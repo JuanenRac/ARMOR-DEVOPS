@@ -44,6 +44,9 @@ services:
       ARMOR_MQTT_URL: mqtt://broker:1883
       ARMOR_MQTT_USERNAME: ${ARMOR_MQTT_USERNAME:-armor-server}
       ARMOR_MQTT_PASSWORD: ${ARMOR_MQTT_PASSWORD:?run scripts/generate_secrets.sh}
+      ARMOR_ALERT_DWELL_MS: ${ARMOR_ALERT_DWELL_MS:-2000}
+      ARMOR_ALERT_WEBHOOK_URL: ${ARMOR_ALERT_WEBHOOK_URL:-}
+      ARMOR_ALERT_WEBHOOK_SECRET: ${ARMOR_ALERT_WEBHOOK_SECRET:-}
     depends_on:
       broker: { condition: service_started }
     networks: [armor_core]
@@ -62,6 +65,22 @@ services:
       server: { condition: service_healthy }
     networks: [armor_core, armor_edge]
 
+  # Optional TLS in front of Studio: `docker compose --profile tls up`. Caddy issues a
+  # certificate from its own local authority (see docs/BACKUP_AND_TLS.md).
+  proxy:
+    <<: *hardened
+    profiles: [tls]
+    image: caddy:2
+    tmpfs: ["/tmp"]
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - proxy-data:/data
+      - proxy-config:/config
+    ports: ["${ARMOR_TLS_BIND:-127.0.0.1}:8443:8443"]
+    depends_on:
+      studio: { condition: service_started }
+    networks: [armor_edge, armor_core]
+
 networks:
   armor_core:
     internal: true
@@ -70,6 +89,8 @@ networks:
 volumes:
   broker-data:
   server-data:
+  proxy-data:
+  proxy-config:
 
 secrets:
   mqtt_password_file:

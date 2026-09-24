@@ -25,5 +25,5 @@ intentionally conservative:
   log; `broker-data` the broker's persistence). Back them up; keep `ARMOR_CAMERA_CONFIG_KEY`
   separately from the volume.
 
-`scripts/validate-compose.sh` runs `docker compose config`; it validates the topology, not a
+`scripts/validate-compose.sh` runs `docker compose config` (Docker is required and is not installed on the development PC); it validates the topology, not a
 running system. For a bench without Docker see [CM5 test bench](CM5_TEST_BENCH.md).
