@@ -14,3 +14,9 @@ user armor-server
 topic read armor/node/+/telemetry
 topic read armor/node/+/health
 topic write armor/node/+/command
+# Alarm output: the server publishes alert.raised / alert.cleared / node.offline / node.stale here.
+topic write armor/server/alert
+
+# An alarm consumer (a siren controller, a notifier) only reads alerts.
+# user alarm-consumer
+# topic read armor/server/alert

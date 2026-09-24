@@ -1,0 +1,22 @@
+# TLS in front of ARMOR Studio (compose profile "tls").
+# Copyright (C) 2026 JuanenRac (Electro Hobby 3D). GPL-3.0-or-later.
+#
+# `tls internal` uses Caddy's own local certificate authority: install its root
+# certificate (in the proxy-data volume, pki/authorities/local/root.crt) on the
+# devices that open Studio. Studio itself proxies /api/ to the server, so this one
+# address serves the console and the API.
+{
+	auto_https disable_redirects
+}
+
+https://:8443 {
+	tls internal
+	encode gzip
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+		-Server
+	}
+	reverse_proxy studio:80
+}

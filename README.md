@@ -17,7 +17,7 @@
 
 ---
 
-**Honesty check - what runs today:** The CM5 bench installer has been run on a real CM5 that hosts other software, which stayed healthy. The Docker Compose topology is **validated with `docker compose config` but has not been run**.
+**Honesty check - what runs today:** The CM5 bench installer has been run on a real CM5 that hosts other software, which stayed healthy. The Docker Compose topology (and its optional TLS profile) is written and parsed as YAML, but **Docker is not installed on the development PC, so it has been neither validated with `docker compose config` nor run**. The backup and restore scripts have a passing round-trip test.
 
 ---
 
@@ -26,6 +26,8 @@
 * **CM5 test bench:** `scripts/deploy_cm5.sh` builds in a clean copy, sends one archive and runs `scripts/install_cm5.sh`, which creates its own user, its own directory and two systemd units on their own ports, with resource limits, and never touches another project ([details](docs/CM5_TEST_BENCH.md)).
 * **Compose topology:** a non-anonymous Mosquitto broker with one identity per node, the server, and Studio behind an nginx that proxies `/api/`; only Studio is published, on loopback. Hardened containers, an internal core network and named volumes for state.
 * **Secrets:** `scripts/generate_secrets.sh` creates random secrets and prints none; `scripts/check-required-env.sh` refuses missing, placeholder, short or repeated values.
+* **Backup and restore:** `scripts/backup_data.sh` makes an AES-256 encrypted, verified and checksummed archive of the server data (evidence excluded unless asked); `scripts/restore_data.sh` lists it or restores it without ever overwriting existing data. The camera key is deliberately **not** in the archive.
+* **TLS:** an optional `tls` Compose profile puts Caddy, with its own local certificate authority, in front of Studio ([details](docs/BACKUP_AND_TLS.md)).
 
 ---
 
@@ -36,6 +38,7 @@ scripts/generate_secrets.sh          # .env and secrets/ (Git-ignored)
 scripts/check-required-env.sh
 docker compose config --quiet && docker compose up --build
 scripts/deploy_cm5.sh --host <cm5> --user <user> --key <key> --apply   # the test bench
+scripts/backup_data.sh --data-dir <data> --out-dir <backups> --passphrase-file <file>
 ```
 
 See the [deployment boundary](docs/DEPLOYMENT_BOUNDARY.md).
@@ -47,8 +50,9 @@ See the [deployment boundary](docs/DEPLOYMENT_BOUNDARY.md).
 ```text
 ARMOR-DEVOPS/
 ├── docker-compose.yml, .env.example, mosquitto/
-├── scripts/   deploy_cm5.sh, install_cm5.sh, generate_secrets.sh, check-required-env.sh, validate-compose.sh
-└── docs/      DEPLOYMENT_BOUNDARY.md, CM5_TEST_BENCH.md
+├── caddy/     Caddyfile (TLS)
+├── scripts/   deploy_cm5, install_cm5, generate_secrets, check-required-env, validate-compose, backup_data, restore_data, test_backup
+└── docs/      DEPLOYMENT_BOUNDARY, CM5_TEST_BENCH, BACKUP_AND_TLS
 ```
 
 ---
