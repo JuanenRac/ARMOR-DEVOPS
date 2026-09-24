@@ -1,0 +1,78 @@
+# A.R.M.O.R. service topology (Jetson or any Docker host).
+# Copyright (C) 2026 JuanenRac (Electro Hobby 3D). GPL-3.0-or-later.
+#
+# Only Studio is published, and only on the loopback address. Put a TLS reverse
+# proxy or a VPN in front of it before any remote access. Secrets come from .env
+# (created by scripts/generate_secrets.sh) and from ./secrets, never from git.
+name: armor
+
+x-hardened: &hardened
+  read_only: true
+  security_opt: ["no-new-privileges:true"]
+  cap_drop: [ALL]
+  restart: unless-stopped
+
+services:
+  broker:
+    <<: *hardened
+    image: eclipse-mosquitto:2
+    tmpfs: ["/tmp", "/mosquitto/log"]
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - broker-data:/mosquitto/data
+    secrets: [mqtt_password_file, mqtt_acl_file]
+    networks: [armor_core]
+
+  server:
+    <<: *hardened
+    build: ../ARMOR-SERVER
+    tmpfs: ["/tmp"]
+    volumes:
+      - server-data:/data
+    environment:
+      ARMOR_HOST: 0.0.0.0
+      ARMOR_PORT: 8080
+      ARMOR_DATA_DIR: /data
+      ARMOR_INGEST_TOKEN: ${ARMOR_INGEST_TOKEN:?run scripts/generate_secrets.sh}
+      ARMOR_CONTROL_TOKEN: ${ARMOR_CONTROL_TOKEN:?run scripts/generate_secrets.sh}
+      ARMOR_OPERATOR_TOKEN: ${ARMOR_OPERATOR_TOKEN:?run scripts/generate_secrets.sh}
+      ARMOR_CAMERA_CONFIG_KEY: ${ARMOR_CAMERA_CONFIG_KEY:?run scripts/generate_secrets.sh}
+      ARMOR_STUDIO_USERNAME: ${ARMOR_STUDIO_USERNAME:?run scripts/generate_secrets.sh}
+      ARMOR_STUDIO_PASSWORD: ${ARMOR_STUDIO_PASSWORD:?run scripts/generate_secrets.sh}
+      ARMOR_STUDIO_ORIGIN: ${ARMOR_PUBLIC_ORIGIN:-http://127.0.0.1:8088}
+      ARMOR_COOKIE_SECURE: ${ARMOR_COOKIE_SECURE:-0}
+      ARMOR_MQTT_URL: mqtt://broker:1883
+      ARMOR_MQTT_USERNAME: ${ARMOR_MQTT_USERNAME:-armor-server}
+      ARMOR_MQTT_PASSWORD: ${ARMOR_MQTT_PASSWORD:?run scripts/generate_secrets.sh}
+    depends_on:
+      broker: { condition: service_started }
+    networks: [armor_core]
+
+  studio:
+    <<: *hardened
+    build: ../ARMOR-STUDIO
+    tmpfs: ["/var/cache/nginx", "/var/run", "/tmp", "/etc/nginx/conf.d"]
+    # The unprivileged nginx needs these to start; everything else stays dropped.
+    cap_add: [CHOWN, SETGID, SETUID, NET_BIND_SERVICE]
+    environment:
+      ARMOR_PUBLIC_ORIGIN: ${ARMOR_PUBLIC_ORIGIN:-http://127.0.0.1:8088}
+      ARMOR_SERVER_UPSTREAM: server:8080
+    ports: ["127.0.0.1:8088:80"]
+    depends_on:
+      server: { condition: service_healthy }
+    networks: [armor_core, armor_edge]
+
+networks:
+  armor_core:
+    internal: true
+  armor_edge: {}
+
+volumes:
+  broker-data:
+  server-data:
+
+secrets:
+  mqtt_password_file:
+    file: ./secrets/mqtt.password
+  mqtt_acl_file:
+    file: ./secrets/mqtt.acl

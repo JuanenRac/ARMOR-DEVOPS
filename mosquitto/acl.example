@@ -1,0 +1,16 @@
+# Broker access rules. Copy to secrets/mqtt.acl and adapt.
+#
+# One identity per field node, and a node reaches only its own namespace: it writes
+# its telemetry and health (its MQTT last will is a health message) and reads its own
+# commands. It can not read another node's data.
+# Replace NODE_ID per device; repeat the block for every node.
+user field-node-NODE_ID
+topic write armor/node/NODE_ID/telemetry
+topic write armor/node/NODE_ID/health
+topic read armor/node/NODE_ID/command
+
+# The central service observes every node and is the only one allowed to send commands.
+user armor-server
+topic read armor/node/+/telemetry
+topic read armor/node/+/health
+topic write armor/node/+/command
