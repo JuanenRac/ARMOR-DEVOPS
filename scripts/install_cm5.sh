@@ -31,14 +31,19 @@ WITH_MQTT=0
 BIND_ADDRESS="0.0.0.0"
 PUBLIC_HOST=""
 APPLY=0
+ALSO_REACH=(); FORGET_REACH=0
 RELEASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 usage() {
   cat <<EOF
 Usage: install_cm5.sh --public-host HOST [--apply] [--server-port N] [--studio-port N]
-                      [--bind ADDRESS] [--prefix DIR]
+                      [--also-reach STUDIO_URL=SERVER_URL] [--forget-reach] [--bind ADDRESS] [--prefix DIR]
   --public-host  address the browser will use to reach this machine (required)
   --apply        actually install; without it the plan is only printed
+  --also-reach   another way to reach this machine, for example from the Internet through a router:
+                 --also-reach http://203.0.113.7:2601=http://203.0.113.7:2600 (Studio address = server address).
+                 Repeatable, and remembered for the next installs; the browser is then allowed to log in that way too
+  --forget-reach forget every address given with --also-reach before now
   --server-port  ARMOR-SERVER port (default ${SERVER_PORT})
   --studio-port  ARMOR-STUDIO port (default ${STUDIO_PORT})
   --with-mqtt    also run A.R.M.O.R.'s own MQTT broker (needs the mosquitto package installed)
@@ -54,6 +59,8 @@ while [[ $# -gt 0 ]]; do
     --apply) APPLY=1; shift ;;
     --server-port) SERVER_PORT="${2:-}"; shift 2 ;;
     --studio-port) STUDIO_PORT="${2:-}"; shift 2 ;;
+    --also-reach) ALSO_REACH+=("${2:-}"); shift 2 ;;
+    --forget-reach) FORGET_REACH=1; shift ;;
     --with-mqtt) WITH_MQTT=1; shift ;;
     --mqtt-port) MQTT_PORT="${2:-}"; shift 2 ;;
     --bind) BIND_ADDRESS="${2:-}"; shift 2 ;;
@@ -70,6 +77,24 @@ say()  { echo "[armor-install] $*"; }
 
 [[ -n "$PUBLIC_HOST" ]] || { usage >&2; fail "--public-host is required"; }
 [[ "$PUBLIC_HOST" =~ ^[A-Za-z0-9.-]+$ ]] || fail "--public-host must be a host name or IPv4 address"
+# Other ways in (a public address behind a router): remembered in armor.reach, one "studio=server" pair per line.
+ORIGIN_PATTERN='https?://[A-Za-z0-9.-]+(:[0-9]{1,5})?'
+REACH_FILE="$PREFIX/etc/armor.reach"
+REACH_PAIRS=()
+if [[ "$FORGET_REACH" -eq 0 && -f "$REACH_FILE" ]]; then
+  while IFS= read -r line; do [[ "$line" =~ ^${ORIGIN_PATTERN}=${ORIGIN_PATTERN}$ ]] && REACH_PAIRS+=("$line"); done <"$REACH_FILE"
+fi
+for pair in "${ALSO_REACH[@]}"; do
+  [[ "$pair" =~ ^${ORIGIN_PATTERN}=${ORIGIN_PATTERN}$ ]] || fail "--also-reach must look like http://HOST:PORT=http://HOST:PORT (Studio address = server address), not: $pair"
+  REACH_PAIRS+=("$pair")
+done
+STUDIO_ORIGINS="http://$PUBLIC_HOST:$STUDIO_PORT"; SERVER_ORIGINS="http://$PUBLIC_HOST:$SERVER_PORT"; REACH_UNIQUE=()
+for pair in "${REACH_PAIRS[@]}"; do
+  studio="${pair%%=*}"; server="${pair#*=}"
+  [[ ",$STUDIO_ORIGINS," == *",$studio,"* ]] || STUDIO_ORIGINS="$STUDIO_ORIGINS,$studio"
+  [[ ",$SERVER_ORIGINS," == *",$server,"* ]] || SERVER_ORIGINS="$SERVER_ORIGINS,$server"
+  [[ " ${REACH_UNIQUE[*]:-} " == *" $pair "* ]] || REACH_UNIQUE+=("$pair")
+done
 for port in "$SERVER_PORT" "$STUDIO_PORT"; do
   [[ "$port" =~ ^[0-9]+$ && "$port" -ge 1024 && "$port" -le 65535 ]] || fail "ports must be numbers between 1024 and 65535"
 done
@@ -103,6 +128,7 @@ say "  install prefix : $PREFIX (owner: $SERVICE_USER)"
 say "  armor-server   : $BIND_ADDRESS:$SERVER_PORT"
 say "  armor-studio   : $BIND_ADDRESS:$STUDIO_PORT"
 say "  browser opens  : http://$PUBLIC_HOST:$STUDIO_PORT"
+for pair in "${REACH_UNIQUE[@]}"; do say "  also reachable : ${pair%%=*} (server ${pair#*=})"; done
 [[ "$WITH_MQTT" -ne 1 ]] || say "  armor-mosquitto: $BIND_ADDRESS:$MQTT_PORT (own broker, own passwords)"
 say "  other software : untouched"
 if [[ "$APPLY" -ne 1 ]]; then say "dry run only - add --apply to install"; exit 0; fi
@@ -161,14 +187,15 @@ if [[ -n "$FFMPEG_BIN" ]]; then FFMPEG_ENV_LINE="ARMOR_FFMPEG_PATH=$FFMPEG_BIN";
 cat >"$PREFIX/etc/armor.network.env" <<EOF
 ARMOR_HOST=$BIND_ADDRESS
 ARMOR_PORT=$SERVER_PORT
-ARMOR_STUDIO_ORIGIN=http://$PUBLIC_HOST:$STUDIO_PORT
+ARMOR_STUDIO_ORIGIN=$STUDIO_ORIGINS
 ARMOR_DATA_DIR=$PREFIX/data
 ARMOR_STUDIO_HOST=$BIND_ADDRESS
 ARMOR_STUDIO_PORT=$STUDIO_PORT
-ARMOR_SERVER_ORIGIN=http://$PUBLIC_HOST:$SERVER_PORT
+ARMOR_SERVER_ORIGIN=$SERVER_ORIGINS
 ${FFMPEG_ENV_LINE}
 EOF
 chown "root:$SERVICE_USER" "$PREFIX/etc/armor.network.env"; chmod 0640 "$PREFIX/etc/armor.network.env"
+if [[ ${#REACH_UNIQUE[@]} -gt 0 ]]; then printf '%s\n' "${REACH_UNIQUE[@]}" >"$REACH_FILE"; chown "root:$SERVICE_USER" "$REACH_FILE"; chmod 0640 "$REACH_FILE"; else rm -f "$REACH_FILE"; fi
 
 MQTT_ENV_LINE=""
 if [[ "$WITH_MQTT" -eq 1 ]]; then

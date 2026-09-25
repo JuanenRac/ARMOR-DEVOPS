@@ -38,6 +38,24 @@ Then open `http://<host>:18081`. The Studio user is `admin`; its password is
 `ARMOR_STUDIO_PASSWORD` in `/opt/armor/etc/armor.env` on the bench (root can read it).
 Studio starts against the server the deployment publishes at `/armor-config.json`.
 
+## Reaching it from the Internet
+
+A browser is only allowed to sign in through the addresses the installation was told about: the server's list of allowed origins
+(CORS) and Studio's content-security policy both hold them. Opening Studio through the router's public address without telling the
+installer ends in *Could not sign in*, whatever the password. With the router forwarding, for example, public port 2601 to 18081
+(Studio) and 2600 to 18080 (server):
+
+```bash
+scripts/deploy_cm5.sh --host 192.168.0.180 --user <ssh user> --key <ssh key> --apply \
+  --also-reach http://<public address>:2601=http://<public address>:2600
+```
+
+Then open `http://<public address>:2601` and type `http://<public address>:2600` as the server. The pair is remembered by later
+installs (`--forget-reach` drops it). If the SSH port is also forwarded, add `--port <public ssh port> --public-host 192.168.0.180`.
+
+**This is plain HTTP.** The password and the session travel across the Internet in clear. Put the TLS profile (Caddy) or a VPN in
+front before leaving it open, and never forward the broker's port (18883): only the two web ports are meant to be reached.
+
 ## What is not on the bench
 
 FFmpeg (so live video, snapshots and recordings answer *not configured*) and an MQTT broker are

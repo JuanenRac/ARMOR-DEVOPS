@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented here.
 
+## [0.2.5] - Another way in: a public address behind a router
+
+- `install_cm5.sh --also-reach http://PUBLIC:2601=http://PUBLIC:2600` (repeatable) adds a second Studio address and server address to the ones the browser is allowed to use: the server's list of allowed origins and Studio's policy get both. The pairs are remembered in `armor.reach` and kept by the next installs; `--forget-reach` drops them. The address is checked before anything is written.
+- `deploy_cm5.sh` passes `--also-reach` and `--forget-reach` on, and has `--port` (the SSH port, for a router that forwards a public port to it) and `--public-host` (the address the browser uses, when it is not the one the deploy connects to; before, both were the same).
+- The bench guide says how to reach the installation from the Internet, and that this is plain HTTP: the password crosses the Internet in clear unless the TLS profile or a VPN is in front.
+
 ## [0.2.4] - MQTT access for devices
 
 - The broker's rules let the server listen on and command the topics under `armor/device/`; an install made before devices existed gets the rule added on the next `install_cm5.sh --with-mqtt` run.
