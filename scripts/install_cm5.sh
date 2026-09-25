@@ -151,6 +151,11 @@ EOF
   chown "root:$SERVICE_USER" "$ENV_FILE"; chmod 0640 "$ENV_FILE"
 fi
 
+# Live video and captures need FFmpeg; when it is installed the server is pointed at it, and it gets more memory.
+FFMPEG_BIN="$(command -v ffmpeg || true)"
+FFMPEG_ENV_LINE=""; SERVER_MEMORY="384M"
+if [[ -n "$FFMPEG_BIN" ]]; then FFMPEG_ENV_LINE="ARMOR_FFMPEG_PATH=$FFMPEG_BIN"; SERVER_MEMORY="768M"; say "FFmpeg found at $FFMPEG_BIN: live video enabled"; else say "FFmpeg not found: live video stays disabled (apt install ffmpeg, then run this again)"; fi
+
 # Settings that follow this install (ports, host) live in their own file so a
 # re-run can change them without touching the secrets above.
 cat >"$PREFIX/etc/armor.network.env" <<EOF
@@ -161,6 +166,7 @@ ARMOR_DATA_DIR=$PREFIX/data
 ARMOR_STUDIO_HOST=$BIND_ADDRESS
 ARMOR_STUDIO_PORT=$STUDIO_PORT
 ARMOR_SERVER_ORIGIN=http://$PUBLIC_HOST:$SERVER_PORT
+${FFMPEG_ENV_LINE}
 EOF
 chown "root:$SERVICE_USER" "$PREFIX/etc/armor.network.env"; chmod 0640 "$PREFIX/etc/armor.network.env"
 
@@ -240,7 +246,7 @@ $MQTT_ENV_LINE
 ExecStart=$(command -v node) $PREFIX/current/server/dist/server.mjs
 Restart=on-failure
 RestartSec=3
-MemoryMax=384M
+MemoryMax=$SERVER_MEMORY
 TasksMax=128
 ReadWritePaths=$PREFIX/data
 $HARDENING
