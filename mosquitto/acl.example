@@ -16,7 +16,17 @@ topic read armor/node/+/health
 topic write armor/node/+/command
 # Alarm output: the server publishes alert.raised / alert.cleared / node.offline / node.stale here.
 topic write armor/server/alert
+# Smart devices (smoke, door, plug, light ...): the server listens on their state and commands them.
+topic readwrite armor/device/#
 
 # An alarm consumer (a siren controller, a notifier) only reads alerts.
 # user alarm-consumer
 # topic read armor/server/alert
+
+# One smart device that speaks MQTT itself (a Tasmota plug, an ESP32 sensor) reaches only its own topics.
+# user device-kitchen
+# topic readwrite armor/device/kitchen/#
+
+# A bridge to many devices (Zigbee2MQTT with base_topic armor/device, a Shelly gateway) needs all of them.
+# user bridge-zigbee
+# topic readwrite armor/device/#

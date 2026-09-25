@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented here.
 
+## [0.2.4] - MQTT access for devices
+
+- The broker's rules let the server listen on and command the topics under `armor/device/`; an install made before devices existed gets the rule added on the next `install_cm5.sh --with-mqtt` run.
+- `scripts/mqtt_identity.sh add device NAME` gives one smart device access to its own topics only (`armor/device/NAME/#`); `add bridge NAME` gives a bridge (Zigbee2MQTT with `base_topic` set to `armor/device`, a Shelly gateway) all of `armor/device/#`. `remove` accepts both.
+
 ## [0.2.3] - FFmpeg on the bench and a Compose that was run
 
 - The installer points the server at FFmpeg when it is installed. `scripts/test_compose.sh` builds and runs the Compose topology (broker, server, Studio and the TLS profile) with 12 checks; it found and fixed three faults.
