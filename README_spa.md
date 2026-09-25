@@ -17,7 +17,7 @@
 
 ---
 
-**Comprobación de honestidad - qué funciona hoy:** El instalador del banco CM5 se ha ejecutado en una CM5 real que aloja otro software, y este siguió sano. La topología de Docker Compose (y su perfil TLS opcional) está escrita y leída como YAML, pero **no hay Docker instalado en el PC de desarrollo, así que ni se ha validado con `docker compose config` ni se ha ejecutado**. Los scripts de copia de seguridad y restauración tienen una prueba de ida y vuelta que pasa.
+**Comprobación de honestidad - qué funciona hoy:** El instalador del banco CM5 se ha ejecutado en una CM5 real que aloja otro software, y este siguió sano. La topología de Docker Compose y su perfil TLS opcional se han construido y ejecutado de verdad con Docker Engine en WSL (`scripts/test_compose.sh`, 12 comprobaciones, que encontró y arregló tres fallos), pero **no en la Jetson**. Los scripts de copia de seguridad y restauración tienen una prueba de ida y vuelta que pasa.
 
 ---
 
@@ -51,7 +51,7 @@ Véase el [límite de despliegue](docs/DEPLOYMENT_BOUNDARY.md).
 ARMOR-DEVOPS/
 ├── docker-compose.yml, .env.example, mosquitto/
 ├── caddy/     Caddyfile (TLS)
-├── scripts/   deploy_cm5, install_cm5, generate_secrets, check-required-env, validate-compose, backup_data, restore_data, test_backup, mqtt_identity
+├── scripts/   deploy_cm5, install_cm5, generate_secrets, check-required-env, validate-compose, backup_data, restore_data, test_backup, test_compose, mqtt_identity
 └── docs/      DEPLOYMENT_BOUNDARY, CM5_TEST_BENCH, BACKUP_AND_TLS
 ```
 

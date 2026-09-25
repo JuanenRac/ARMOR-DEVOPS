@@ -4,6 +4,7 @@ All notable changes to this project are documented here.
 
 ## [0.4.0] - A.R.M.O.R.'s own MQTT broker on the bench
 
+- **Compose run for real** (Docker Engine in WSL, `scripts/test_compose.sh`, 12 checks) and three faults fixed that a YAML check could not see: the broker could not start with every capability dropped (it needs `CHOWN`, `SETUID`, `SETGID` to drop to its own user), it could not read its password and ACL files (they are now world-readable on purpose: a salted hash and an access list), and Caddy could not even execute with all capabilities dropped (it needs `NET_BIND_SERVICE`). The TLS certificate is now issued for `ARMOR_TLS_HOST` because a hostless site cannot answer a request by IP address.
 - `install_cm5.sh --with-mqtt` runs Mosquitto as a third systemd unit (`armor-mosquitto`) on its own port (18883), with its own passwords and ACL, never the system broker and never the standard port 1883 that other software may use. An upgrade keeps an existing broker.
 - `scripts/mqtt_identity.sh` adds or removes a field-node or alarm-consumer identity with the least privilege each needs, printing the generated password once.
 - The installer points the server at FFmpeg when it is installed (live video, captures and recordings; the server unit gets more memory then) and says so when it is not.

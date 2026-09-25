@@ -16,6 +16,8 @@ services:
   broker:
     <<: *hardened
     image: eclipse-mosquitto:2
+    # The image starts as root and drops to its own user; that needs these three, everything else stays dropped.
+    cap_add: [CHOWN, SETUID, SETGID]
     tmpfs: ["/tmp", "/mosquitto/log"]
     volumes:
       - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
@@ -71,6 +73,10 @@ services:
     <<: *hardened
     profiles: [tls]
     image: caddy:2
+    # The caddy binary carries a file capability (bind low ports); with every capability dropped it can not even start.
+    cap_add: [NET_BIND_SERVICE]
+    environment:
+      ARMOR_TLS_HOST: ${ARMOR_TLS_HOST:-localhost}
     tmpfs: ["/tmp"]
     volumes:
       - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro

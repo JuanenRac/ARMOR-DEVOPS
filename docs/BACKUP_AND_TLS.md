@@ -53,7 +53,8 @@ docker compose --profile tls up --build
 ```
 
 Caddy listens on `ARMOR_TLS_BIND:8443` (loopback by default) with a certificate from its own local
-authority. Install its root certificate (in the `proxy-data` volume, `pki/authorities/local/root.crt`)
+authority, issued for `ARMOR_TLS_HOST` (default `localhost`): browse to `https://<that name>:8443`, not to an
+IP address. Install the authority's root certificate (in the `proxy-data` volume, `pki/authorities/local/root.crt`)
 on every device that opens Studio, then set in `.env`:
 
 ```
@@ -62,5 +63,6 @@ ARMOR_COOKIE_SECURE=1
 ```
 
 `ARMOR_COOKIE_SECURE=1` makes the session cookie HTTPS-only, so set it only when every access goes
-through the TLS address. This profile has not been run in this repository's environment; treat the
-first start as a test.
+through the TLS address. The profile has been started and answered over HTTPS with `scripts/test_compose.sh`
+(Docker Engine in WSL); Caddy logs an error that it could not install its root certificate in the container's own
+trust store, which is harmless. Whether a given browser trusts the authority once you install it has not been verified.
