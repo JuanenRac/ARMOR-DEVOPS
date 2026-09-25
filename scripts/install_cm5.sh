@@ -10,6 +10,8 @@
 #   * a dedicated system user `armor` (no login shell, no sudo)
 #   * everything under /opt/armor (releases, data, etc)
 #   * two systemd units, armor-server and armor-studio, on their own ports
+#   * optionally (--with-mqtt) a third unit, armor-mosquitto: A.R.M.O.R.'s own MQTT
+#     broker on its own port, with its own passwords and ACL, never the system broker
 #   * resource limits so the bench can never starve the other software
 # What it never does: edit, restart or read anything belonging to another
 # project, open a port outside the two below, or touch the firewall.
@@ -17,12 +19,15 @@
 # Usage (as root, from the unpacked release):
 #   install_cm5.sh --public-host 192.168.0.180           # dry run: prints the plan
 #   install_cm5.sh --public-host 192.168.0.180 --apply   # installs / upgrades
+#   install_cm5.sh --public-host 192.168.0.180 --apply --with-mqtt   # also the broker
 set -euo pipefail
 
 PREFIX="/opt/armor"
 SERVICE_USER="armor"
 SERVER_PORT="18080"
 STUDIO_PORT="18081"
+MQTT_PORT="18883"
+WITH_MQTT=0
 BIND_ADDRESS="0.0.0.0"
 PUBLIC_HOST=""
 APPLY=0
@@ -36,7 +41,9 @@ Usage: install_cm5.sh --public-host HOST [--apply] [--server-port N] [--studio-p
   --apply        actually install; without it the plan is only printed
   --server-port  ARMOR-SERVER port (default ${SERVER_PORT})
   --studio-port  ARMOR-STUDIO port (default ${STUDIO_PORT})
-  --bind         address both services listen on (default ${BIND_ADDRESS})
+  --with-mqtt    also run A.R.M.O.R.'s own MQTT broker (needs the mosquitto package installed)
+  --mqtt-port    broker port (default ${MQTT_PORT}; never the standard 1883, which other software may use)
+  --bind         address all services listen on (default ${BIND_ADDRESS})
   --prefix       install directory (default ${PREFIX})
 EOF
 }
@@ -47,6 +54,8 @@ while [[ $# -gt 0 ]]; do
     --apply) APPLY=1; shift ;;
     --server-port) SERVER_PORT="${2:-}"; shift 2 ;;
     --studio-port) STUDIO_PORT="${2:-}"; shift 2 ;;
+    --with-mqtt) WITH_MQTT=1; shift ;;
+    --mqtt-port) MQTT_PORT="${2:-}"; shift 2 ;;
     --bind) BIND_ADDRESS="${2:-}"; shift 2 ;;
     --prefix) PREFIX="${2:-}"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
@@ -55,6 +64,8 @@ while [[ $# -gt 0 ]]; do
 done
 
 fail() { echo "ERROR: $*" >&2; exit 1; }
+# An upgrade of an install that already has the broker keeps it, whether or not the flag is repeated.
+[[ -f "$PREFIX/etc/armor.mqtt.env" ]] && WITH_MQTT=1
 say()  { echo "[armor-install] $*"; }
 
 [[ -n "$PUBLIC_HOST" ]] || { usage >&2; fail "--public-host is required"; }
@@ -63,6 +74,10 @@ for port in "$SERVER_PORT" "$STUDIO_PORT"; do
   [[ "$port" =~ ^[0-9]+$ && "$port" -ge 1024 && "$port" -le 65535 ]] || fail "ports must be numbers between 1024 and 65535"
 done
 [[ "$SERVER_PORT" != "$STUDIO_PORT" ]] || fail "the server and studio ports must differ"
+if [[ "$WITH_MQTT" -eq 1 ]]; then
+  [[ "$MQTT_PORT" =~ ^[0-9]+$ && "$MQTT_PORT" -ge 1024 && "$MQTT_PORT" -le 65535 ]] || fail "--mqtt-port must be a number between 1024 and 65535"
+  [[ "$MQTT_PORT" != "1883" && "$MQTT_PORT" != "$SERVER_PORT" && "$MQTT_PORT" != "$STUDIO_PORT" ]] || fail "--mqtt-port must not be 1883 or another A.R.M.O.R. port"
+fi
 [[ "$PREFIX" == /opt/* && "$PREFIX" != "/opt/hydra-umc"* ]] || fail "--prefix must be under /opt and never inside a HYDRA-UMC directory"
 # An existing, non-empty prefix must already be this project's own (an upgrade), never someone else's directory.
 if [[ -d "$PREFIX" && -n "$(ls -A "$PREFIX" 2>/dev/null)" && ! -f "$PREFIX/etc/armor.network.env" ]]; then
@@ -81,18 +96,24 @@ check_port() {
 }
 check_port "$SERVER_PORT" armor-server
 check_port "$STUDIO_PORT" armor-studio
+[[ "$WITH_MQTT" -ne 1 ]] || check_port "$MQTT_PORT" armor-mosquitto
 
 say "plan"
 say "  install prefix : $PREFIX (owner: $SERVICE_USER)"
 say "  armor-server   : $BIND_ADDRESS:$SERVER_PORT"
 say "  armor-studio   : $BIND_ADDRESS:$STUDIO_PORT"
 say "  browser opens  : http://$PUBLIC_HOST:$STUDIO_PORT"
+[[ "$WITH_MQTT" -ne 1 ]] || say "  armor-mosquitto: $BIND_ADDRESS:$MQTT_PORT (own broker, own passwords)"
 say "  other software : untouched"
 if [[ "$APPLY" -ne 1 ]]; then say "dry run only - add --apply to install"; exit 0; fi
 
 [[ "$(id -u)" -eq 0 ]] || fail "--apply must run as root"
 command -v node >/dev/null || fail "Node.js is required"
 command -v npm >/dev/null || fail "npm is required"
+if [[ "$WITH_MQTT" -eq 1 ]]; then
+  command -v mosquitto >/dev/null || fail "--with-mqtt needs the mosquitto package (its own service is not used; install it with your package manager)"
+  command -v mosquitto_passwd >/dev/null || fail "--with-mqtt needs mosquitto_passwd (package mosquitto or mosquitto-clients)"
+fi
 
 STAMP="$(date +%Y%m%d-%H%M%S)"
 RELEASE="$PREFIX/releases/$STAMP"
@@ -143,6 +164,42 @@ ARMOR_SERVER_ORIGIN=http://$PUBLIC_HOST:$SERVER_PORT
 EOF
 chown "root:$SERVICE_USER" "$PREFIX/etc/armor.network.env"; chmod 0640 "$PREFIX/etc/armor.network.env"
 
+MQTT_ENV_LINE=""
+if [[ "$WITH_MQTT" -eq 1 ]]; then
+  say "configuring A.R.M.O.R.'s own MQTT broker on port $MQTT_PORT"
+  MQ="$PREFIX/etc/mosquitto"
+  install -d -o "$SERVICE_USER" -g "$SERVICE_USER" -m 0750 "$MQ" "$PREFIX/data/mqtt"
+  if [[ ! -f "$PREFIX/etc/armor.mqtt.env" ]]; then
+    SERVER_MQTT_PASSWORD="$(random 48 32)"
+    ( umask 0177; : >"$MQ/passwd"; )
+    mosquitto_passwd -b "$MQ/passwd" armor-server "$SERVER_MQTT_PASSWORD" >/dev/null
+    cat >"$MQ/acl" <<'ACL'
+# Managed by scripts/mqtt_identity.sh; one block per identity.
+user armor-server
+topic read armor/node/+/telemetry
+topic read armor/node/+/health
+topic write armor/node/+/command
+topic write armor/server/alert
+ACL
+    chown "$SERVICE_USER:$SERVICE_USER" "$MQ/passwd" "$MQ/acl"; chmod 0600 "$MQ/passwd" "$MQ/acl"
+    ( umask 0137; printf 'ARMOR_MQTT_URL=mqtt://127.0.0.1:%s\nARMOR_MQTT_USERNAME=armor-server\nARMOR_MQTT_PASSWORD=%s\n' "$MQTT_PORT" "$SERVER_MQTT_PASSWORD" >"$PREFIX/etc/armor.mqtt.env" )
+    chown "root:$SERVICE_USER" "$PREFIX/etc/armor.mqtt.env"; chmod 0640 "$PREFIX/etc/armor.mqtt.env"
+  fi
+  cat >"$MQ/mosquitto.conf" <<EOF
+# A.R.M.O.R. broker: authenticated only, its own port, its own files.
+listener $MQTT_PORT $BIND_ADDRESS
+allow_anonymous false
+password_file $MQ/passwd
+acl_file $MQ/acl
+persistence true
+persistence_location $PREFIX/data/mqtt/
+log_dest stderr
+connection_messages true
+EOF
+  chown "$SERVICE_USER:$SERVICE_USER" "$MQ/mosquitto.conf"; chmod 0640 "$MQ/mosquitto.conf"
+  MQTT_ENV_LINE="EnvironmentFile=$PREFIX/etc/armor.mqtt.env"
+fi
+
 ln -sfn "$RELEASE" "$PREFIX/current.new" && mv -Tf "$PREFIX/current.new" "$PREFIX/current"
 
 HARDENING="NoNewPrivileges=true
@@ -179,6 +236,7 @@ Group=$SERVICE_USER
 WorkingDirectory=$PREFIX/current/server
 EnvironmentFile=$ENV_FILE
 EnvironmentFile=$PREFIX/etc/armor.network.env
+$MQTT_ENV_LINE
 ExecStart=$(command -v node) $PREFIX/current/server/dist/server.mjs
 Restart=on-failure
 RestartSec=3
@@ -215,8 +273,38 @@ $HARDENING
 WantedBy=multi-user.target
 EOF
 
+if [[ "$WITH_MQTT" -eq 1 ]]; then
+  cat >/etc/systemd/system/armor-mosquitto.service <<EOF
+[Unit]
+Description=A.R.M.O.R. MQTT broker (test bench)
+After=network-online.target
+Wants=network-online.target
+Before=armor-server.service
+
+[Service]
+Type=simple
+User=$SERVICE_USER
+Group=$SERVICE_USER
+ExecStart=$(command -v mosquitto) -c $PREFIX/etc/mosquitto/mosquitto.conf
+ExecReload=/bin/kill -HUP \$MAINPID
+Restart=on-failure
+RestartSec=3
+MemoryMax=96M
+TasksMax=64
+ReadWritePaths=$PREFIX/data/mqtt
+$HARDENING
+
+[Install]
+WantedBy=multi-user.target
+EOF
+fi
+
 systemctl daemon-reload
 systemctl enable armor-server armor-studio >/dev/null
+if [[ "$WITH_MQTT" -eq 1 ]]; then
+  systemctl enable armor-mosquitto >/dev/null
+  systemctl restart armor-mosquitto
+fi
 systemctl restart armor-server armor-studio
 
 say "waiting for the services"
@@ -237,4 +325,5 @@ ls -1dt "$PREFIX"/releases/*/ 2>/dev/null | tail -n +5 | while read -r old; do m
 say "A.R.M.O.R. is running"
 say "  Studio : http://$PUBLIC_HOST:$STUDIO_PORT"
 say "  Server : http://$PUBLIC_HOST:$SERVER_PORT/healthz"
+[[ "$WITH_MQTT" -ne 1 ]] || say "  Broker : mqtt://$PUBLIC_HOST:$MQTT_PORT (add devices with scripts/mqtt_identity.sh)"
 say "  Studio login user 'admin'; its password is in $ENV_FILE (ARMOR_STUDIO_PASSWORD), readable by root"

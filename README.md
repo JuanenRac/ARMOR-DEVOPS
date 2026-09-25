@@ -23,7 +23,7 @@
 
 ## 1. 🛠️ OVERVIEW
 
-* **CM5 test bench:** `scripts/deploy_cm5.sh` builds in a clean copy, sends one archive and runs `scripts/install_cm5.sh`, which creates its own user, its own directory and two systemd units on their own ports, with resource limits, and never touches another project ([details](docs/CM5_TEST_BENCH.md)).
+* **CM5 test bench:** `scripts/deploy_cm5.sh` builds in a clean copy, sends one archive and runs `scripts/install_cm5.sh`, which creates its own user, its own directory and two systemd units on their own ports (three with `--with-mqtt`: A.R.M.O.R.'s own Mosquitto on port 18883, verified on a real CM5), with resource limits, and never touches another project ([details](docs/CM5_TEST_BENCH.md)).
 * **Compose topology:** a non-anonymous Mosquitto broker with one identity per node, the server, and Studio behind an nginx that proxies `/api/`; only Studio is published, on loopback. Hardened containers, an internal core network and named volumes for state.
 * **Secrets:** `scripts/generate_secrets.sh` creates random secrets and prints none; `scripts/check-required-env.sh` refuses missing, placeholder, short or repeated values.
 * **Backup and restore:** `scripts/backup_data.sh` makes an AES-256 encrypted, verified and checksummed archive of the server data (evidence excluded unless asked); `scripts/restore_data.sh` lists it or restores it without ever overwriting existing data. The camera key is deliberately **not** in the archive.
@@ -51,7 +51,7 @@ See the [deployment boundary](docs/DEPLOYMENT_BOUNDARY.md).
 ARMOR-DEVOPS/
 ├── docker-compose.yml, .env.example, mosquitto/
 ├── caddy/     Caddyfile (TLS)
-├── scripts/   deploy_cm5, install_cm5, generate_secrets, check-required-env, validate-compose, backup_data, restore_data, test_backup
+├── scripts/   deploy_cm5, install_cm5, generate_secrets, check-required-env, validate-compose, backup_data, restore_data, test_backup, mqtt_identity
 └── docs/      DEPLOYMENT_BOUNDARY, CM5_TEST_BENCH, BACKUP_AND_TLS
 ```
 
