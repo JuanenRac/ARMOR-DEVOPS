@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented here.
 
+## [0.2.6] - Broker access for the node's panel information and pins
+
+- `mqtt_identity.sh add node` now also lets a node write `armor/node/<id>/info` (where its panel is) next to its telemetry and health. `mqtt_identity.sh upgrade-node <id>` adds that and `armor/device/<id>/#` (the pins the node lends to the server) to a node created earlier, idempotently, keeping the previous ACL as `acl.before-upgrade`. The ACL example shows both.
+
 ## [0.2.5] - Another way in: a public address behind a router
 
 - `install_cm5.sh --also-reach http://PUBLIC:2601=http://PUBLIC:2600` (repeatable) adds a second Studio address and server address to the ones the browser is allowed to use: the server's list of allowed origins and Studio's policy get both. The pairs are remembered in `armor.reach` and kept by the next installs; `--forget-reach` drops them. The address is checked before anything is written.

@@ -6,6 +6,7 @@
 #   sudo mqtt_identity.sh add consumer siren   # an alarm consumer: reads armor/server/alert only
 #   sudo mqtt_identity.sh add device kitchen   # one smart device (a plug, a sensor): reads and writes armor/device/kitchen/# only
 #   sudo mqtt_identity.sh add bridge zigbee    # a bridge to many devices (Zigbee2MQTT, a Shelly gateway): all of armor/device/#
+#   sudo mqtt_identity.sh upgrade-node north-1 # an existing field node: also let it write armor/node/north-1/info (where its panel is) and use armor/device/north-1/# (its mapped pins)
 #   sudo mqtt_identity.sh remove field-node-north-1
 #
 # The generated password is printed once, because the device needs it; it is
@@ -16,7 +17,7 @@ MQ="$PREFIX/etc/mosquitto"
 [[ "$(id -u)" -eq 0 ]] || { echo "run as root" >&2; exit 1; }
 [[ -f "$MQ/passwd" && -f "$MQ/acl" ]] || { echo "the A.R.M.O.R. broker is not installed (install_cm5.sh --with-mqtt)" >&2; exit 1; }
 
-usage() { echo "Usage: mqtt_identity.sh add node ID | add consumer NAME | add device NAME | add bridge NAME | remove USER" >&2; exit 2; }
+usage() { echo "Usage: mqtt_identity.sh add node ID | add consumer NAME | add device NAME | add bridge NAME | upgrade-node NODE_ID | remove USER" >&2; exit 2; }
 ACTION="${1:-}"
 reload_broker() { systemctl reload armor-mosquitto 2>/dev/null || systemctl restart armor-mosquitto; }
 
@@ -40,7 +41,10 @@ case "$ACTION" in
       if [[ "$ROLE" == "node" ]]; then
         echo "topic write armor/node/$NAME/telemetry"
         echo "topic write armor/node/$NAME/health"
+        echo "topic write armor/node/$NAME/info"   # the address of its own web panel, for a console to link to
         echo "topic read armor/node/$NAME/command"
+        # The pins mapped in the node's own panel are devices named after the node: armor/device/<node>/<pin>/state and /set.
+        echo "topic readwrite armor/device/$NAME/#"
       elif [[ "$ROLE" == "device" ]]; then
         echo "topic readwrite armor/device/$NAME/#"
       elif [[ "$ROLE" == "bridge" ]]; then
@@ -53,6 +57,28 @@ case "$ACTION" in
     reload_broker
     echo "user: $USER_NAME"
     echo "password: $PASSWORD"
+    ;;
+  upgrade-node)
+    NAME="${2:-}"; USER_NAME="field-node-$NAME"
+    [[ "$NAME" =~ ^[a-z0-9][a-z0-9_-]{0,63}$ ]] || { echo "the node id must match ^[a-z0-9][a-z0-9_-]{0,63}\$" >&2; exit 2; }
+    grep -qx "user $USER_NAME" "$MQ/acl" || { echo "$USER_NAME does not exist" >&2; exit 1; }
+    CHANGED=0
+    # Idempotent: each line is added to the node's own block only when it is not there.
+    for LINE in "topic write armor/node/$NAME/info" "topic readwrite armor/device/$NAME/#"; do
+      if awk -v u="user $USER_NAME" -v l="$LINE" 'BEGIN{inb=0; found=0} $0==u{inb=1; next} inb && /^$/{inb=0} inb && $0==l{found=1} END{exit found?0:1}' "$MQ/acl"; then
+        echo "$USER_NAME already has: $LINE"
+      else
+        [[ "$CHANGED" -eq 1 ]] || cp -p "$MQ/acl" "$MQ/acl.before-upgrade"
+        sed -i "/^user $USER_NAME\$/a $LINE" "$MQ/acl"
+        CHANGED=1
+        echo "$USER_NAME now has: $LINE"
+      fi
+    done
+    if [[ "$CHANGED" -eq 1 ]]; then
+      chown armor:armor "$MQ/acl"; chmod 0600 "$MQ/acl"
+      reload_broker
+      echo "the previous ACL is kept as acl.before-upgrade"
+    fi
     ;;
   remove)
     USER_NAME="${2:-}"
