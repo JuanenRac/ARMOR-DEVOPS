@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented here.
 
+## [0.4.0] - A.R.M.O.R.'s own MQTT broker on the bench
+
+- `install_cm5.sh --with-mqtt` runs Mosquitto as a third systemd unit (`armor-mosquitto`) on its own port (18883), with its own passwords and ACL, never the system broker and never the standard port 1883 that other software may use. An upgrade keeps an existing broker.
+- `scripts/mqtt_identity.sh` adds or removes a field-node or alarm-consumer identity with the least privilege each needs, printing the generated password once.
+- Verified on a real CM5: anonymous connections are refused, a node's telemetry reaches the server over MQTT and raises an alert, and the alarm is delivered to a consumer on `armor/server/alert`.
+
 ## [0.3.0] - Backup, restore and TLS
 
 - `scripts/backup_data.sh` and `restore_data.sh`: AES-256 encrypted, verified and checksummed backups of the server data; restore never overwrites existing data. `scripts/test_backup.sh` covers the round trip, a wrong passphrase, a damaged archive and restoring over existing data.
