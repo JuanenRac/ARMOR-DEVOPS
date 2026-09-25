@@ -7,7 +7,11 @@
 user field-node-NODE_ID
 topic write armor/node/NODE_ID/telemetry
 topic write armor/node/NODE_ID/health
+# Where the node's own web panel is (its address), for a console to link to.
+topic write armor/node/NODE_ID/info
 topic read armor/node/NODE_ID/command
+# The pins mapped in the node's web panel are devices named after the node (armor/device/NODE_ID/<pin>/state and /set).
+topic readwrite armor/device/NODE_ID/#
 
 # The central service observes every node and is the only one allowed to send commands.
 user armor-server
