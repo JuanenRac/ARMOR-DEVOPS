@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented here.
 
+## [0.5.0] - FFmpeg on the bench and a Compose that was run
+
+- The installer points the server at FFmpeg when it is installed. `scripts/test_compose.sh` builds and runs the Compose topology (broker, server, Studio and the TLS profile) with 12 checks; it found and fixed three faults.
+
 ## [0.4.0] - A.R.M.O.R.'s own MQTT broker on the bench
 
 - **Compose run for real** (Docker Engine in WSL, `scripts/test_compose.sh`, 12 checks) and three faults fixed that a YAML check could not see: the broker could not start with every capability dropped (it needs `CHOWN`, `SETUID`, `SETGID` to drop to its own user), it could not read its password and ACL files (they are now world-readable on purpose: a salted hash and an access list), and Caddy could not even execute with all capabilities dropped (it needs `NET_BIND_SERVICE`). The TLS certificate is now issued for `ARMOR_TLS_HOST` because a hostless site cannot answer a request by IP address.
