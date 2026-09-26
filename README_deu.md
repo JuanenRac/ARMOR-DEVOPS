@@ -34,7 +34,7 @@
 * **Eine Host-Firewall für den zentralen Rechner** (`scripts/firewall_core.sh`): der Port des Brokers nur aus dem Feldnetz, die Ports von Server und Studio nur aus dem Netz der Clients (wenn angegeben), in einer eigenen Tabelle, die nichts anderes erwähnt und den Rest annimmt; `apply --rollback-after` entfernt die Regeln wieder, wenn Sie sie nicht bestätigen, ein Fehler sperrt Sie also nicht aus. Regeln und Ablehnungen sind getestet (36 Prüfungen, nichts wird geladen); sie wurde noch auf keinem Rechner geladen, und die VLANs selbst sind weiter ein Entwurf für Router und Switch.
 * **CM5-Prüfstand:** `scripts/deploy_cm5.sh` baut in einer sauberen Kopie, sendet ein Archiv und führt `scripts/install_cm5.sh` aus, das einen eigenen Benutzer, ein eigenes Verzeichnis und zwei systemd-Units auf eigenen Ports anlegt (drei mit `--with-mqtt`: das eigene Mosquitto von A.R.M.O.R. auf Port 18883, auf einer echten CM5 geprüft), mit Ressourcenlimits, und nie ein anderes Projekt anfasst ([Details](docs/CM5_TEST_BENCH.md)).
 * **Compose-Topologie:** ein nicht anonymer Mosquitto-Broker mit einer Identität je Knoten, der Server und Studio hinter einem nginx, der `/api/` weiterreicht; nur Studio wird veröffentlicht, auf Loopback. Gehärtete Container, ein internes Kernnetz und benannte Volumes für den Zustand.
-* **Geräte und Messwerte am Broker des Prüfstands:** der Server darf `armor/device/#` hören und ansteuern und `armor/node/+/info` sowie `armor/solar/#` lesen; `scripts/mqtt_identity.sh add device NAME` gibt einem Gerät eigene Topics und `add bridge NAME` einer Zigbee2MQTT- oder Shelly-Brücke alle.
+* **Geräte und Messwerte am Broker des Prüfstands:** der Server darf `armor/device/#` hören und ansteuern und `armor/node/+/info`, `armor/solar/#` sowie `armor/electrical/#` lesen; `scripts/mqtt_identity.sh add device NAME` gibt einem Gerät eigene Topics und `add bridge NAME` einer Zigbee2MQTT- oder Shelly-Brücke alle.
 * **Geheimnisse:** `scripts/generate_secrets.sh` erzeugt zufällige Geheimnisse und druckt keines; `scripts/check-required-env.sh` lehnt fehlende, Platzhalter-, kurze oder wiederholte Werte ab.
 * **Backup und Wiederherstellung:** `scripts/backup_data.sh` erstellt ein AES-256-verschlüsseltes, verifiziertes und mit Prüfsumme versehenes Archiv der Serverdaten (Beweise nur auf Wunsch); `scripts/restore_data.sh` listet es auf oder stellt es wieder her, ohne je vorhandene Daten zu überschreiben. Der Kameraschlüssel ist absichtlich **nicht** im Archiv.
 * **TLS:** ein optionales Compose-Profil `tls` stellt Caddy mit eigener lokaler Zertifizierungsstelle vor Studio ([Details](docs/BACKUP_AND_TLS.md)).
@@ -45,7 +45,7 @@
 ARMOR-DEVOPS/
 ├── docker-compose.yml, .env.example, mosquitto/
 ├── caddy/     Caddyfile (TLS)
-├── scripts/   deploy_cm5, install_cm5, generate_secrets, check-required-env, validate-compose, backup_data, restore_data, test_backup, test_compose, mqtt_identity
+├── scripts/   deploy_cm5, install_cm5, generate_secrets, check-required-env, validate-compose, backup_data, restore_data, test_backup, test_compose, firewall_core, test_firewall, mqtt_identity
 └── docs/      DEPLOYMENT_BOUNDARY, CM5_TEST_BENCH, BACKUP_AND_TLS
 ```
 
