@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented here.
 
+## [0.2.9] - An identity for the solar nodes
+
+- `mqtt_identity.sh add solar-node <id>` makes the broker identity of an ARMOR-SOLAR node (`solar-node-<id>`): it may write `armor/solar/<id>/#` and nothing else, and it reads nothing. `remove` knows the new kind.
+
 ## [0.2.8] - A plainer rule for the install prefix
 
 - `install_cm5.sh` accepts as `--prefix` only one directory directly under `/opt` (before it refused a list of names), and still refuses an existing directory that is not an A.R.M.O.R. install. The usage lines in the scripts and the bench guide use placeholders for the account and key names.
