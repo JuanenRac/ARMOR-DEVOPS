@@ -27,6 +27,16 @@ topic write armor/server/alert
 # Smart devices (smoke, door, plug, light ...): the server listens on their state and commands them.
 topic readwrite armor/device/#
 
+# An electrical node (ARMOR-ELECTRICAL, scripts/mqtt_identity.sh add electrical-node ID): it writes what it measures and its answers, and reads nothing.
+# user electrical-node-electrical-1
+# topic write armor/electrical/electrical-1/state
+# topic write armor/electrical/electrical-1/result
+#
+# A command to a node's switch is refused by the broker unless BOTH of these lines exist, and only `scripts/mqtt_identity.sh electrical-switching ID on` writes them
+# (`off` removes them). The server also needs ARMOR_ELECTRICAL_SWITCHING=1 and the node has to allow switching itself: three independent switches, all off by default.
+#   in the block of electrical-node-electrical-1:   topic read armor/electrical/electrical-1/command
+#   in the block of armor-server:                   topic write armor/electrical/electrical-1/command
+
 # An alarm consumer (a siren controller, a notifier) only reads alerts.
 # user alarm-consumer
 # topic read armor/server/alert

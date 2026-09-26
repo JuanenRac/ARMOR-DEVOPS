@@ -34,7 +34,7 @@
 * **中核マシン用のホストファイアウォール**（`scripts/firewall_core.sh`）：ブローカーのポートはフィールドネットワークからのみ、サーバーと Studio のポートはクライアントのネットワークからのみ（指定した場合）許可し、他には一切触れずそれ以外を許可する専用テーブルに入れます。`apply --rollback-after` は確認しないとルールを自動的に取り除くため、設定ミスで締め出されません。ルールと拒否のテストがあります（36 件、何も読み込みません）。どのマシンにも読み込んだことはなく、VLAN 自体はルーターとスイッチ向けの設計のままです。
 * **CM5 テストベンチ：** `scripts/deploy_cm5.sh` はきれいなコピーでビルドし、アーカイブを送って `scripts/install_cm5.sh` を実行します。これは専用のユーザー、専用のディレクトリ、専用ポートの 2 つの systemd ユニット（`--with-mqtt` で 3 つ：A.R.M.O.R. 専用の Mosquitto をポート 18883 で、実際の CM5 で確認済み）を作り、リソース制限を設け、他のプロジェクトには決して触れません（[詳細](docs/CM5_TEST_BENCH.md)）。
 * **Compose のトポロジー：** ノードごとに ID を持つ非匿名の Mosquitto ブローカー、サーバー、`/api/` を中継する nginx の背後にある Studio。公開されるのは Studio だけで、ループバック上です。堅牢化されたコンテナー、内部コアネットワーク、状態用の名前付きボリューム。
-* **ベンチのブローカー上のデバイスと測定値：** サーバーは `armor/device/#` を購読して操作でき、`armor/node/+/info`、`armor/solar/#`、`armor/electrical/#` を読めます。`scripts/mqtt_identity.sh add device NAME` は 1 つのデバイスに専用トピックを、`add bridge NAME` は Zigbee2MQTT や Shelly のブリッジにすべてを与えます。
+* **ベンチのブローカー上のデバイスと測定値：** サーバーは `armor/device/#` を購読して操作でき、`armor/node/+/info`、`armor/solar/#`、`armor/electrical/#` を読めます。`scripts/mqtt_identity.sh add device NAME` は 1 つのデバイスに専用トピックを、`add bridge NAME` は Zigbee2MQTT や Shelly のブリッジにすべてを与えます。 `scripts/mqtt_identity.sh electrical-switching NODE_ID on` だけが、サーバーが電気ノードの開閉器へコマンドを送れるようにします（既定ではオフ。`off` で取り消せます）。
 * **シークレット：** `scripts/generate_secrets.sh` はランダムなシークレットを作り、何も表示しません。`scripts/check-required-env.sh` は、欠落、見本、短すぎる、重複した値を拒否します。
 * **バックアップと復元：** `scripts/backup_data.sh` はサーバーデータの AES-256 暗号化、検証済み、チェックサム付きアーカイブを作ります（要求しない限り証拠は含めません）。`scripts/restore_data.sh` はそれを一覧または復元し、既存のデータを決して上書きしません。カメラの鍵は意図的にアーカイブに**入れません**。
 * **TLS：** オプションの `tls` Compose プロファイルは、独自のローカル認証局を持つ Caddy を Studio の前に置きます（[詳細](docs/BACKUP_AND_TLS.md)）。
