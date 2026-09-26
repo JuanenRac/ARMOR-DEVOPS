@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented here.
 
+## [0.2.7] - The server may read the nodes' information and the solar topic
+
+- The broker's access list for the server (`install_cm5.sh`, and `mqtt_identity.sh` when it makes one) lets it read `armor/node/+/info` (it could not, so a node's panel address never arrived over MQTT) and `armor/solar/#`; an installation made earlier gets both on the next run.
+
 ## [0.2.6] - Broker access for the node's panel information and pins
 
 - `mqtt_identity.sh add node` now also lets a node write `armor/node/<id>/info` (where its panel is) next to its telemetry and health. `mqtt_identity.sh upgrade-node <id>` adds that and `armor/device/<id>/#` (the pins the node lends to the server) to a node created earlier, idempotently, keeping the previous ACL as `acl.before-upgrade`. The ACL example shows both.

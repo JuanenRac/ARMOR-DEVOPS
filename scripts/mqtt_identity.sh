@@ -2,11 +2,11 @@
 # ARMOR-DEVOPS - add or remove an MQTT identity on the A.R.M.O.R. test-bench broker.
 # Copyright (C) 2026 JuanenRac (Electro Hobby 3D). GPL-3.0-or-later.
 #
-#   sudo mqtt_identity.sh add node north-1     # a field node: writes its own telemetry/health, reads its own commands
+#   sudo mqtt_identity.sh add node north-1     # a field node: writes its own telemetry/health, reads its own commands (and writes armor/solar/north-1/# if it also reads solar equipment)
 #   sudo mqtt_identity.sh add consumer siren   # an alarm consumer: reads armor/server/alert only
 #   sudo mqtt_identity.sh add device kitchen   # one smart device (a plug, a sensor): reads and writes armor/device/kitchen/# only
 #   sudo mqtt_identity.sh add bridge zigbee    # a bridge to many devices (Zigbee2MQTT, a Shelly gateway): all of armor/device/#
-#   sudo mqtt_identity.sh upgrade-node north-1 # an existing field node: also let it write armor/node/north-1/info (where its panel is) and use armor/device/north-1/# (its mapped pins)
+#   sudo mqtt_identity.sh upgrade-node north-1 # an existing field node: also let it write armor/node/north-1/info (where its panel is) use armor/device/north-1/# (its mapped pins) and write armor/solar/north-1/# (inverters and batteries it reads)
 #   sudo mqtt_identity.sh remove field-node-north-1
 #
 # The generated password is printed once, because the device needs it; it is
@@ -45,6 +45,8 @@ case "$ACTION" in
         echo "topic read armor/node/$NAME/command"
         # The pins mapped in the node's own panel are devices named after the node: armor/device/<node>/<pin>/state and /set.
         echo "topic readwrite armor/device/$NAME/#"
+        # A node that also reads solar inverters and batteries publishes them as armor/solar/<node>/<device>/state.
+        echo "topic write armor/solar/$NAME/#"
       elif [[ "$ROLE" == "device" ]]; then
         echo "topic readwrite armor/device/$NAME/#"
       elif [[ "$ROLE" == "bridge" ]]; then
@@ -64,7 +66,7 @@ case "$ACTION" in
     grep -qx "user $USER_NAME" "$MQ/acl" || { echo "$USER_NAME does not exist" >&2; exit 1; }
     CHANGED=0
     # Idempotent: each line is added to the node's own block only when it is not there.
-    for LINE in "topic write armor/node/$NAME/info" "topic readwrite armor/device/$NAME/#"; do
+    for LINE in "topic write armor/node/$NAME/info" "topic readwrite armor/device/$NAME/#" "topic write armor/solar/$NAME/#"; do
       if awk -v u="user $USER_NAME" -v l="$LINE" 'BEGIN{inb=0; found=0} $0==u{inb=1; next} inb && /^$/{inb=0} inb && $0==l{found=1} END{exit found?0:1}' "$MQ/acl"; then
         echo "$USER_NAME already has: $LINE"
       else
