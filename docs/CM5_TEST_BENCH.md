@@ -12,7 +12,7 @@ touching anything else on the machine. This is a test bench, not the Jetson depl
 * installs two systemd units, `armor-server` and `armor-studio`, on their **own ports**
   (18080 and 18081 by default) and refuses to start if either port is already in use by
   something else;
-* refuses a prefix that is outside `/opt`, inside a HYDRA-UMC directory, or an existing directory that is not already an A.R.M.O.R. install;
+* refuses a prefix that is not one directory directly under `/opt` (never a place inside another project), or an existing directory that is not already an A.R.M.O.R. install;
 * limits what the bench can take from the machine (`Nice`, `CPUWeight`, `IOWeight`,
   `MemoryMax`, `TasksMax`) and hardens the units (`ProtectSystem=strict`, `NoNewPrivileges`,
   empty capability set and restricted address families);

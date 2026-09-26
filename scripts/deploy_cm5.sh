@@ -6,7 +6,7 @@
 # Copyright (C) 2026 JuanenRac (Electro Hobby 3D)
 # GPL-3.0-or-later - see LICENSE
 # =============================================================================
-# Usage: deploy_cm5.sh --host 192.168.0.180 --user hydra-umc --key ~/.ssh/id_key [--port N] [--public-host H] [--apply] [--with-mqtt]
+# Usage: deploy_cm5.sh --host 192.168.0.180 --user <user> --key ~/.ssh/id_key [--port N] [--public-host H] [--apply] [--with-mqtt]
 #        --port N          the SSH port, when it is not 22 (a router that forwards a public port to it)
 #        --public-host H   the address the browser uses, when it is not --host
 #        [--also-reach http://PUBLIC:2601=http://PUBLIC:2600] [--forget-reach]   (another address the browser may log in from)
