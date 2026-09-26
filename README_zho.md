@@ -31,6 +31,7 @@
 
 ## 🎯 概述
 
+* **核心主机的防火墙**（`scripts/firewall_core.sh`）：代理（broker）端口只允许现场网络访问，服务器和 Studio 的端口只允许客户端网络访问（如已指定），放在只提及这些端口、其余一概放行的独立表中；`apply --rollback-after` 会在未确认时自动移除规则，因此配置错误不会把你锁在外面。规则和拒绝情形已有测试（36 项，不会加载任何内容）；尚未在任何机器上加载，VLAN 本身仍是面向路由器和交换机的设计。
 * **CM5 测试台：** `scripts/deploy_cm5.sh` 在干净的副本中构建，发送一个压缩包并运行 `scripts/install_cm5.sh`，后者创建自己的用户、自己的目录和两个使用各自端口的 systemd 单元（加 `--with-mqtt` 为三个：A.R.M.O.R. 自己的 Mosquitto，端口 18883，已在真实 CM5 上验证），带资源限制，且绝不触碰其他项目（[详情](docs/CM5_TEST_BENCH.md)）。
 * **Compose 拓扑：** 非匿名的 Mosquitto 代理，每个节点一个身份；服务器；以及位于转发 `/api/` 的 nginx 之后的 Studio；只有 Studio 被发布，且仅在回环上。加固的容器、内部核心网络和用于保存状态的命名卷。
 * **测试台代理上的设备与读数：** 服务器可以监听并控制 `armor/device/#`，并读取 `armor/node/+/info` 和 `armor/solar/#`；`scripts/mqtt_identity.sh add device NAME` 为一个设备提供专属主题，`add bridge NAME` 为 Zigbee2MQTT 或 Shelly 桥接提供全部主题。

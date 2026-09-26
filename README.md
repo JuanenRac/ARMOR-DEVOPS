@@ -31,6 +31,7 @@
 
 ## 🎯 Overview
 
+* **A host firewall for the core machine** (`scripts/firewall_core.sh`): the broker's port only from the field network, the server's and Studio's ports only from the clients' network (when it is given), in a table of its own that mentions nothing else and accepts the rest; `apply --rollback-after` removes the rules again unless you confirm them, so a mistake cannot shut you out. The rules and the refusals are tested (36 checks, nothing is loaded); it has been loaded on no machine yet, and the VLANs themselves are still a design for the router and the switch.
 * **CM5 test bench:** `scripts/deploy_cm5.sh` builds in a clean copy, sends one archive and runs `scripts/install_cm5.sh`, which creates its own user, its own directory and two systemd units on their own ports (three with `--with-mqtt`: A.R.M.O.R.'s own Mosquitto on port 18883, verified on a real CM5), with resource limits, and never touches another project ([details](docs/CM5_TEST_BENCH.md)).
 * **Compose topology:** a non-anonymous Mosquitto broker with one identity per node, the server, and Studio behind an nginx that proxies `/api/`; only Studio is published, on loopback. Hardened containers, an internal core network and named volumes for state.
 * **Devices and readings on the bench broker:** the server may listen on and command `armor/device/#` and read `armor/node/+/info` and `armor/solar/#`; `scripts/mqtt_identity.sh add device NAME` gives one device its own topics and `add bridge NAME` a Zigbee2MQTT or Shelly bridge all of them.

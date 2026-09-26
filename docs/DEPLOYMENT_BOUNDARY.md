@@ -27,3 +27,18 @@ intentionally conservative:
 
 `scripts/validate-compose.sh` runs `docker compose config` (Docker is required and is not installed on the development PC); it validates the topology, not a
 running system. For a bench without Docker see [CM5 test bench](CM5_TEST_BENCH.md).
+
+## The host firewall
+
+`scripts/firewall_core.sh` puts the network design (`ARMOR-DOCS/docs/SECURITY_BASELINE.md`) into rules for the core machine, in a table of its own:
+
+    firewall_core.sh print --field 192.168.0.0/24 --clients 192.168.10.0/24        # what it would load
+    sudo firewall_core.sh apply --field 192.168.0.0/24 --rollback-after 120         # load it; it undoes itself in 120 s ...
+    sudo firewall_core.sh confirm                                                   # ... unless you say it is good
+    sudo firewall_core.sh apply --field 192.168.0.0/24 --clients 192.168.10.0/24 --persist   # and at every boot
+    sudo firewall_core.sh revert
+
+The broker (18883) accepts only the **field** network and this machine; the server (18080) and Studio (18081) accept only the **clients'** network and this machine when `--clients` is given (without it they stay as open as
+they were, protected by the login). Nothing else is mentioned and the policy is *accept*, so SSH, another project's ports and DNS are untouched. It acts on the machine's input: services installed natively are covered,
+a port published by Docker is not (keep those on loopback behind Caddy). A remote way in through a router's port forwarding arrives from the router's or the Internet's address: give `--clients` only if that address is
+in it, or leave `--clients` out. **Never forward the broker's port.** The rules have been tested as text only (`scripts/test_firewall.sh`); they have not been loaded on a machine.

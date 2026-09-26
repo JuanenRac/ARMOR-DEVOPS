@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented here.
 
+## [0.3.0] - A host firewall for the core machine
+
+- **`scripts/firewall_core.sh`** turns the network design into rules for the machine that runs the server, the broker and Studio: the broker's port is reachable only from the **field** network (`--field`, required) and from the machine itself, and, when `--clients` is given, the server's and Studio's ports only from the **clients'** network. The rules live in one table of their own (`inet armor_core`) that mentions only A.R.M.O.R.'s ports and has an *accept* policy: SSH, another project's ports and everything else are left as they were. The ports are the ones `install_cm5.sh` uses and can be changed.
+- **A mistake cannot shut you out:** `apply --rollback-after 120` removes the rules again after that many seconds unless `confirm` is run; `apply --persist` loads them at every boot; `revert` removes the table and the boot unit; `print` and `check` change nothing. Networks, ports and names are validated (IPv4 only, no shell text gets through).
+- **`scripts/test_firewall.sh`** (36 checks): the rules printed for the standard case, without clients, with other ports and a trusted interface and several networks; that no rule sets a drop policy or mentions another port; and every refusal (a missing field network, a bad network, a bad port, two services on one port, a tampered interface name, an unknown option). `nft -c` also checks the syntax when nft is installed (it is not on the development machine, so that step was skipped).
+- **Not done:** loading the rules on the CM5 (Monday's bench), and the VLANs themselves, which are the router's and the switch's job. The rules act on the machine's input, so they cover services installed natively (`install_cm5.sh`); a port that Docker publishes is forwarded, not input, and stays on loopback behind Caddy as `docker-compose.yml` has it.
+
 ## [0.2.9] - An identity for the solar nodes
 
 - `mqtt_identity.sh add solar-node <id>` makes the broker identity of an ARMOR-SOLAR node (`solar-node-<id>`): it may write `armor/solar/<id>/#` and nothing else, and it reads nothing. `remove` knows the new kind.
