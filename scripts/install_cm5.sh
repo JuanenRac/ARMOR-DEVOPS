@@ -103,7 +103,7 @@ if [[ "$WITH_MQTT" -eq 1 ]]; then
   [[ "$MQTT_PORT" =~ ^[0-9]+$ && "$MQTT_PORT" -ge 1024 && "$MQTT_PORT" -le 65535 ]] || fail "--mqtt-port must be a number between 1024 and 65535"
   [[ "$MQTT_PORT" != "1883" && "$MQTT_PORT" != "$SERVER_PORT" && "$MQTT_PORT" != "$STUDIO_PORT" ]] || fail "--mqtt-port must not be 1883 or another A.R.M.O.R. port"
 fi
-[[ "$PREFIX" == /opt/* && "$PREFIX" != "/opt/hydra-umc"* ]] || fail "--prefix must be under /opt and never inside a HYDRA-UMC directory"
+[[ "$PREFIX" =~ ^/opt/[A-Za-z0-9._-]+$ ]] || fail "--prefix must be one directory directly under /opt (never a place inside another project)"
 # An existing, non-empty prefix must already be this project's own (an upgrade), never someone else's directory.
 if [[ -d "$PREFIX" && -n "$(ls -A "$PREFIX" 2>/dev/null)" && ! -f "$PREFIX/etc/armor.network.env" ]]; then
   fail "$PREFIX already exists and is not an A.R.M.O.R. install; choose another --prefix"

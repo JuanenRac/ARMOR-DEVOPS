@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented here.
 
+## [0.2.8] - A plainer rule for the install prefix
+
+- `install_cm5.sh` accepts as `--prefix` only one directory directly under `/opt` (before it refused a list of names), and still refuses an existing directory that is not an A.R.M.O.R. install. The usage lines in the scripts and the bench guide use placeholders for the account and key names.
+
 ## [0.2.7] - The server may read the nodes' information and the solar topic
 
 - The broker's access list for the server (`install_cm5.sh`, and `mqtt_identity.sh` when it makes one) lets it read `armor/node/+/info` (it could not, so a node's panel address never arrived over MQTT) and `armor/solar/#`; an installation made earlier gets both on the next run.

@@ -4,7 +4,15 @@
 
 # 🚀 ARMOR-DEVOPS
 
-<p align="center"><a href="README.md">🇺🇸 English</a> | 🇪🇸 <b>Español</b></p>
+<p align="center">
+  <a href="README.md">🇺🇸 English</a> |
+  🇪🇸 <b>Español</b> |
+  <a href="README_fra.md">🇫🇷 Français</a> |
+  <a href="README_ita.md">🇮🇹 Italiano</a> |
+  <a href="README_deu.md">🇩🇪 Deutsch</a> |
+  <a href="README_zho.md">🇨🇳 简体中文</a> |
+  <a href="README_jpn.md">🇯🇵 日本語</a>
+</p>
 
 ### Topología de despliegue y el banco de pruebas aislado en CM5
 
@@ -21,32 +29,16 @@
 
 ---
 
-## 1. 🛠️ DESCRIPCIÓN
+## 🎯 Descripción general
 
 * **Banco de pruebas CM5:** `scripts/deploy_cm5.sh` compila en una copia limpia, envía un archivo y ejecuta `scripts/install_cm5.sh`, que crea su propio usuario, su propio directorio y dos unidades systemd en puertos propios (tres con `--with-mqtt`: el Mosquitto propio de A.R.M.O.R. en el puerto 18883, comprobado en una CM5 real), con límites de recursos, y nunca toca otro proyecto ([detalles](docs/CM5_TEST_BENCH.md)).
 * **Topología Compose:** un broker Mosquitto no anónimo con una identidad por nodo, el servidor y Studio tras un nginx que hace de proxy de `/api/`; solo se publica Studio, en loopback. Contenedores endurecidos, red interna y volúmenes con nombre para el estado.
-* **Dispositivos en el broker del banco:** el servidor puede escuchar y ordenar `armor/device/#`; `scripts/mqtt_identity.sh add device NOMBRE` da a un dispositivo sus propios topics y `add bridge NOMBRE` a un puente Zigbee2MQTT o Shelly todos ellos.
+* **Dispositivos y lecturas en el broker del banco:** el servidor puede escuchar y ordenar `armor/device/#` y leer `armor/node/+/info` y `armor/solar/#`; `scripts/mqtt_identity.sh add device NAME` da a un dispositivo sus propios temas y `add bridge NAME` a un puente Zigbee2MQTT o Shelly todos ellos.
 * **Secretos:** `scripts/generate_secrets.sh` crea secretos aleatorios sin imprimir ninguno; `scripts/check-required-env.sh` rechaza valores ausentes, de ejemplo, cortos o repetidos.
 * **Copia de seguridad y restauración:** `scripts/backup_data.sh` crea un archivo cifrado con AES-256, verificado y con suma de comprobación de los datos del servidor (sin evidencias salvo que se pida); `scripts/restore_data.sh` lo lista o lo restaura sin sobrescribir nunca datos existentes. La clave de cámaras **no** va en el archivo, a propósito.
 * **TLS:** un perfil `tls` opcional de Compose pone Caddy, con su propia autoridad de certificados local, delante de Studio ([detalles](docs/BACKUP_AND_TLS.md)).
 
----
-
-## 2. 🔧 COMPILAR Y EJECUTAR
-
-```bash
-scripts/generate_secrets.sh          # .env y secrets/ (ignorados por Git)
-scripts/check-required-env.sh
-docker compose config --quiet && docker compose up --build
-scripts/deploy_cm5.sh --host <cm5> --user <usuario> --key <clave> --apply   # el banco de pruebas
-scripts/backup_data.sh --data-dir <datos> --out-dir <copias> --passphrase-file <fichero>
-```
-
-Véase el [límite de despliegue](docs/DEPLOYMENT_BOUNDARY.md).
-
----
-
-## 📂 ESTRUCTURA DE DIRECTORIOS
+## 📂 Estructura del repositorio
 
 ```text
 ARMOR-DEVOPS/
@@ -56,7 +48,44 @@ ARMOR-DEVOPS/
 └── docs/      DEPLOYMENT_BOUNDARY, CM5_TEST_BENCH, BACKUP_AND_TLS
 ```
 
----
+## 🛠️ Entorno de desarrollo
+
+```bash
+scripts/generate_secrets.sh          # .env and secrets/ (Git-ignored)
+scripts/check-required-env.sh
+docker compose config --quiet && docker compose up --build
+scripts/deploy_cm5.sh --host <cm5> --user <user> --key <key> --apply   # the test bench
+scripts/backup_data.sh --data-dir <data> --out-dir <backups> --passphrase-file <file>
+```
+
+Véase el [límite de despliegue](docs/DEPLOYMENT_BOUNDARY.md).
+
+## 🔗 Proyectos relacionados
+
+**A.R.M.O.R.** (Autonomous Radar & Multimodal Observation Range) es un sistema de seguridad perimetral hecho de repositorios independientes. Cada uno tiene su propia versión, sus propias pruebas y su propio README; esta es la familia:
+
+* **[ARMOR-COMMON](../ARMOR-COMMON)** - Contratos de mensajes, validadores, vectores de conformidad y tipos generados
+* **[ARMOR-RADAR](../ARMOR-RADAR)** - Firmware del nodo de campo para ESP32-S3 con tres radares y su propio panel web
+* **[ARMOR-SOLAR](../ARMOR-SOLAR)** - Protocolos de inversores y baterías solares y los mensajes de un nodo pasarela
+* **[ARMOR-SERVER](../ARMOR-SERVER)** - Coordinador central: telemetría, alarmas, dispositivos, lecturas solares y cámaras
+* **[ARMOR-STUDIO](../ARMOR-STUDIO)** - Consola web: cámaras, radar, alarmas, energía solar y el diseñador de sitio 2D/3D
+* **[ARMOR-ANDROID-CONTROL](../ARMOR-ANDROID-CONTROL)** - Cliente Android del operador con radar 2D/3D en vivo
+* **[ARMOR-SERVER-AI](../ARMOR-SERVER-AI)** - Política de inferencia visual que explica sus decisiones y nunca actúa
+* **[ARMOR-VOICE-AI](../ARMOR-VOICE-AI)** - Intenciones de voz sin conexión con una confirmación imposible de falsificar
+* **[ARMOR-HARDWARE](../ARMOR-HARDWARE)** - Cajas, electrónica y la matriz de aceptación en banco
+* **ARMOR-DEVOPS** (este repositorio) - Despliegue, el banco de pruebas de la CM5, copias de seguridad y TLS
+* **[ARMOR-SIMULATOR](../ARMOR-SIMULATOR)** - Simulador de telemetría sin conexión con fallos repetibles
+* **[ARMOR-DOCS](../ARMOR-DOCS)** - Arquitectura, base de seguridad y la matriz de capacidades
+
+## 📚 Documentación y comunidad
+
+Dónde leer más:
+
+* [Matriz de capacidades: qué está probado y qué no](../ARMOR-DOCS/docs/CAPABILITY_MATRIX.md)
+* [Catálogo de proyectos: versiones y cómo dependen unos de otros](../ARMOR-DOCS/docs/PROJECT_CATALOG.md)
+* [Historial de cambios de este repositorio](CHANGELOG.md)
+* [Licencia (GPL-3.0-or-later)](LICENSE)
+* Preguntas, ideas e informes: electrohobby3d@gmail.com
 
 ## 👤 AUTOR
 
