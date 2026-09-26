@@ -17,6 +17,10 @@ topic readwrite armor/device/NODE_ID/#
 user armor-server
 topic read armor/node/+/telemetry
 topic read armor/node/+/health
+topic read armor/node/+/info
+# What the solar gateway nodes and the electrical nodes measure (each node writes only its own subtree, see scripts/mqtt_identity.sh).
+topic read armor/solar/#
+topic read armor/electrical/#
 topic write armor/node/+/command
 # Alarm output: the server publishes alert.raised / alert.cleared / node.offline / node.stale here.
 topic write armor/server/alert

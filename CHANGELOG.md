@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented here.
 
+## [0.3.1] - The server may read the electrical nodes
+
+- **A fix found in review:** the broker's ACL for `armor-server` (written by `install_cm5.sh` on a new install and added, once, on an existing one) lets it read `armor/electrical/#` next to `armor/solar/#`. Without it the broker refused the server's subscription to the electrical nodes' messages, so nothing an electrical node published would have reached Studio. `mosquitto/acl.example` now shows the server's rules for the info, solar and electrical topics too.
+
 ## [0.3.0] - A host firewall for the core machine
 
 - **`scripts/firewall_core.sh`** turns the network design into rules for the machine that runs the server, the broker and Studio: the broker's port is reachable only from the **field** network (`--field`, required) and from the machine itself, and, when `--clients` is given, the server's and Studio's ports only from the **clients'** network. The rules live in one table of their own (`inet armor_core`) that mentions only A.R.M.O.R.'s ports and has an *accept* policy: SSH, another project's ports and everything else are left as they were. The ports are the ones `install_cm5.sh` uses and can be changed.
