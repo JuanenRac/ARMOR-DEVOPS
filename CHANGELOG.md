@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented here.
 
+## [0.3.2] - The switch of an electrical node is not reachable until it is turned on
+
+- `mqtt_identity.sh add electrical-node ID` now gives the node `armor/electrical/ID/state` and `.../result` (not the whole `ID/#`) and it still reads nothing.
+- **`mqtt_identity.sh electrical-switching ID on|off`:** the only thing that writes the two lines that make a node's switch reachable, the node may read `armor/electrical/ID/command` and the server may write it; without both the broker itself refuses a command, whatever the server says. Idempotent, keeps `acl.before-switching`, and `off` takes both away. It is in no install.
+- **A fix:** `remove` did not know `electrical-node-*` identities, so one could never be removed; it does now, and takes the server's command line for that node with it.
+- `scripts/test_mqtt_identity.sh` (in `check_all.sh`) runs the script against a stand-in broker directory: nothing is reachable by default, `on` reaches only that node, is idempotent, `off` and `remove` take it all away, and bad input changes nothing.
+
 ## [0.3.1] - The server may read the electrical nodes
 
 - **A fix found in review:** the broker's ACL for `armor-server` (written by `install_cm5.sh` on a new install and added, once, on an existing one) lets it read `armor/electrical/#` next to `armor/solar/#`. Without it the broker refused the server's subscription to the electrical nodes' messages, so nothing an electrical node published would have reached Studio. `mosquitto/acl.example` now shows the server's rules for the info, solar and electrical topics too.
