@@ -4,6 +4,7 @@
 #
 #   sudo mqtt_identity.sh add node north-1     # a field node: writes its own telemetry/health, reads its own commands (and writes armor/solar/north-1/# if it also reads solar equipment)
 #   sudo mqtt_identity.sh add solar-node solar-1  # a solar gateway node (ARMOR-SOLAR): writes armor/solar/solar-1/# and nothing else
+#   sudo mqtt_identity.sh add electrical-node electrical-1  # an electrical node (ARMOR-ELECTRICAL): writes armor/electrical/electrical-1/# and nothing else
 #   sudo mqtt_identity.sh add consumer siren   # an alarm consumer: reads armor/server/alert only
 #   sudo mqtt_identity.sh add device kitchen   # one smart device (a plug, a sensor): reads and writes armor/device/kitchen/# only
 #   sudo mqtt_identity.sh add bridge zigbee    # a bridge to many devices (Zigbee2MQTT, a Shelly gateway): all of armor/device/#
@@ -18,7 +19,7 @@ MQ="$PREFIX/etc/mosquitto"
 [[ "$(id -u)" -eq 0 ]] || { echo "run as root" >&2; exit 1; }
 [[ -f "$MQ/passwd" && -f "$MQ/acl" ]] || { echo "the A.R.M.O.R. broker is not installed (install_cm5.sh --with-mqtt)" >&2; exit 1; }
 
-usage() { echo "Usage: mqtt_identity.sh add node ID | add solar-node ID | add consumer NAME | add device NAME | add bridge NAME | upgrade-node NODE_ID | remove USER" >&2; exit 2; }
+usage() { echo "Usage: mqtt_identity.sh add node ID | add solar-node ID | add electrical-node ID | add consumer NAME | add device NAME | add bridge NAME | upgrade-node NODE_ID | remove USER" >&2; exit 2; }
 ACTION="${1:-}"
 reload_broker() { systemctl reload armor-mosquitto 2>/dev/null || systemctl restart armor-mosquitto; }
 
@@ -29,6 +30,7 @@ case "$ACTION" in
     case "$ROLE" in
       node) USER_NAME="field-node-$NAME" ;;
       solar-node) USER_NAME="solar-node-$NAME" ;;
+      electrical-node) USER_NAME="electrical-node-$NAME" ;;
       consumer) USER_NAME="alarm-$NAME" ;;
       device) USER_NAME="device-$NAME" ;;
       bridge) USER_NAME="bridge-$NAME" ;;
@@ -52,6 +54,9 @@ case "$ACTION" in
       elif [[ "$ROLE" == "solar-node" ]]; then
         # ARMOR-SOLAR: the readings of the inverters and batteries on its serial ports, armor/solar/<node>/<device>/state; it reads nothing.
         echo "topic write armor/solar/$NAME/#"
+      elif [[ "$ROLE" == "electrical-node" ]]; then
+        # ARMOR-ELECTRICAL: what it measures on the house's network, armor/electrical/<node>/state; it reads nothing (no command reaches a node from the broker).
+        echo "topic write armor/electrical/$NAME/#"
       elif [[ "$ROLE" == "device" ]]; then
         echo "topic readwrite armor/device/$NAME/#"
       elif [[ "$ROLE" == "bridge" ]]; then
