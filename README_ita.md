@@ -78,6 +78,7 @@ Vedi il [confine di distribuzione](docs/DEPLOYMENT_BOUNDARY.md).
 * **[ARMOR-HARDWARE](../ARMOR-HARDWARE)** - Contenitori, elettronica e matrice di accettazione da banco
 * **ARMOR-DEVOPS** (questo repository) - Distribuzione, banco di prova CM5, backup e TLS
 * **[ARMOR-SIMULATOR](../ARMOR-SIMULATOR)** - Simulatore di telemetria offline con guasti ripetibili
+* **[ARMOR-UPDATER](../ARMOR-UPDATER)** - Rileva, installa e aggiorna i repository stessi dell'ecosistema
 * **[ARMOR-DOCS](../ARMOR-DOCS)** - Architettura, base di sicurezza e matrice delle capacità
 
 ## 📚 Documentazione e comunità

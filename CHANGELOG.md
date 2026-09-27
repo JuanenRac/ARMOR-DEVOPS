@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented here.
 
+## [0.3.4]
+
+- A GitHub Actions CI baseline (`.github/workflows/ci.yml`): validates the manifest, the version, CHANGELOG.md's heading, the seven README translations' structure and its own local Markdown links, then runs this project's real build/test through `tools/armor_project_tool.py build-test .` (vendored from ARMOR-COMMON, alongside `tools/armor_ci_validate.py` and `tools/_armor_readme_parity.py`, which do the manifest/docs checking).
+
 ## [0.3.3] - The network nodes
 
 - `mqtt_identity.sh add network-node ID`: the identity of an ARMOR-NETWORK node, which writes `armor/network/ID/state` and nothing else and reads nothing; `remove` knows it. The broker's rules for the server (`install_cm5.sh`, on a new install and, once, on an existing one, and `mosquitto/acl.example`) let it read `armor/network/#`. `scripts/test_mqtt_identity.sh` checks the identity and its removal.

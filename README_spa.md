@@ -78,6 +78,7 @@ Véase el [límite de despliegue](docs/DEPLOYMENT_BOUNDARY.md).
 * **[ARMOR-HARDWARE](../ARMOR-HARDWARE)** - Cajas, electrónica y la matriz de aceptación en banco
 * **ARMOR-DEVOPS** (este repositorio) - Despliegue, el banco de pruebas de la CM5, copias de seguridad y TLS
 * **[ARMOR-SIMULATOR](../ARMOR-SIMULATOR)** - Simulador de telemetría sin conexión con fallos repetibles
+* **[ARMOR-UPDATER](../ARMOR-UPDATER)** - Detecta, instala y actualiza los propios repositorios del ecosistema
 * **[ARMOR-DOCS](../ARMOR-DOCS)** - Arquitectura, base de seguridad y la matriz de capacidades
 
 ## 📚 Documentación y comunidad
