@@ -21,6 +21,8 @@ topic read armor/node/+/info
 # What the solar gateway nodes and the electrical nodes measure (each node writes only its own subtree, see scripts/mqtt_identity.sh).
 topic read armor/solar/#
 topic read armor/electrical/#
+# What the network nodes see on the local network.
+topic read armor/network/#
 topic write armor/node/+/command
 # Alarm output: the server publishes alert.raised / alert.cleared / node.offline / node.stale here.
 topic write armor/server/alert
@@ -36,6 +38,10 @@ topic readwrite armor/device/#
 # (`off` removes them). The server also needs ARMOR_ELECTRICAL_SWITCHING=1 and the node has to allow switching itself: three independent switches, all off by default.
 #   in the block of electrical-node-electrical-1:   topic read armor/electrical/electrical-1/command
 #   in the block of armor-server:                   topic write armor/electrical/electrical-1/command
+
+# A network node (ARMOR-NETWORK, scripts/mqtt_identity.sh add network-node ID): it writes what it sees on the local network and reads nothing.
+# user network-node-network-1
+# topic write armor/network/network-1/state
 
 # An alarm consumer (a siren controller, a notifier) only reads alerts.
 # user alarm-consumer

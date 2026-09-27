@@ -52,6 +52,13 @@ run electrical-switching electrical-1 on >/dev/null
 [[ "$(cat "$ACL")" == "$BEFORE" ]] || fail "a second on changed the ACL"
 run add electrical-node electrical-2 >/dev/null
 if grep -q 'armor/electrical/electrical-2/command' "$ACL"; then fail "another node became reachable"; fi
+# A network node writes its state and reads nothing, and nothing reaches it from the broker.
+run add network-node network-1 >/dev/null
+NET="$(block network-node-network-1)"
+grep -qx 'topic write armor/network/network-1/state' <<<"$NET" || fail "the network node cannot write its state"
+if grep -q 'topic read\|readwrite\|/#$' <<<"$NET"; then fail "the network node has more than it needs: $NET"; fi
+run remove network-node-network-1 >/dev/null
+if grep -q 'network-1' "$ACL"; then fail "removing the network node left something of it"; fi
 # A node that does not exist, and a bad word, change nothing.
 if run electrical-switching nothing on >/dev/null 2>&1; then fail "an unknown node was accepted"; fi
 if run electrical-switching electrical-1 maybe >/dev/null 2>&1; then fail "a bad state was accepted"; fi
