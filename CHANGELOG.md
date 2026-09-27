@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented here.
 
+## [0.3.3] - The network nodes
+
+- `mqtt_identity.sh add network-node ID`: the identity of an ARMOR-NETWORK node, which writes `armor/network/ID/state` and nothing else and reads nothing; `remove` knows it. The broker's rules for the server (`install_cm5.sh`, on a new install and, once, on an existing one, and `mosquitto/acl.example`) let it read `armor/network/#`. `scripts/test_mqtt_identity.sh` checks the identity and its removal.
+
 ## [0.3.2] - The switch of an electrical node is not reachable until it is turned on
 
 - `mqtt_identity.sh add electrical-node ID` now gives the node `armor/electrical/ID/state` and `.../result` (not the whole `ID/#`) and it still reads nothing.

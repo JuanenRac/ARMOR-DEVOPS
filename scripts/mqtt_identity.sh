@@ -5,6 +5,7 @@
 #   sudo mqtt_identity.sh add node north-1     # a field node: writes its own telemetry/health, reads its own commands (and writes armor/solar/north-1/# if it also reads solar equipment)
 #   sudo mqtt_identity.sh add solar-node solar-1  # a solar gateway node (ARMOR-SOLAR): writes armor/solar/solar-1/# and nothing else
 #   sudo mqtt_identity.sh add electrical-node electrical-1  # an electrical node (ARMOR-ELECTRICAL): writes armor/electrical/electrical-1/state and /result and nothing else, reads nothing
+#   sudo mqtt_identity.sh add network-node network-1   # a network node (ARMOR-NETWORK): writes armor/network/network-1/state and nothing else, reads nothing
 #   sudo mqtt_identity.sh electrical-switching electrical-1 on   # lets the server send commands to that node's switch, and the node read them (off again with `off`): NOT part of any install
 #   sudo mqtt_identity.sh add consumer siren   # an alarm consumer: reads armor/server/alert only
 #   sudo mqtt_identity.sh add device kitchen   # one smart device (a plug, a sensor): reads and writes armor/device/kitchen/# only
@@ -20,7 +21,7 @@ MQ="$PREFIX/etc/mosquitto"
 [[ "$(id -u)" -eq 0 ]] || { echo "run as root" >&2; exit 1; }
 [[ -f "$MQ/passwd" && -f "$MQ/acl" ]] || { echo "the A.R.M.O.R. broker is not installed (install_cm5.sh --with-mqtt)" >&2; exit 1; }
 
-usage() { echo "Usage: mqtt_identity.sh add node ID | add solar-node ID | add electrical-node ID | add consumer NAME | add device NAME | add bridge NAME | upgrade-node NODE_ID | electrical-switching NODE_ID on|off | remove USER" >&2; exit 2; }
+usage() { echo "Usage: mqtt_identity.sh add node ID | add solar-node ID | add electrical-node ID | add network-node ID | add consumer NAME | add device NAME | add bridge NAME | upgrade-node NODE_ID | electrical-switching NODE_ID on|off | remove USER" >&2; exit 2; }
 ACTION="${1:-}"
 reload_broker() { systemctl reload armor-mosquitto 2>/dev/null || systemctl restart armor-mosquitto; }
 
@@ -32,6 +33,7 @@ case "$ACTION" in
       node) USER_NAME="field-node-$NAME" ;;
       solar-node) USER_NAME="solar-node-$NAME" ;;
       electrical-node) USER_NAME="electrical-node-$NAME" ;;
+      network-node) USER_NAME="network-node-$NAME" ;;
       consumer) USER_NAME="alarm-$NAME" ;;
       device) USER_NAME="device-$NAME" ;;
       bridge) USER_NAME="bridge-$NAME" ;;
@@ -60,6 +62,9 @@ case "$ACTION" in
         # reaches it from the broker until `electrical-switching <node> on` is run for it, on purpose.
         echo "topic write armor/electrical/$NAME/state"
         echo "topic write armor/electrical/$NAME/result"
+      elif [[ "$ROLE" == "network-node" ]]; then
+        # ARMOR-NETWORK: what it sees on the local network (armor/network/<node>/state); it reads nothing, so nothing can be sent to it from the broker.
+        echo "topic write armor/network/$NAME/state"
       elif [[ "$ROLE" == "device" ]]; then
         echo "topic readwrite armor/device/$NAME/#"
       elif [[ "$ROLE" == "bridge" ]]; then
@@ -126,7 +131,7 @@ case "$ACTION" in
     ;;
   remove)
     USER_NAME="${2:-}"
-    [[ "$USER_NAME" =~ ^(field-node|solar-node|electrical-node|alarm|device|bridge)-[a-z0-9][a-z0-9_-]{0,63}$ ]] || { echo "only field-node-*, solar-node-*, electrical-node-*, alarm-*, device-* and bridge-* identities can be removed" >&2; exit 2; }
+    [[ "$USER_NAME" =~ ^(field-node|solar-node|electrical-node|network-node|alarm|device|bridge)-[a-z0-9][a-z0-9_-]{0,63}$ ]] || { echo "only field-node-*, solar-node-*, electrical-node-*, network-node-*, alarm-*, device-* and bridge-* identities can be removed" >&2; exit 2; }
     mosquitto_passwd -D "$MQ/passwd" "$USER_NAME" >/dev/null
     # Drop the identity's block (its "user" line and the lines up to the next blank line), keeping a copy.
     cp -p "$MQ/acl" "$MQ/acl.before-remove"

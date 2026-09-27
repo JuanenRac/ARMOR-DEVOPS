@@ -214,6 +214,7 @@ topic read armor/node/+/health
 topic read armor/node/+/info
 topic read armor/solar/#
 topic read armor/electrical/#
+topic read armor/network/#
 topic write armor/node/+/command
 topic write armor/server/alert
 topic readwrite armor/device/#
@@ -224,7 +225,7 @@ ACL
   fi
   # An install made before devices existed: let the server listen on, and command, the devices' topics too.
   # An install made before the nodes said where their panel is, or before solar gateways or electrical nodes existed: let the server read those topics too (each line added once).
-  for ACL_LINE in 'topic read armor/node/+/info' 'topic read armor/solar/#' 'topic read armor/electrical/#'; do
+  for ACL_LINE in 'topic read armor/node/+/info' 'topic read armor/solar/#' 'topic read armor/electrical/#' 'topic read armor/network/#'; do
     grep -qxF "$ACL_LINE" "$MQ/acl" || sed -i "/^topic write armor\/server\/alert\$/a $ACL_LINE" "$MQ/acl"
   done
   grep -qx 'topic readwrite armor/device/#' "$MQ/acl" || sed -i '0,/^topic write armor\/server\/alert$/s//topic write armor\/server\/alert\ntopic readwrite armor\/device\/#/' "$MQ/acl"
