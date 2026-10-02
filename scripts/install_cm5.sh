@@ -236,7 +236,7 @@ topic write armor/node/+/command
 topic write armor/server/alert
 topic readwrite armor/device/#
 ACL
-    chown "$SERVICE_USER:$SERVICE_USER" "$MQ/passwd" "$MQ/acl"; chmod 0600 "$MQ/passwd" "$MQ/acl"
+    chown "root:$SERVICE_USER" "$MQ/passwd" "$MQ/acl"; chmod 0640 "$MQ/passwd" "$MQ/acl"
     ( umask 0137; printf 'ARMOR_MQTT_URL=mqtt://127.0.0.1:%s\nARMOR_MQTT_USERNAME=armor-server\nARMOR_MQTT_PASSWORD=%s\n' "$MQTT_PORT" "$SERVER_MQTT_PASSWORD" >"$PREFIX/etc/armor.mqtt.env" )
     chown "root:$SERVICE_USER" "$PREFIX/etc/armor.mqtt.env"; chmod 0640 "$PREFIX/etc/armor.mqtt.env"
   fi
