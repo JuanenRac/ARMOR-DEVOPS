@@ -28,6 +28,7 @@ SERVER_PORT="18080"
 STUDIO_PORT="18081"
 MQTT_PORT="18883"
 WITH_MQTT=0
+WITH_BACKUP=0
 BIND_ADDRESS="0.0.0.0"
 PUBLIC_HOST=""
 APPLY=0
@@ -48,6 +49,7 @@ Usage: install_cm5.sh --public-host HOST [--apply] [--server-port N] [--studio-p
   --studio-port  ARMOR-STUDIO port (default ${STUDIO_PORT})
   --with-mqtt    also run A.R.M.O.R.'s own MQTT broker (needs the mosquitto package installed)
   --mqtt-port    broker port (default ${MQTT_PORT}; never the standard 1883, which other software may use)
+  --with-backup  a daily encrypted backup of $PREFIX/data (a timer; see scripts/backup_data.sh), kept under $PREFIX/backups
   --bind         address all services listen on (default ${BIND_ADDRESS})
   --prefix       install directory (default ${PREFIX})
 EOF
@@ -63,6 +65,7 @@ while [[ $# -gt 0 ]]; do
     --forget-reach) FORGET_REACH=1; shift ;;
     --with-mqtt) WITH_MQTT=1; shift ;;
     --mqtt-port) MQTT_PORT="${2:-}"; shift 2 ;;
+    --with-backup) WITH_BACKUP=1; shift ;;
     --bind) BIND_ADDRESS="${2:-}"; shift 2 ;;
     --prefix) PREFIX="${2:-}"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
@@ -71,8 +74,9 @@ while [[ $# -gt 0 ]]; do
 done
 
 fail() { echo "ERROR: $*" >&2; exit 1; }
-# An upgrade of an install that already has the broker keeps it, whether or not the flag is repeated.
+# An upgrade of an install that already has the broker (or the backup timer) keeps it, whether or not the flag is repeated.
 [[ -f "$PREFIX/etc/armor.mqtt.env" ]] && WITH_MQTT=1
+[[ -f "$PREFIX/etc/armor.backup.passphrase" ]] && WITH_BACKUP=1
 say()  { echo "[armor-install] $*"; }
 
 [[ -n "$PUBLIC_HOST" ]] || { usage >&2; fail "--public-host is required"; }
@@ -130,6 +134,7 @@ say "  armor-studio   : $BIND_ADDRESS:$STUDIO_PORT"
 say "  browser opens  : http://$PUBLIC_HOST:$STUDIO_PORT"
 for pair in "${REACH_UNIQUE[@]}"; do say "  also reachable : ${pair%%=*} (server ${pair#*=})"; done
 [[ "$WITH_MQTT" -ne 1 ]] || say "  armor-mosquitto: $BIND_ADDRESS:$MQTT_PORT (own broker, own passwords)"
+[[ "$WITH_BACKUP" -ne 1 ]] || say "  armor-backup   : daily, encrypted, kept under $PREFIX/backups"
 say "  other software : untouched"
 if [[ "$APPLY" -ne 1 ]]; then say "dry run only - add --apply to install"; exit 0; fi
 
@@ -175,6 +180,18 @@ ARMOR_STUDIO_USERNAME=admin
 ARMOR_STUDIO_PASSWORD=$(random 48 32)
 EOF
   chown "root:$SERVICE_USER" "$ENV_FILE"; chmod 0640 "$ENV_FILE"
+fi
+
+if [[ "$WITH_BACKUP" -eq 1 ]]; then
+  install -d -o "$SERVICE_USER" -g "$SERVICE_USER" -m 0750 "$PREFIX/backups" "$PREFIX/bin"
+  install -o root -g "$SERVICE_USER" -m 0750 "$(dirname "${BASH_SOURCE[0]}")/backup_data.sh" "$PREFIX/bin/backup_data.sh"
+  BACKUP_PASS_FILE="$PREFIX/etc/armor.backup.passphrase"
+  if [[ ! -f "$BACKUP_PASS_FILE" ]]; then
+    say "creating $BACKUP_PASS_FILE with a new random passphrase (kept across upgrades - copy it somewhere else too, or old backups become unreadable if this disk is lost)"
+    umask 0177
+    random 32 24 >"$BACKUP_PASS_FILE"
+    chown "root:$SERVICE_USER" "$BACKUP_PASS_FILE"; chmod 0640 "$BACKUP_PASS_FILE"
+  fi
 fi
 
 # Live video and captures need FFmpeg; when it is installed the server is pointed at it, and it gets more memory.
@@ -343,11 +360,43 @@ WantedBy=multi-user.target
 EOF
 fi
 
+if [[ "$WITH_BACKUP" -eq 1 ]]; then
+  cat >/etc/systemd/system/armor-backup.service <<EOF
+[Unit]
+Description=A.R.M.O.R. encrypted backup of $PREFIX/data
+
+[Service]
+Type=oneshot
+User=$SERVICE_USER
+Group=$SERVICE_USER
+ExecStart=$PREFIX/bin/backup_data.sh --data-dir $PREFIX/data --out-dir $PREFIX/backups --passphrase-file $PREFIX/etc/armor.backup.passphrase
+MemoryMax=256M
+TasksMax=16
+ReadWritePaths=$PREFIX/backups
+$HARDENING
+EOF
+  cat >/etc/systemd/system/armor-backup.timer <<EOF
+[Unit]
+Description=Daily A.R.M.O.R. backup (see armor-backup.service)
+
+[Timer]
+OnCalendar=daily
+RandomizedDelaySec=1800
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+fi
+
 systemctl daemon-reload
 systemctl enable armor-server armor-studio >/dev/null
 if [[ "$WITH_MQTT" -eq 1 ]]; then
   systemctl enable armor-mosquitto >/dev/null
   systemctl restart armor-mosquitto
+fi
+if [[ "$WITH_BACKUP" -eq 1 ]]; then
+  systemctl enable --now armor-backup.timer >/dev/null
 fi
 systemctl restart armor-server armor-studio
 
