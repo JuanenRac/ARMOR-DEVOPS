@@ -73,7 +73,7 @@ case "$ACTION" in
         echo "topic read armor/server/alert"
       fi
     } >>"$MQ/acl"
-    chown armor:armor "$MQ/passwd" "$MQ/acl"; chmod 0600 "$MQ/passwd" "$MQ/acl"
+    chown root:armor "$MQ/passwd" "$MQ/acl"; chmod 0640 "$MQ/passwd" "$MQ/acl"
     reload_broker
     echo "user: $USER_NAME"
     echo "password: $PASSWORD"
@@ -95,7 +95,7 @@ case "$ACTION" in
       fi
     done
     if [[ "$CHANGED" -eq 1 ]]; then
-      chown armor:armor "$MQ/acl"; chmod 0600 "$MQ/acl"
+      chown root:armor "$MQ/acl"; chmod 0640 "$MQ/acl"
       reload_broker
       echo "the previous ACL is kept as acl.before-upgrade"
     fi
@@ -124,7 +124,7 @@ case "$ACTION" in
       fi
     done
     if [[ "$CHANGED" -eq 1 ]]; then
-      chown armor:armor "$MQ/acl"; chmod 0600 "$MQ/acl"
+      chown root:armor "$MQ/acl"; chmod 0640 "$MQ/acl"
       reload_broker
       echo "the previous ACL is kept as acl.before-switching; the server also needs ARMOR_ELECTRICAL_SWITCHING=1 to send anything, and the node has to allow it"
     fi
@@ -138,7 +138,7 @@ case "$ACTION" in
     awk -v u="user $USER_NAME" 'BEGIN{skip=0} $0==u{skip=1; next} skip && /^$/{skip=0; next} !skip{print}' "$MQ/acl.before-remove" >"$MQ/acl"
     # An electrical node that goes leaves no way for the server to command it: its line in the server's block goes too.
     if [[ "$USER_NAME" == electrical-node-* ]]; then sed -i "\#^topic write armor/electrical/${USER_NAME#electrical-node-}/command\$#d" "$MQ/acl"; fi
-    chown armor:armor "$MQ/passwd" "$MQ/acl"; chmod 0600 "$MQ/passwd" "$MQ/acl"
+    chown root:armor "$MQ/passwd" "$MQ/acl"; chmod 0640 "$MQ/passwd" "$MQ/acl"
     reload_broker
     echo "removed $USER_NAME (the previous ACL is kept as acl.before-remove)"
     ;;

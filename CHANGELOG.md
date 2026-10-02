@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented here.
 
+## [0.3.6] - mqtt_identity.sh's own fix did not fix the real owner
+
+- **`passwd`/`acl` ended up `root:root` the first time anyone added or removed an identity, crashing the broker in a restart loop:** `mosquitto_passwd`/the script's own ACL edits create a new file and do not preserve the previous owner, so each operation's own `chown` was the only thing keeping it readable by the `armor` user the service runs as. That chown set `armor:armor` - `mosquitto_passwd` itself warns this is wrong ("File owner is not root. Future versions will refuse to load this file") and the broker still starts today only because current versions tolerate it. Found on a real test bench: 300+ silent restarts, nobody noticed until MQTT was reported as "not active". Both files are now `root:armor 0640` everywhere they are touched (install_cm5.sh's first install, and all four places mqtt_identity.sh rewrites them), matching what mosquitto_passwd itself expects.
+
 ## [0.3.5] - A backup existed, but nothing ever ran it
 
 - **`install_cm5.sh --with-backup`:** `scripts/backup_data.sh` (encrypted, self-verifying) had no schedule behind it - without a cron job or systemd timer set up by hand, a test bench had no actual backup happening at all. The flag now installs the script under `/opt/armor/bin`, generates its own random passphrase file (kept across upgrades, like the other secrets), and enables a daily `armor-backup.timer` (random delay up to 30 minutes, catches up if the machine was off at the scheduled time). Off by default, kept on upgrade once enabled, same pattern as `--with-mqtt`.
