@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented here.
 
+## [0.3.5] - A backup existed, but nothing ever ran it
+
+- **`install_cm5.sh --with-backup`:** `scripts/backup_data.sh` (encrypted, self-verifying) had no schedule behind it - without a cron job or systemd timer set up by hand, a test bench had no actual backup happening at all. The flag now installs the script under `/opt/armor/bin`, generates its own random passphrase file (kept across upgrades, like the other secrets), and enables a daily `armor-backup.timer` (random delay up to 30 minutes, catches up if the machine was off at the scheduled time). Off by default, kept on upgrade once enabled, same pattern as `--with-mqtt`.
+
 ## [0.3.4]
 
 - A GitHub Actions CI baseline (`.github/workflows/ci.yml`): validates the manifest, the version, CHANGELOG.md's heading, the seven README translations' structure and its own local Markdown links, then runs this project's real build/test through `tools/armor_project_tool.py build-test .` (vendored from ARMOR-COMMON, alongside `tools/armor_ci_validate.py` and `tools/_armor_readme_parity.py`, which do the manifest/docs checking).
