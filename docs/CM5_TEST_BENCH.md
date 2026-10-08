@@ -38,6 +38,21 @@ Then open `http://<host>:18081`. The Studio user is `admin`; its password is
 `ARMOR_STUDIO_PASSWORD` in `/opt/armor/etc/armor.env` on the bench (root can read it).
 Studio starts against the server the deployment publishes at `/armor-config.json`.
 
+## Administering it from Studio
+
+The server runs as the unprivileged user `armor` with no sudo and a read-only system, on purpose. To let an administrator start, stop and restart the services, edit their
+settings files and add the MQTT accounts of new nodes from Studio (Configuration > Services, MQTT broker, Settings files), install with `--with-admin`:
+
+```bash
+sudo scripts/install_cm5.sh --public-host 192.168.0.180 --apply --with-mqtt --with-admin
+```
+
+That adds one more unit, `armor-admin`, which runs as root and is the only privileged part. It listens on `/run/armor-admin.sock`, which only the group `armor` can open, and also
+wants the token in `/opt/armor/etc/armor.admin.env`. It can do only a closed list of things: start, stop, restart or reload the units `armor-server`, `armor-studio`, `armor-mosquitto`
+and `armor-network`; read and write the settings files `armor.env`, `armor.mqtt.env`, `armor.network.env`, `armor.reach` and the broker's `mosquitto.conf` and `acl` (a size limit, a check of
+the format and a copy of the old file); and make or remove broker accounts by running `mqtt_identity.sh`. The hashed password file of the broker is never offered, and its own files
+(`/opt/armor/bin`) belong to root, so the service user cannot change what runs as root. Without `--with-admin` nothing of this exists and the Studio screens say so.
+
 ## Reaching it from the Internet
 
 A browser is only allowed to sign in through the addresses the installation was told about: the server's list of allowed origins

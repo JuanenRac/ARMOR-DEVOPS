@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented here.
 
+## [0.3.7] - An admin agent, so Studio can restart services and add MQTT accounts
+
+- **`scripts/armor_admin_agent.py` and `install_cm5.sh --with-admin`:** the server runs as an unprivileged user with no sudo, on purpose; this small separate program, as root, is the only privileged part. It listens on a Unix socket that only the group `armor` can open (and wants a token from a file only root and that group read) and can do only a closed list of things: start, stop, restart or reload the A.R.M.O.R. units; read and write five settings files at fixed paths (size limit, format check, a copy of the old file kept); and make or remove broker accounts by running `mqtt_identity.sh`. Its own files belong to root and cannot be changed by the service user. `scripts/test_admin_agent.sh` tests it with a temporary prefix and stand-ins for systemctl and the identity script.
+
 ## [0.3.6] - mqtt_identity.sh's own fix did not fix the real owner
 
 - **`passwd`/`acl` ended up `root:root` the first time anyone added or removed an identity, crashing the broker in a restart loop:** `mosquitto_passwd`/the script's own ACL edits create a new file and do not preserve the previous owner, so each operation's own `chown` was the only thing keeping it readable by the `armor` user the service runs as. That chown set `armor:armor` - `mosquitto_passwd` itself warns this is wrong ("File owner is not root. Future versions will refuse to load this file") and the broker still starts today only because current versions tolerate it. Found on a real test bench: 300+ silent restarts, nobody noticed until MQTT was reported as "not active". Both files are now `root:armor 0640` everywhere they are touched (install_cm5.sh's first install, and all four places mqtt_identity.sh rewrites them), matching what mosquitto_passwd itself expects.
