@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented here.
 
+## [0.3.8] - deploy_cm5.sh can install the admin agent
+
+- **Real bug found when installing it on the bench:** the deployment archive did not carry `armor_admin_agent.py`, so `--with-admin` stopped with *cannot stat* after copying the release. The archive now includes it.
+
+- **`deploy_cm5.sh --with-admin`** is passed on to the installer, so the admin agent can be installed from the computer that has the source in the same step as a release. Once installed the installer remembers it and keeps it in later deployments; the unit is enabled and starts at every boot.
+
 ## [0.3.7] - An admin agent, so Studio can restart services and add MQTT accounts
 
 - **`scripts/armor_admin_agent.py` and `install_cm5.sh --with-admin`:** the server runs as an unprivileged user with no sudo, on purpose; this small separate program, as root, is the only privileged part. It listens on a Unix socket that only the group `armor` can open (and wants a token from a file only root and that group read) and can do only a closed list of things: start, stop, restart or reload the A.R.M.O.R. units; read and write five settings files at fixed paths (size limit, format check, a copy of the old file kept); and make or remove broker accounts by running `mqtt_identity.sh`. Its own files belong to root and cannot be changed by the service user. `scripts/test_admin_agent.sh` tests it with a temporary prefix and stand-ins for systemctl and the identity script.
