@@ -29,6 +29,7 @@ STUDIO_PORT="18081"
 MQTT_PORT="18883"
 WITH_MQTT=0
 WITH_BACKUP=0
+WITH_ADMIN=0
 BIND_ADDRESS="0.0.0.0"
 PUBLIC_HOST=""
 APPLY=0
@@ -49,6 +50,8 @@ Usage: install_cm5.sh --public-host HOST [--apply] [--server-port N] [--studio-p
   --studio-port  ARMOR-STUDIO port (default ${STUDIO_PORT})
   --with-mqtt    also run A.R.M.O.R.'s own MQTT broker (needs the mosquitto package installed)
   --mqtt-port    broker port (default ${MQTT_PORT}; never the standard 1883, which other software may use)
+  --with-admin   also run the admin agent (armor-admin, as root, with a closed list of what it may do) so that an administrator can start, stop and
+                 restart the services, edit their settings and add MQTT accounts from Studio; the server itself stays unprivileged
   --with-backup  a daily encrypted backup of $PREFIX/data (a timer; see scripts/backup_data.sh), kept under $PREFIX/backups
   --bind         address all services listen on (default ${BIND_ADDRESS})
   --prefix       install directory (default ${PREFIX})
@@ -66,6 +69,7 @@ while [[ $# -gt 0 ]]; do
     --with-mqtt) WITH_MQTT=1; shift ;;
     --mqtt-port) MQTT_PORT="${2:-}"; shift 2 ;;
     --with-backup) WITH_BACKUP=1; shift ;;
+    --with-admin) WITH_ADMIN=1; shift ;;
     --bind) BIND_ADDRESS="${2:-}"; shift 2 ;;
     --prefix) PREFIX="${2:-}"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
@@ -77,6 +81,7 @@ fail() { echo "ERROR: $*" >&2; exit 1; }
 # An upgrade of an install that already has the broker (or the backup timer) keeps it, whether or not the flag is repeated.
 [[ -f "$PREFIX/etc/armor.mqtt.env" ]] && WITH_MQTT=1
 [[ -f "$PREFIX/etc/armor.backup.passphrase" ]] && WITH_BACKUP=1
+[[ -f "$PREFIX/etc/armor.admin.env" ]] && WITH_ADMIN=1
 say()  { echo "[armor-install] $*"; }
 
 [[ -n "$PUBLIC_HOST" ]] || { usage >&2; fail "--public-host is required"; }
@@ -135,6 +140,7 @@ say "  browser opens  : http://$PUBLIC_HOST:$STUDIO_PORT"
 for pair in "${REACH_UNIQUE[@]}"; do say "  also reachable : ${pair%%=*} (server ${pair#*=})"; done
 [[ "$WITH_MQTT" -ne 1 ]] || say "  armor-mosquitto: $BIND_ADDRESS:$MQTT_PORT (own broker, own passwords)"
 [[ "$WITH_BACKUP" -ne 1 ]] || say "  armor-backup   : daily, encrypted, kept under $PREFIX/backups"
+[[ "$WITH_ADMIN" -ne 1 ]] || say "  armor-admin    : root agent on /run/armor-admin.sock (group $SERVICE_USER), allowed only the A.R.M.O.R. services, their settings files and the broker accounts"
 say "  other software : untouched"
 if [[ "$APPLY" -ne 1 ]]; then say "dry run only - add --apply to install"; exit 0; fi
 
@@ -213,6 +219,22 @@ ${FFMPEG_ENV_LINE}
 EOF
 chown "root:$SERVICE_USER" "$PREFIX/etc/armor.network.env"; chmod 0640 "$PREFIX/etc/armor.network.env"
 if [[ ${#REACH_UNIQUE[@]} -gt 0 ]]; then printf '%s\n' "${REACH_UNIQUE[@]}" >"$REACH_FILE"; chown "root:$SERVICE_USER" "$REACH_FILE"; chmod 0640 "$REACH_FILE"; else rm -f "$REACH_FILE"; fi
+
+ADMIN_ENV_LINE=""
+if [[ "$WITH_ADMIN" -eq 1 ]]; then
+  command -v python3 >/dev/null || fail "--with-admin needs python3"
+  say "installing the admin agent"
+  install -d -m 0755 -o root -g root "$PREFIX/bin"
+  # Owned by root and not writable by the service user: the unprivileged server must never be able to change what runs as root.
+  install -m 0755 -o root -g root "$RELEASE_DIR/scripts/armor_admin_agent.py" "$PREFIX/bin/armor_admin_agent.py"
+  install -m 0755 -o root -g root "$RELEASE_DIR/scripts/mqtt_identity.sh" "$PREFIX/bin/mqtt_identity.sh"
+  if [[ ! -f "$PREFIX/etc/armor.admin.env" ]]; then
+    ( umask 0137; printf 'ARMOR_ADMIN_TOKEN=%s\n' "$(head -c 48 /dev/urandom | base64 | tr -d '\n=+/' | head -c 40)" >"$PREFIX/etc/armor.admin.env" )
+  fi
+  chown "root:$SERVICE_USER" "$PREFIX/etc/armor.admin.env"; chmod 0640 "$PREFIX/etc/armor.admin.env"
+  ADMIN_ENV_LINE="EnvironmentFile=$PREFIX/etc/armor.admin.env
+Environment=ARMOR_ADMIN_SOCKET=/run/armor-admin.sock"
+fi
 
 MQTT_ENV_LINE=""
 if [[ "$WITH_MQTT" -eq 1 ]]; then
@@ -298,6 +320,7 @@ WorkingDirectory=$PREFIX/current/server
 EnvironmentFile=$ENV_FILE
 EnvironmentFile=$PREFIX/etc/armor.network.env
 $MQTT_ENV_LINE
+$ADMIN_ENV_LINE
 ExecStart=$(command -v node) $PREFIX/current/server/dist/server.mjs
 Restart=on-failure
 RestartSec=3
@@ -360,6 +383,38 @@ WantedBy=multi-user.target
 EOF
 fi
 
+if [[ "$WITH_ADMIN" -eq 1 ]]; then
+  cat >/etc/systemd/system/armor-admin.service <<EOF
+[Unit]
+Description=A.R.M.O.R. admin agent (the only privileged part: a closed list of services, settings files and broker accounts)
+After=local-fs.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+EnvironmentFile=$PREFIX/etc/armor.admin.env
+Environment=ARMOR_PREFIX=$PREFIX
+ExecStart=$(command -v python3) $PREFIX/bin/armor_admin_agent.py --socket /run/armor-admin.sock --group $SERVICE_USER
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=$PREFIX/etc /run
+ProtectHome=true
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+RestrictAddressFamilies=AF_UNIX
+LockPersonality=true
+MemoryMax=64M
+TasksMax=32
+
+[Install]
+WantedBy=multi-user.target
+EOF
+fi
+
 if [[ "$WITH_BACKUP" -eq 1 ]]; then
   cat >/etc/systemd/system/armor-backup.service <<EOF
 [Unit]
@@ -397,6 +452,10 @@ if [[ "$WITH_MQTT" -eq 1 ]]; then
 fi
 if [[ "$WITH_BACKUP" -eq 1 ]]; then
   systemctl enable --now armor-backup.timer >/dev/null
+fi
+if [[ "$WITH_ADMIN" -eq 1 ]]; then
+  systemctl enable armor-admin >/dev/null
+  systemctl restart armor-admin
 fi
 systemctl restart armor-server armor-studio
 
