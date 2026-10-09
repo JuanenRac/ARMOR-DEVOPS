@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented here.
 
+## [0.4.1] - A second install keeps the HTTPS it found
+
+- `install_cm5.sh` used to rewrite the network settings with `http://` addresses and check the health of the services over plain HTTP, so running it again on an installation that already served HTTPS dropped the certificate lines and then failed its own check. It now keeps `TLS_CERT_PATH`, `TLS_KEY_PATH` and `ARMOR_COOKIE_SECURE` when they are there, writes the `https://` addresses and checks the health over HTTPS (the certificate is not verified against the loopback address). The observation service still asks the server over `http://127.0.0.1`: on an HTTPS installation it has to be pointed at the certificate's host name by hand.
+- The voice option's help says fifteen commands instead of four.
+
 ## [0.4.0] - The observation service on the bench
 
 - **`install_cm5.sh --with-ai`** (and `deploy_cm5.sh --with-ai`, which carries the package): installs ARMOR-SERVER-AI as the unit `armor-server-ai`, as the service user with the same hardening as the others, its code belonging to root. One token, made once and kept in `armor.ai.env`, shared by the unit and the server (which loads it and opens only the four `/api/v1/ai` routes with it). An install that has it keeps it; the admin agent lists the unit.

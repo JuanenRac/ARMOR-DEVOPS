@@ -108,7 +108,13 @@ for pair in "${ALSO_REACH[@]}"; do
   [[ "$pair" =~ ^${ORIGIN_PATTERN}=${ORIGIN_PATTERN}$ ]] || fail "--also-reach must look like http://HOST:PORT=http://HOST:PORT (Studio address = server address), not: $pair"
   REACH_PAIRS+=("$pair")
 done
-STUDIO_ORIGINS="http://$PUBLIC_HOST:$STUDIO_PORT"; SERVER_ORIGINS="http://$PUBLIC_HOST:$SERVER_PORT"; REACH_UNIQUE=()
+# An install that already serves HTTPS (TLS_CERT_PATH in its settings) keeps its certificate lines and its https:// addresses when this runs again.
+OLD_NETWORK_ENV="$PREFIX/etc/armor.network.env"; SCHEME="http"; TLS_ENV_LINES=""
+if [[ -f "$OLD_NETWORK_ENV" ]] && grep -q '^TLS_CERT_PATH=.' "$OLD_NETWORK_ENV"; then
+  SCHEME="https"; TLS_ENV_LINES="$(grep -E '^(TLS_CERT_PATH|TLS_KEY_PATH|ARMOR_COOKIE_SECURE)=' "$OLD_NETWORK_ENV" || true)"
+fi
+CURL_TLS=(); [[ "$SCHEME" == "https" ]] && CURL_TLS=(-k)
+STUDIO_ORIGINS="$SCHEME://$PUBLIC_HOST:$STUDIO_PORT"; SERVER_ORIGINS="$SCHEME://$PUBLIC_HOST:$SERVER_PORT"; REACH_UNIQUE=()
 for pair in "${REACH_PAIRS[@]}"; do
   studio="${pair%%=*}"; server="${pair#*=}"
   [[ ",$STUDIO_ORIGINS," == *",$studio,"* ]] || STUDIO_ORIGINS="$STUDIO_ORIGINS,$studio"
@@ -148,7 +154,7 @@ say "plan"
 say "  install prefix : $PREFIX (owner: $SERVICE_USER)"
 say "  armor-server   : $BIND_ADDRESS:$SERVER_PORT"
 say "  armor-studio   : $BIND_ADDRESS:$STUDIO_PORT"
-say "  browser opens  : http://$PUBLIC_HOST:$STUDIO_PORT"
+say "  browser opens  : $SCHEME://$PUBLIC_HOST:$STUDIO_PORT"
 for pair in "${REACH_UNIQUE[@]}"; do say "  also reachable : ${pair%%=*} (server ${pair#*=})"; done
 [[ "$WITH_MQTT" -ne 1 ]] || say "  armor-mosquitto: $BIND_ADDRESS:$MQTT_PORT (own broker, own passwords)"
 [[ "$WITH_AI" -ne 1 ]] || say "  armor-server-ai: looks at the cameras through the server (movement, weighed with the radars and the light) and tells it; its own token opens only four routes of the server"
@@ -230,6 +236,7 @@ ARMOR_STUDIO_HOST=$BIND_ADDRESS
 ARMOR_STUDIO_PORT=$STUDIO_PORT
 ARMOR_SERVER_ORIGIN=$SERVER_ORIGINS
 ${FFMPEG_ENV_LINE}
+${TLS_ENV_LINES}
 EOF
 chown "root:$SERVICE_USER" "$PREFIX/etc/armor.network.env"; chmod 0640 "$PREFIX/etc/armor.network.env"
 if [[ ${#REACH_UNIQUE[@]} -gt 0 ]]; then printf '%s\n' "${REACH_UNIQUE[@]}" >"$REACH_FILE"; chown "root:$SERVICE_USER" "$REACH_FILE"; chmod 0640 "$REACH_FILE"; else rm -f "$REACH_FILE"; fi
@@ -580,7 +587,7 @@ systemctl restart armor-server armor-studio
 say "waiting for the services"
 ok=0
 for _ in $(seq 1 30); do
-  if curl -fsS "http://127.0.0.1:$SERVER_PORT/healthz" >/dev/null 2>&1 && curl -fsS "http://127.0.0.1:$STUDIO_PORT/healthz" >/dev/null 2>&1; then ok=1; break; fi
+  if curl -fsS "${CURL_TLS[@]}" "$SCHEME://127.0.0.1:$SERVER_PORT/healthz" >/dev/null 2>&1 && curl -fsS "${CURL_TLS[@]}" "$SCHEME://127.0.0.1:$STUDIO_PORT/healthz" >/dev/null 2>&1; then ok=1; break; fi
   sleep 1
 done
 if [[ "$ok" -ne 1 ]]; then
@@ -593,7 +600,7 @@ mkdir -p "$PREFIX/releases-old"
 ls -1dt "$PREFIX"/releases/*/ 2>/dev/null | tail -n +5 | while read -r old; do mv "$old" "$PREFIX/releases-old/" || true; done
 
 say "A.R.M.O.R. is running"
-say "  Studio : http://$PUBLIC_HOST:$STUDIO_PORT"
-say "  Server : http://$PUBLIC_HOST:$SERVER_PORT/healthz"
+say "  Studio : $SCHEME://$PUBLIC_HOST:$STUDIO_PORT"
+say "  Server : $SCHEME://$PUBLIC_HOST:$SERVER_PORT/healthz"
 [[ "$WITH_MQTT" -ne 1 ]] || say "  Broker : mqtt://$PUBLIC_HOST:$MQTT_PORT (add devices with scripts/mqtt_identity.sh)"
 say "  Studio login user 'admin'; its password is in $ENV_FILE (ARMOR_STUDIO_PASSWORD), readable by root"
