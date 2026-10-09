@@ -267,7 +267,7 @@ if [[ "$WITH_VOICE" -eq 1 ]]; then
   install -d -m 0755 -o root -g root "$PREFIX/voice"
   cp -r "$RELEASE_DIR/voice/armor_voice_ai" "$PREFIX/voice/armor_voice_ai"
   find "$PREFIX/voice" -name __pycache__ -prune -exec rm -rf {} + 2>/dev/null || true
-  chown -R root:root "$PREFIX/voice"; chmod -R go-w "$PREFIX/voice"
+  chown -R root:root "$PREFIX/voice"; chmod -R u=rwX,go=rX "$PREFIX/voice"
   # Two secrets, two files: the token that lets the server ask the gateway (the server reads it too), and the key that signs the confirmations (only the gateway reads it).
   if [[ ! -f "$PREFIX/etc/armor.voice.env" ]]; then
     ( umask 0137; printf 'ARMOR_VOICE_TOKEN=%s\n' "$(random 48 40)" >"$PREFIX/etc/armor.voice.env" )
@@ -291,7 +291,7 @@ if [[ "$WITH_AI" -eq 1 ]]; then
   install -d -m 0755 -o root -g root "$PREFIX/ai"
   cp -r "$RELEASE_DIR/ai/armor_server_ai" "$PREFIX/ai/armor_server_ai"
   find "$PREFIX/ai" -name __pycache__ -prune -exec rm -rf {} + 2>/dev/null || true
-  chown -R root:root "$PREFIX/ai"; chmod -R go-w "$PREFIX/ai"
+  chown -R root:root "$PREFIX/ai"; chmod -R u=rwX,go=rX "$PREFIX/ai"
   if [[ ! -f "$PREFIX/etc/armor.ai.env" ]]; then
     ( umask 0137; printf 'ARMOR_AI_TOKEN=%s\n' "$(random 48 40)" >"$PREFIX/etc/armor.ai.env" )
   fi
