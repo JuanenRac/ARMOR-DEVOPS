@@ -44,6 +44,7 @@ SERVICES: dict[str, tuple[str, str]] = {
     "studio": ("armor-studio", "Studio: the console you are looking at"),
     "mosquitto": ("armor-mosquitto", "The MQTT broker the nodes and the server talk through"),
     "network": ("armor-network", "The network watcher of this machine"),
+    "voice": ("armor-voice", "The voice gateway: written and spoken commands (a closed list of four)"),
 }
 for pair in filter(None, os.environ.get("ARMOR_ADMIN_EXTRA_SERVICES", "").split(",")):
     key, _, unit = pair.partition("=")
