@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented here.
 
+## [0.4.2] - The bench deployment can install the daily backup
+
+- `deploy_cm5.sh --with-backup` passes the option on (it did not exist there) and now carries `backup_data.sh` and `restore_data.sh` in the release: the installer failed with `cannot stat backup_data.sh` as soon as the backup was asked for through the deployment script. Run on the CM5 bench: the timer is armed for every day and a first encrypted, checksummed copy of the data was made and listed.
+- The code of the voice and observation services is now left readable by everyone (`u=rwX,go=rX`) after it is copied: an archive made on Windows can arrive with mode 600 and the services, which run as their own user, could not import their own package (`No module named armor_voice_ai.service`).
+
 ## [0.4.1] - A second install keeps the HTTPS it found
 
 - `install_cm5.sh` used to rewrite the network settings with `http://` addresses and check the health of the services over plain HTTP, so running it again on an installation that already served HTTPS dropped the certificate lines and then failed its own check. It now keeps `TLS_CERT_PATH`, `TLS_KEY_PATH` and `ARMOR_COOKIE_SECURE` when they are there, writes the `https://` addresses and checks the health over HTTPS (the certificate is not verified against the loopback address). The observation service still asks the server over `http://127.0.0.1`: on an HTTPS installation it has to be pointed at the certificate's host name by hand.
