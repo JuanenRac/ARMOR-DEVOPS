@@ -91,7 +91,7 @@ class AgentTest(unittest.TestCase):
     def test_lists_the_services_and_knows_the_extra_one_only_when_its_name_is_valid(self) -> None:
         status, data = self.call("GET", "/v1/services")
         self.assertEqual(status, 200)
-        self.assertEqual([item["id"] for item in data["services"]], ["server", "studio", "mosquitto", "network", "voice", "extra"])
+        self.assertEqual([item["id"] for item in data["services"]], ["server", "studio", "mosquitto", "network", "ai", "voice", "extra"])
         self.assertTrue(all(item["active"] == "active" and item["installed"] for item in data["services"]))
 
     def test_service_actions_go_to_systemctl_and_only_the_allowed_ones(self) -> None:
