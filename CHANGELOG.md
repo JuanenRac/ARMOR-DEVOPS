@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented here.
 
+## [0.4.0] - The observation service on the bench
+
+- **`install_cm5.sh --with-ai`** (and `deploy_cm5.sh --with-ai`, which carries the package): installs ARMOR-SERVER-AI as the unit `armor-server-ai`, as the service user with the same hardening as the others, its code belonging to root. One token, made once and kept in `armor.ai.env`, shared by the unit and the server (which loads it and opens only the four `/api/v1/ai` routes with it). An install that has it keeps it; the admin agent lists the unit.
+
 ## [0.3.9] - The voice gateway on the bench
 
 - **`install_cm5.sh --with-voice`** (and `deploy_cm5.sh --with-voice`, which carries the package): installs ARMOR-VOICE-AI as the unit `armor-voice`, on `127.0.0.1:18090` only, running as the service user with the same hardening as the others; its code belongs to root. Two secrets in two files, made once and kept: `armor.voice.env` (the token the server uses to ask it, which the server unit loads together with `ARMOR_VOICE_URL`) and `armor.voice.secret` (the key that signs the confirmations, which only the gateway loads). An install that has it keeps it. The admin agent lists the unit, so Studio can start, stop and restart it.

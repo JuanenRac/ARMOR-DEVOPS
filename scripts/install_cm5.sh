@@ -31,6 +31,7 @@ WITH_MQTT=0
 WITH_BACKUP=0
 WITH_ADMIN=0
 WITH_VOICE=0
+WITH_AI=0
 VOICE_PORT="18090"
 BIND_ADDRESS="0.0.0.0"
 PUBLIC_HOST=""
@@ -54,6 +55,8 @@ Usage: install_cm5.sh --public-host HOST [--apply] [--server-port N] [--studio-p
   --mqtt-port    broker port (default ${MQTT_PORT}; never the standard 1883, which other software may use)
   --with-admin   also run the admin agent (armor-admin, as root, with a closed list of what it may do) so that an administrator can start, stop and
                  restart the services, edit their settings and add MQTT accounts from Studio; the server itself stays unprivileged
+  --with-ai      also run the observation service (armor-server-ai): it looks at the cameras through the server, notices movement, weighs it with the radar tracks and
+                 the light, and tells the server, which raises the alarm while the system is armed; it holds no camera password and its token opens four routes only
   --with-voice   also run the voice gateway (armor-voice, on 127.0.0.1 only): the closed list of four written and spoken commands (arm, disarm, status, silence), confirmed
                  in two turns; the server asks it and carries out what it accepts, so the console and the phone can send commands as text or voice
   --with-backup  a daily encrypted backup of $PREFIX/data (a timer; see scripts/backup_data.sh), kept under $PREFIX/backups
@@ -75,6 +78,7 @@ while [[ $# -gt 0 ]]; do
     --with-backup) WITH_BACKUP=1; shift ;;
     --with-admin) WITH_ADMIN=1; shift ;;
     --with-voice) WITH_VOICE=1; shift ;;
+    --with-ai) WITH_AI=1; shift ;;
     --bind) BIND_ADDRESS="${2:-}"; shift 2 ;;
     --prefix) PREFIX="${2:-}"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
@@ -88,6 +92,7 @@ fail() { echo "ERROR: $*" >&2; exit 1; }
 [[ -f "$PREFIX/etc/armor.backup.passphrase" ]] && WITH_BACKUP=1
 [[ -f "$PREFIX/etc/armor.admin.env" ]] && WITH_ADMIN=1
 [[ -f "$PREFIX/etc/armor.voice.env" ]] && WITH_VOICE=1
+[[ -f "$PREFIX/etc/armor.ai.env" ]] && WITH_AI=1
 say()  { echo "[armor-install] $*"; }
 
 [[ -n "$PUBLIC_HOST" ]] || { usage >&2; fail "--public-host is required"; }
@@ -146,6 +151,7 @@ say "  armor-studio   : $BIND_ADDRESS:$STUDIO_PORT"
 say "  browser opens  : http://$PUBLIC_HOST:$STUDIO_PORT"
 for pair in "${REACH_UNIQUE[@]}"; do say "  also reachable : ${pair%%=*} (server ${pair#*=})"; done
 [[ "$WITH_MQTT" -ne 1 ]] || say "  armor-mosquitto: $BIND_ADDRESS:$MQTT_PORT (own broker, own passwords)"
+[[ "$WITH_AI" -ne 1 ]] || say "  armor-server-ai: looks at the cameras through the server (movement, weighed with the radars and the light) and tells it; its own token opens only four routes of the server"
 [[ "$WITH_VOICE" -ne 1 ]] || say "  armor-voice    : 127.0.0.1:$VOICE_PORT (written and spoken commands: a closed list of four, confirmed in two turns; only this machine can reach it)"
 [[ "$WITH_BACKUP" -ne 1 ]] || say "  armor-backup   : daily, encrypted, kept under $PREFIX/backups"
 [[ "$WITH_ADMIN" -ne 1 ]] || say "  armor-admin    : root agent on /run/armor-admin.sock (group $SERVICE_USER), allowed only the A.R.M.O.R. services, their settings files and the broker accounts"
@@ -268,6 +274,24 @@ if [[ "$WITH_VOICE" -eq 1 ]]; then
 Environment=ARMOR_VOICE_URL=http://127.0.0.1:$VOICE_PORT"
 fi
 
+AI_ENV_LINE=""
+if [[ "$WITH_AI" -eq 1 ]]; then
+  command -v python3 >/dev/null || fail "--with-ai needs python3"
+  [[ -d "$RELEASE_DIR/ai/armor_server_ai" ]] || fail "this release carries no observation service (ai/armor_server_ai)"
+  say "installing the observation service"
+  # The code belongs to root and cannot be changed by the service user; the service holds no camera address or password, only a token that opens four routes of the server.
+  rm -rf "$PREFIX/ai"
+  install -d -m 0755 -o root -g root "$PREFIX/ai"
+  cp -r "$RELEASE_DIR/ai/armor_server_ai" "$PREFIX/ai/armor_server_ai"
+  find "$PREFIX/ai" -name __pycache__ -prune -exec rm -rf {} + 2>/dev/null || true
+  chown -R root:root "$PREFIX/ai"; chmod -R go-w "$PREFIX/ai"
+  if [[ ! -f "$PREFIX/etc/armor.ai.env" ]]; then
+    ( umask 0137; printf 'ARMOR_AI_TOKEN=%s\n' "$(random 48 40)" >"$PREFIX/etc/armor.ai.env" )
+  fi
+  chown "root:$SERVICE_USER" "$PREFIX/etc/armor.ai.env"; chmod 0640 "$PREFIX/etc/armor.ai.env"
+  AI_ENV_LINE="EnvironmentFile=$PREFIX/etc/armor.ai.env"
+fi
+
 MQTT_ENV_LINE=""
 if [[ "$WITH_MQTT" -eq 1 ]]; then
   say "configuring A.R.M.O.R.'s own MQTT broker on port $MQTT_PORT"
@@ -354,6 +378,7 @@ EnvironmentFile=$PREFIX/etc/armor.network.env
 $MQTT_ENV_LINE
 $ADMIN_ENV_LINE
 $VOICE_ENV_LINE
+$AI_ENV_LINE
 ExecStart=$(command -v node) $PREFIX/current/server/dist/server.mjs
 Restart=on-failure
 RestartSec=3
@@ -409,6 +434,32 @@ RestartSec=3
 MemoryMax=96M
 TasksMax=64
 ReadWritePaths=$PREFIX/data/mqtt
+$HARDENING
+
+[Install]
+WantedBy=multi-user.target
+EOF
+fi
+
+if [[ "$WITH_AI" -eq 1 ]]; then
+  cat >/etc/systemd/system/armor-server-ai.service <<EOF
+[Unit]
+Description=A.R.M.O.R. observation service (movement on the cameras, weighed with the radars; it recommends, the server decides)
+After=network-online.target armor-server.service
+Wants=armor-server.service
+
+[Service]
+Type=simple
+User=$SERVICE_USER
+Group=$SERVICE_USER
+Environment=PYTHONPATH=$PREFIX/ai
+Environment=ARMOR_AI_SERVER_URL=http://127.0.0.1:$SERVER_PORT
+EnvironmentFile=$PREFIX/etc/armor.ai.env
+ExecStart=$(command -v python3) -m armor_server_ai.service
+Restart=on-failure
+RestartSec=5
+MemoryMax=96M
+TasksMax=32
 $HARDENING
 
 [Install]
@@ -520,7 +571,11 @@ if [[ "$WITH_VOICE" -eq 1 ]]; then
   systemctl enable armor-voice >/dev/null
   systemctl restart armor-voice
 fi
+if [[ "$WITH_AI" -eq 1 ]]; then
+  systemctl enable armor-server-ai >/dev/null
+fi
 systemctl restart armor-server armor-studio
+[[ "$WITH_AI" -ne 1 ]] || systemctl restart armor-server-ai
 
 say "waiting for the services"
 ok=0

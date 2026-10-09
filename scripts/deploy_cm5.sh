@@ -6,7 +6,7 @@
 # Copyright (C) 2026 JuanenRac (Electro Hobby 3D)
 # GPL-3.0-or-later - see LICENSE
 # =============================================================================
-# Usage: deploy_cm5.sh --host 192.168.0.180 --user <user> --key ~/.ssh/id_key [--port N] [--public-host H] [--apply] [--with-mqtt] [--with-admin] [--with-voice]
+# Usage: deploy_cm5.sh --host 192.168.0.180 --user <user> --key ~/.ssh/id_key [--port N] [--public-host H] [--apply] [--with-mqtt] [--with-admin] [--with-voice] [--with-ai]
 #        --port N          the SSH port, when it is not 22 (a router that forwards a public port to it)
 #        --public-host H   the address the browser uses, when it is not --host
 #        [--also-reach http://PUBLIC:2601=http://PUBLIC:2600] [--forget-reach]   (another address the browser may log in from)
@@ -25,12 +25,13 @@ while [[ $# -gt 0 ]]; do
     --with-mqtt) EXTRA="$EXTRA --with-mqtt"; shift ;;
     --with-admin) EXTRA="$EXTRA --with-admin"; shift ;;
     --with-voice) EXTRA="$EXTRA --with-voice"; shift ;;
+    --with-ai) EXTRA="$EXTRA --with-ai"; shift ;;
     --also-reach) EXTRA="$EXTRA --also-reach $(printf '%q' "${2:-}")"; shift 2 ;;
     --forget-reach) EXTRA="$EXTRA --forget-reach"; shift ;;
     *) echo "unknown option: $1" >&2; exit 2 ;;
   esac
 done
-[[ -n "$HOST" && -n "$USER_NAME" ]] || { echo "usage: deploy_cm5.sh --host H --user U [--key K] [--port N] [--public-host H] [--apply] [--with-mqtt] [--with-admin] [--with-voice] [--also-reach STUDIO_URL=SERVER_URL]" >&2; exit 2; }
+[[ -n "$HOST" && -n "$USER_NAME" ]] || { echo "usage: deploy_cm5.sh --host H --user U [--key K] [--port N] [--public-host H] [--apply] [--with-mqtt] [--with-admin] [--with-voice] [--with-ai] [--also-reach STUDIO_URL=SERVER_URL]" >&2; exit 2; }
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 SSH_OPTS=(-o BatchMode=yes -o ConnectTimeout=10)
@@ -66,6 +67,10 @@ cp "$ROOT/ARMOR-DEVOPS/scripts/install_cm5.sh" "$ROOT/ARMOR-DEVOPS/scripts/mqtt_
 if [[ -d "$ROOT/ARMOR-VOICE-AI/src/armor_voice_ai" ]]; then
   mkdir -p "$WORK/release/voice"
   tar -C "$ROOT/ARMOR-VOICE-AI/src" --exclude=__pycache__ -cf - armor_voice_ai | tar -C "$WORK/release/voice" -xf -
+fi
+if [[ -d "$ROOT/ARMOR-SERVER-AI/src/armor_server_ai" ]]; then
+  mkdir -p "$WORK/release/ai"
+  tar -C "$ROOT/ARMOR-SERVER-AI/src" --exclude=__pycache__ -cf - armor_server_ai | tar -C "$WORK/release/ai" -xf -
 fi
 tar -C "$WORK" -czf "$WORK/armor-$STAMP.tar.gz" release
 
