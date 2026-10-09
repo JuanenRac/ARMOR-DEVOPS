@@ -94,6 +94,17 @@ class AgentTest(unittest.TestCase):
         self.assertEqual([item["id"] for item in data["services"]], ["server", "studio", "mosquitto", "network", "ai", "voice", "extra"])
         self.assertTrue(all(item["active"] == "active" and item["installed"] for item in data["services"]))
 
+    def test_a_service_can_be_paused_and_resumed_but_not_the_console_itself(self) -> None:
+        self.assertEqual(self.call("POST", "/v1/services/mosquitto/pause")[0], 200)
+        self.assertEqual(self.call("POST", "/v1/services/mosquitto/resume")[0], 200)
+        log = self.calls.read_text(encoding="utf-8")
+        self.assertIn("kill --signal=SIGSTOP --kill-whom=main armor-mosquitto", log)
+        self.assertIn("kill --signal=SIGCONT --kill-whom=main armor-mosquitto", log)
+        for service_id in ("server", "studio"):          # a paused console could not be used to resume itself
+            self.assertEqual(self.call("POST", f"/v1/services/{service_id}/pause")[1], {"error": "cannot_pause"})
+        status, data = self.call("GET", "/v1/services")
+        self.assertTrue(all(item["paused"] is False for item in data["services"]))
+
     def test_service_actions_go_to_systemctl_and_only_the_allowed_ones(self) -> None:
         self.assertEqual(self.call("POST", "/v1/services/mosquitto/restart")[0], 200)
         self.assertEqual(self.call("POST", "/v1/services/server/restart")[0], 200)
