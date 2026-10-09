@@ -38,6 +38,7 @@
 * **Secrets:** `scripts/generate_secrets.sh` creates random secrets and prints none; `scripts/check-required-env.sh` refuses missing, placeholder, short or repeated values.
 * **Backup and restore:** `scripts/backup_data.sh` makes an AES-256 encrypted, verified and checksummed archive of the server data (evidence excluded unless asked); `scripts/restore_data.sh` lists it or restores it without ever overwriting existing data. The camera key is deliberately **not** in the archive.
 * **TLS:** an optional `tls` Compose profile puts Caddy, with its own local certificate authority, in front of Studio ([details](docs/BACKUP_AND_TLS.md)).
+* **Every service of the bench:** `install_cm5.sh` also installs, on request, the observation service (`--with-ai`), the voice service (`--with-voice`), the administration agent that lets Studio start, stop and restart services and edit the configuration files from a closed list of actions (`--with-admin`) and the daily encrypted backup (`--with-backup`); a later run remembers what was installed before.
 
 ## 📂 Repository Structure
 

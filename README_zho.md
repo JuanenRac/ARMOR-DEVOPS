@@ -38,6 +38,7 @@
 * **机密：** `scripts/generate_secrets.sh` 创建随机机密且不打印任何一个；`scripts/check-required-env.sh` 拒绝缺失、示例、过短或重复的值。
 * **备份与恢复：** `scripts/backup_data.sh` 生成服务器数据的 AES-256 加密、已验证且带校验和的压缩包（除非要求，否则不含证据）；`scripts/restore_data.sh` 列出或恢复它，且绝不覆盖现有数据。摄像头密钥有意**不**放入压缩包。
 * **TLS：** 可选的 `tls` Compose 配置在 Studio 前放置带自己本地证书颁发机构的 Caddy（[详情](docs/BACKUP_AND_TLS.md)）。
+* **试验台的全部服务：** `install_cm5.sh` 还可按需安装观察服务（`--with-ai`）、语音服务（`--with-voice`）、让 Studio 能按封闭的操作清单启动、停止、重启服务并编辑配置文件的管理代理（`--with-admin`），以及每日加密备份（`--with-backup`）；之后再次运行会记住之前安装的内容。
 
 ## 📂 仓库结构
 

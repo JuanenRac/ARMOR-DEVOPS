@@ -38,6 +38,7 @@
 * **Secretos:** `scripts/generate_secrets.sh` crea secretos aleatorios sin imprimir ninguno; `scripts/check-required-env.sh` rechaza valores ausentes, de ejemplo, cortos o repetidos.
 * **Copia de seguridad y restauración:** `scripts/backup_data.sh` crea un archivo cifrado con AES-256, verificado y con suma de comprobación de los datos del servidor (sin evidencias salvo que se pida); `scripts/restore_data.sh` lo lista o lo restaura sin sobrescribir nunca datos existentes. La clave de cámaras **no** va en el archivo, a propósito.
 * **TLS:** un perfil `tls` opcional de Compose pone Caddy, con su propia autoridad de certificados local, delante de Studio ([detalles](docs/BACKUP_AND_TLS.md)).
+* **Todos los servicios del banco:** `install_cm5.sh` instala también, bajo petición, el servicio de observación (`--with-ai`), el servicio de voz (`--with-voice`), el agente de administración que permite a Studio arrancar, parar y reiniciar servicios y editar los archivos de configuración con una lista cerrada de acciones (`--with-admin`) y la copia de seguridad cifrada diaria (`--with-backup`); una ejecución posterior recuerda lo instalado antes.
 
 ## 📂 Estructura del repositorio
 
