@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented here.
 
+## [0.4.3] - The administration agent can pause and resume a service
+
+- `armor_admin_agent.py`: two new actions, `pause` (`systemctl kill --signal=SIGSTOP --kill-whom=main`) and `resume` (`SIGCONT`), which freeze a program and let it go on without losing anything; the server and Studio are refused (`cannot_pause`), since a paused console could not be used to resume itself. The list of services says which are `paused`. The voice service's description says fifteen commands. Tests cover both actions and the refusal.
+
 ## [0.4.2] - The bench deployment can install the daily backup
 
 - `deploy_cm5.sh --with-backup` passes the option on (it did not exist there) and now carries `backup_data.sh` and `restore_data.sh` in the release: the installer failed with `cannot stat backup_data.sh` as soon as the backup was asked for through the deployment script. Run on the CM5 bench: the timer is armed for every day and a first encrypted, checksummed copy of the data was made and listed.

@@ -45,13 +45,18 @@ SERVICES: dict[str, tuple[str, str]] = {
     "mosquitto": ("armor-mosquitto", "The MQTT broker the nodes and the server talk through"),
     "network": ("armor-network", "The network watcher of this machine"),
     "ai": ("armor-server-ai", "The observation service: movement on the cameras, weighed with the radars (it recommends, the server decides)"),
-    "voice": ("armor-voice", "The voice gateway: written and spoken commands (a closed list of four)"),
+    "voice": ("armor-voice", "The voice gateway: written and spoken commands (a closed list of fifteen)"),
 }
 for pair in filter(None, os.environ.get("ARMOR_ADMIN_EXTRA_SERVICES", "").split(",")):
     key, _, unit = pair.partition("=")
     if re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,31}", key) and re.fullmatch(r"[A-Za-z0-9@_.-]{1,64}", unit):
         SERVICES[key] = (unit, "Extra service")
 ACTIONS = {"start": ["start"], "stop": ["stop"], "restart": ["restart"], "reload": ["reload-or-restart"]}
+# Pausing freezes the main process with SIGSTOP and resuming lets it go on with SIGCONT: nothing is lost, it just stops answering. The server and Studio
+# cannot be paused - a paused console cannot be used to resume itself.
+ACTIONS["pause"] = ["kill", "--signal=SIGSTOP", "--kill-whom=main"]
+ACTIONS["resume"] = ["kill", "--signal=SIGCONT", "--kill-whom=main"]
+NEVER_PAUSE = {"server", "studio"}
 # Stopping or restarting the server cuts the request that asked for it: do not wait for the answer.
 NO_BLOCK = {"armor-server", "armor-studio"}
 
@@ -82,15 +87,27 @@ def run(command: list[str], timeout: float = 30.0) -> subprocess.CompletedProces
 
 # ---- services -----------------------------------------------------------------------------------------------------------------------------------
 
+def is_stopped_by_signal(pid: int) -> bool:
+    """True when the process is frozen (state T in /proc/<pid>/stat): a paused service is still "active" for systemd."""
+    if pid <= 0:
+        return False
+    try:
+        text = Path(f"/proc/{pid}/stat").read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return False
+    return text[text.rfind(")") + 2:text.rfind(")") + 3] == "T"
+
+
 def service_state(service_id: str) -> dict[str, object]:
     unit, description = SERVICES[service_id]
     shown = run([SYSTEMCTL, "show", unit, "--no-pager", "--property=LoadState,ActiveState,SubState,UnitFileState,MainPID,ActiveEnterTimestamp"])
     fields = dict(line.split("=", 1) for line in shown.stdout.splitlines() if "=" in line)
+    pid = int(fields.get("MainPID", "0") or 0)
     return {
         "id": service_id, "unit": unit, "description": description,
         "installed": fields.get("LoadState", "not-found") != "not-found",
         "active": fields.get("ActiveState", "unknown"), "sub": fields.get("SubState", ""),
-        "enabled": fields.get("UnitFileState", ""), "pid": int(fields.get("MainPID", "0") or 0), "since": fields.get("ActiveEnterTimestamp", ""),
+        "enabled": fields.get("UnitFileState", ""), "pid": pid, "since": fields.get("ActiveEnterTimestamp", ""), "paused": is_stopped_by_signal(pid),
     }
 
 
@@ -99,6 +116,8 @@ def service_action(service_id: str, action: str) -> dict[str, object]:
         raise Refused(404, "unknown_service")
     if action not in ACTIONS:
         raise Refused(422, "unknown_action")
+    if action == "pause" and service_id in NEVER_PAUSE:
+        raise Refused(422, "cannot_pause")
     unit = SERVICES[service_id][0]
     command = [SYSTEMCTL] + (["--no-block"] if unit in NO_BLOCK and action != "start" else []) + ACTIONS[action] + [unit]
     done = run(command, timeout=60.0)
