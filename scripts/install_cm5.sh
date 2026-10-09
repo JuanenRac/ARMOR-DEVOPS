@@ -57,8 +57,8 @@ Usage: install_cm5.sh --public-host HOST [--apply] [--server-port N] [--studio-p
                  restart the services, edit their settings and add MQTT accounts from Studio; the server itself stays unprivileged
   --with-ai      also run the observation service (armor-server-ai): it looks at the cameras through the server, notices movement, weighs it with the radar tracks and
                  the light, and tells the server, which raises the alarm while the system is armed; it holds no camera password and its token opens four routes only
-  --with-voice   also run the voice gateway (armor-voice, on 127.0.0.1 only): the closed list of four written and spoken commands (arm, disarm, status, silence), confirmed
-                 in two turns; the server asks it and carries out what it accepts, so the console and the phone can send commands as text or voice
+  --with-voice   also run the voice gateway (armor-voice, on 127.0.0.1 only): the closed list of fifteen written and spoken commands (arm and disarm are confirmed
+                 in two turns; the server asks it and carries out what it accepts, so the phone can send commands as text or voice)
   --with-backup  a daily encrypted backup of $PREFIX/data (a timer; see scripts/backup_data.sh), kept under $PREFIX/backups
   --bind         address all services listen on (default ${BIND_ADDRESS})
   --prefix       install directory (default ${PREFIX})
@@ -152,7 +152,7 @@ say "  browser opens  : http://$PUBLIC_HOST:$STUDIO_PORT"
 for pair in "${REACH_UNIQUE[@]}"; do say "  also reachable : ${pair%%=*} (server ${pair#*=})"; done
 [[ "$WITH_MQTT" -ne 1 ]] || say "  armor-mosquitto: $BIND_ADDRESS:$MQTT_PORT (own broker, own passwords)"
 [[ "$WITH_AI" -ne 1 ]] || say "  armor-server-ai: looks at the cameras through the server (movement, weighed with the radars and the light) and tells it; its own token opens only four routes of the server"
-[[ "$WITH_VOICE" -ne 1 ]] || say "  armor-voice    : 127.0.0.1:$VOICE_PORT (written and spoken commands: a closed list of four, confirmed in two turns; only this machine can reach it)"
+[[ "$WITH_VOICE" -ne 1 ]] || say "  armor-voice    : 127.0.0.1:$VOICE_PORT (written and spoken commands: a closed list of fifteen, arm and disarm confirmed in two turns; only this machine can reach it)"
 [[ "$WITH_BACKUP" -ne 1 ]] || say "  armor-backup   : daily, encrypted, kept under $PREFIX/backups"
 [[ "$WITH_ADMIN" -ne 1 ]] || say "  armor-admin    : root agent on /run/armor-admin.sock (group $SERVICE_USER), allowed only the A.R.M.O.R. services, their settings files and the broker accounts"
 say "  other software : untouched"
@@ -470,7 +470,7 @@ fi
 if [[ "$WITH_VOICE" -eq 1 ]]; then
   cat >/etc/systemd/system/armor-voice.service <<EOF
 [Unit]
-Description=A.R.M.O.R. voice gateway (a closed list of four commands, loopback only)
+Description=A.R.M.O.R. voice gateway (a closed list of fifteen commands, loopback only)
 After=network-online.target
 Before=armor-server.service
 

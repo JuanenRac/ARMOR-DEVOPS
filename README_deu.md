@@ -38,6 +38,7 @@
 * **Geheimnisse:** `scripts/generate_secrets.sh` erzeugt zufällige Geheimnisse und druckt keines; `scripts/check-required-env.sh` lehnt fehlende, Platzhalter-, kurze oder wiederholte Werte ab.
 * **Backup und Wiederherstellung:** `scripts/backup_data.sh` erstellt ein AES-256-verschlüsseltes, verifiziertes und mit Prüfsumme versehenes Archiv der Serverdaten (Beweise nur auf Wunsch); `scripts/restore_data.sh` listet es auf oder stellt es wieder her, ohne je vorhandene Daten zu überschreiben. Der Kameraschlüssel ist absichtlich **nicht** im Archiv.
 * **TLS:** ein optionales Compose-Profil `tls` stellt Caddy mit eigener lokaler Zertifizierungsstelle vor Studio ([Details](docs/BACKUP_AND_TLS.md)).
+* **Alle Dienste des Prüfstands:** `install_cm5.sh` installiert auf Wunsch auch den Beobachtungsdienst (`--with-ai`), den Sprachdienst (`--with-voice`), den Administrationsagenten, mit dem Studio Dienste starten, stoppen und neu starten und Konfigurationsdateien aus einer geschlossenen Liste von Aktionen bearbeiten kann (`--with-admin`), und das tägliche verschlüsselte Backup (`--with-backup`); ein späterer Lauf erinnert sich an das zuvor Installierte.
 
 ## 📂 Struktur des Repositorys
 

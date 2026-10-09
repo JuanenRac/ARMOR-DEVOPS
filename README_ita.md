@@ -38,6 +38,7 @@
 * **Segreti:** `scripts/generate_secrets.sh` crea segreti casuali senza stamparne nessuno; `scripts/check-required-env.sh` rifiuta valori mancanti, di esempio, corti o ripetuti.
 * **Backup e ripristino:** `scripts/backup_data.sh` crea un archivio cifrato AES-256, verificato e con checksum dei dati del server (senza le prove salvo richiesta); `scripts/restore_data.sh` lo elenca o lo ripristina senza mai sovrascrivere dati esistenti. La chiave delle telecamere volutamente **non** è nell'archivio.
 * **TLS:** un profilo Compose `tls` opzionale mette Caddy, con una propria autorità di certificazione locale, davanti a Studio ([dettagli](docs/BACKUP_AND_TLS.md)).
+* **Tutti i servizi del banco:** `install_cm5.sh` installa anche, su richiesta, il servizio di osservazione (`--with-ai`), il servizio vocale (`--with-voice`), l'agente di amministrazione che permette a Studio di avviare, fermare e riavviare servizi e modificare i file di configurazione da un elenco chiuso di azioni (`--with-admin`) e il backup cifrato giornaliero (`--with-backup`); un'esecuzione successiva ricorda ciò che era stato installato.
 
 ## 📂 Struttura del repository
 
