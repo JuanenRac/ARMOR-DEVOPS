@@ -30,6 +30,8 @@ MQTT_PORT="18883"
 WITH_MQTT=0
 WITH_BACKUP=0
 WITH_ADMIN=0
+WITH_VOICE=0
+VOICE_PORT="18090"
 BIND_ADDRESS="0.0.0.0"
 PUBLIC_HOST=""
 APPLY=0
@@ -52,6 +54,8 @@ Usage: install_cm5.sh --public-host HOST [--apply] [--server-port N] [--studio-p
   --mqtt-port    broker port (default ${MQTT_PORT}; never the standard 1883, which other software may use)
   --with-admin   also run the admin agent (armor-admin, as root, with a closed list of what it may do) so that an administrator can start, stop and
                  restart the services, edit their settings and add MQTT accounts from Studio; the server itself stays unprivileged
+  --with-voice   also run the voice gateway (armor-voice, on 127.0.0.1 only): the closed list of four written and spoken commands (arm, disarm, status, silence), confirmed
+                 in two turns; the server asks it and carries out what it accepts, so the console and the phone can send commands as text or voice
   --with-backup  a daily encrypted backup of $PREFIX/data (a timer; see scripts/backup_data.sh), kept under $PREFIX/backups
   --bind         address all services listen on (default ${BIND_ADDRESS})
   --prefix       install directory (default ${PREFIX})
@@ -70,6 +74,7 @@ while [[ $# -gt 0 ]]; do
     --mqtt-port) MQTT_PORT="${2:-}"; shift 2 ;;
     --with-backup) WITH_BACKUP=1; shift ;;
     --with-admin) WITH_ADMIN=1; shift ;;
+    --with-voice) WITH_VOICE=1; shift ;;
     --bind) BIND_ADDRESS="${2:-}"; shift 2 ;;
     --prefix) PREFIX="${2:-}"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
@@ -82,6 +87,7 @@ fail() { echo "ERROR: $*" >&2; exit 1; }
 [[ -f "$PREFIX/etc/armor.mqtt.env" ]] && WITH_MQTT=1
 [[ -f "$PREFIX/etc/armor.backup.passphrase" ]] && WITH_BACKUP=1
 [[ -f "$PREFIX/etc/armor.admin.env" ]] && WITH_ADMIN=1
+[[ -f "$PREFIX/etc/armor.voice.env" ]] && WITH_VOICE=1
 say()  { echo "[armor-install] $*"; }
 
 [[ -n "$PUBLIC_HOST" ]] || { usage >&2; fail "--public-host is required"; }
@@ -131,6 +137,7 @@ check_port() {
 check_port "$SERVER_PORT" armor-server
 check_port "$STUDIO_PORT" armor-studio
 [[ "$WITH_MQTT" -ne 1 ]] || check_port "$MQTT_PORT" armor-mosquitto
+[[ "$WITH_VOICE" -ne 1 ]] || check_port "$VOICE_PORT" armor-voice
 
 say "plan"
 say "  install prefix : $PREFIX (owner: $SERVICE_USER)"
@@ -139,6 +146,7 @@ say "  armor-studio   : $BIND_ADDRESS:$STUDIO_PORT"
 say "  browser opens  : http://$PUBLIC_HOST:$STUDIO_PORT"
 for pair in "${REACH_UNIQUE[@]}"; do say "  also reachable : ${pair%%=*} (server ${pair#*=})"; done
 [[ "$WITH_MQTT" -ne 1 ]] || say "  armor-mosquitto: $BIND_ADDRESS:$MQTT_PORT (own broker, own passwords)"
+[[ "$WITH_VOICE" -ne 1 ]] || say "  armor-voice    : 127.0.0.1:$VOICE_PORT (written and spoken commands: a closed list of four, confirmed in two turns; only this machine can reach it)"
 [[ "$WITH_BACKUP" -ne 1 ]] || say "  armor-backup   : daily, encrypted, kept under $PREFIX/backups"
 [[ "$WITH_ADMIN" -ne 1 ]] || say "  armor-admin    : root agent on /run/armor-admin.sock (group $SERVICE_USER), allowed only the A.R.M.O.R. services, their settings files and the broker accounts"
 say "  other software : untouched"
@@ -236,6 +244,30 @@ if [[ "$WITH_ADMIN" -eq 1 ]]; then
 Environment=ARMOR_ADMIN_SOCKET=/run/armor-admin.sock"
 fi
 
+VOICE_ENV_LINE=""
+if [[ "$WITH_VOICE" -eq 1 ]]; then
+  command -v python3 >/dev/null || fail "--with-voice needs python3"
+  [[ -d "$RELEASE_DIR/voice/armor_voice_ai" ]] || fail "this release carries no voice gateway (voice/armor_voice_ai)"
+  say "installing the voice gateway"
+  # The code belongs to root and cannot be changed by the service user. It listens on the loopback address only and holds nothing of the system: it understands a phrase.
+  rm -rf "$PREFIX/voice"
+  install -d -m 0755 -o root -g root "$PREFIX/voice"
+  cp -r "$RELEASE_DIR/voice/armor_voice_ai" "$PREFIX/voice/armor_voice_ai"
+  find "$PREFIX/voice" -name __pycache__ -prune -exec rm -rf {} + 2>/dev/null || true
+  chown -R root:root "$PREFIX/voice"; chmod -R go-w "$PREFIX/voice"
+  # Two secrets, two files: the token that lets the server ask the gateway (the server reads it too), and the key that signs the confirmations (only the gateway reads it).
+  if [[ ! -f "$PREFIX/etc/armor.voice.env" ]]; then
+    ( umask 0137; printf 'ARMOR_VOICE_TOKEN=%s\n' "$(random 48 40)" >"$PREFIX/etc/armor.voice.env" )
+  fi
+  chown "root:$SERVICE_USER" "$PREFIX/etc/armor.voice.env"; chmod 0640 "$PREFIX/etc/armor.voice.env"
+  if [[ ! -f "$PREFIX/etc/armor.voice.secret" ]]; then
+    ( umask 0137; printf 'ARMOR_VOICE_CONFIRM_SECRET=%s\n' "$(random 48 40)" >"$PREFIX/etc/armor.voice.secret" )
+  fi
+  chown "root:$SERVICE_USER" "$PREFIX/etc/armor.voice.secret"; chmod 0640 "$PREFIX/etc/armor.voice.secret"
+  VOICE_ENV_LINE="EnvironmentFile=$PREFIX/etc/armor.voice.env
+Environment=ARMOR_VOICE_URL=http://127.0.0.1:$VOICE_PORT"
+fi
+
 MQTT_ENV_LINE=""
 if [[ "$WITH_MQTT" -eq 1 ]]; then
   say "configuring A.R.M.O.R.'s own MQTT broker on port $MQTT_PORT"
@@ -321,6 +353,7 @@ EnvironmentFile=$ENV_FILE
 EnvironmentFile=$PREFIX/etc/armor.network.env
 $MQTT_ENV_LINE
 $ADMIN_ENV_LINE
+$VOICE_ENV_LINE
 ExecStart=$(command -v node) $PREFIX/current/server/dist/server.mjs
 Restart=on-failure
 RestartSec=3
@@ -376,6 +409,32 @@ RestartSec=3
 MemoryMax=96M
 TasksMax=64
 ReadWritePaths=$PREFIX/data/mqtt
+$HARDENING
+
+[Install]
+WantedBy=multi-user.target
+EOF
+fi
+
+if [[ "$WITH_VOICE" -eq 1 ]]; then
+  cat >/etc/systemd/system/armor-voice.service <<EOF
+[Unit]
+Description=A.R.M.O.R. voice gateway (a closed list of four commands, loopback only)
+After=network-online.target
+Before=armor-server.service
+
+[Service]
+Type=simple
+User=$SERVICE_USER
+Group=$SERVICE_USER
+Environment=PYTHONPATH=$PREFIX/voice
+EnvironmentFile=$PREFIX/etc/armor.voice.env
+EnvironmentFile=$PREFIX/etc/armor.voice.secret
+ExecStart=$(command -v python3) -m armor_voice_ai.service --host 127.0.0.1 --port $VOICE_PORT
+Restart=on-failure
+RestartSec=3
+MemoryMax=64M
+TasksMax=32
 $HARDENING
 
 [Install]
@@ -456,6 +515,10 @@ fi
 if [[ "$WITH_ADMIN" -eq 1 ]]; then
   systemctl enable armor-admin >/dev/null
   systemctl restart armor-admin
+fi
+if [[ "$WITH_VOICE" -eq 1 ]]; then
+  systemctl enable armor-voice >/dev/null
+  systemctl restart armor-voice
 fi
 systemctl restart armor-server armor-studio
 

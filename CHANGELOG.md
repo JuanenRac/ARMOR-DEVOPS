@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented here.
 
+## [0.3.9] - The voice gateway on the bench
+
+- **`install_cm5.sh --with-voice`** (and `deploy_cm5.sh --with-voice`, which carries the package): installs ARMOR-VOICE-AI as the unit `armor-voice`, on `127.0.0.1:18090` only, running as the service user with the same hardening as the others; its code belongs to root. Two secrets in two files, made once and kept: `armor.voice.env` (the token the server uses to ask it, which the server unit loads together with `ARMOR_VOICE_URL`) and `armor.voice.secret` (the key that signs the confirmations, which only the gateway loads). An install that has it keeps it. The admin agent lists the unit, so Studio can start, stop and restart it.
+
 ## [0.3.8] - deploy_cm5.sh can install the admin agent
 
 - **Real bug found when installing it on the bench:** the deployment archive did not carry `armor_admin_agent.py`, so `--with-admin` stopped with *cannot stat* after copying the release. The archive now includes it.
