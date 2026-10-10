@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented here.
 
+## [0.4.4] - The relays of an electrical node can be made reachable from the broker
+
+- **`mqtt_identity.sh electrical-relays ID on|off`:** the only thing that lets an electrical node write its relays' states and read their commands (`topic readwrite armor/device/<node>/#` in the node's own block), so the relays can be devices of the house that the server switches. Off by default and not part of any install; idempotent, it keeps the previous list as `acl.before-relays`, and `off` takes only that line away. The node also needs `remote.relays` on in its panel, and Studio a device with the connection *ARMOR node* and the name `<node>/<relay>`. Tested in `test_mqtt_identity.sh`: nothing is reachable before the `on`, one node's `on` reaches no other node, twice writes the line once, a bad node or state changes nothing, and `off` leaves the node's other topics and the server's rules alone.
+
 ## [0.4.3] - The administration agent can pause and resume a service
 
 - `armor_admin_agent.py`: two new actions, `pause` (`systemctl kill --signal=SIGSTOP --kill-whom=main`) and `resume` (`SIGCONT`), which freeze a program and let it go on without losing anything; the server and Studio are refused (`cannot_pause`), since a paused console could not be used to resume itself. The list of services says which are `paused`. The voice service's description says fifteen commands. Tests cover both actions and the refusal.

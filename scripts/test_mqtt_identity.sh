@@ -75,4 +75,23 @@ run electrical-switching electrical-2 on >/dev/null
 run remove electrical-node-electrical-2 >/dev/null
 if grep -q 'electrical-2' "$ACL"; then fail "removing the node left something of it: $(grep electrical-2 "$ACL")"; fi
 grep -qx 'user electrical-node-electrical-1' "$ACL" || fail "removing one node removed another"
-echo "ARMOR_MQTT_IDENTITY=PASS the switch of an electrical node is reachable only after an explicit on, and off and remove take it away"
+# The relays of an electrical node (devices of the device layer) are reachable only after an explicit `electrical-relays ... on`, for that node only.
+run add electrical-node electrical-3 >/dev/null
+run add electrical-node electrical-4 >/dev/null
+if grep -q 'armor/device/electrical-3' "$ACL"; then fail "the relays of a new node are reachable before they were turned on"; fi
+run electrical-relays electrical-3 on >/dev/null
+grep -qx 'topic readwrite armor/device/electrical-3/#' <<<"$(block electrical-node-electrical-3)" || fail "the node cannot use its device topics after on"
+if grep -q 'armor/device/electrical-4' "$ACL"; then fail "another node's relays became reachable"; fi
+grep -qx 'topic write armor/electrical/electrical-3/state' <<<"$(block electrical-node-electrical-3)" || fail "turning the relays on took the node's own topics"
+run electrical-relays electrical-3 on >/dev/null
+[[ "$(grep -c 'armor/device/electrical-3/#' "$ACL")" == "1" ]] || fail "turning the relays on twice wrote the line twice"
+if run electrical-relays nothing on >/dev/null 2>&1; then fail "relays of an unknown node were accepted"; fi
+if run electrical-relays electrical-3 maybe >/dev/null 2>&1; then fail "a bad state was accepted for the relays"; fi
+if run electrical-relays 'Bad Node' on >/dev/null 2>&1; then fail "a bad node id was accepted for the relays"; fi
+run electrical-relays electrical-3 off >/dev/null
+if grep -q 'armor/device/electrical-3' "$ACL"; then fail "off left the relays reachable"; fi
+grep -qx 'topic write armor/electrical/electrical-3/state' <<<"$(block electrical-node-electrical-3)" || fail "turning the relays off took the node's own topics"
+grep -qx 'topic readwrite armor/device/#' <<<"$(block armor-server)" || fail "the relays' off took the server's rules"
+run electrical-relays electrical-3 off >/dev/null   # off again is harmless
+
+echo "ARMOR_MQTT_IDENTITY=PASS the switch and the relays of an electrical node are reachable only after an explicit on, and off and remove take them away"

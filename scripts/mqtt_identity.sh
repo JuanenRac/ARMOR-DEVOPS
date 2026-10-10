@@ -6,6 +6,7 @@
 #   sudo mqtt_identity.sh add solar-node solar-1  # a solar gateway node (ARMOR-SOLAR): writes armor/solar/solar-1/# and nothing else
 #   sudo mqtt_identity.sh add electrical-node electrical-1  # an electrical node (ARMOR-ELECTRICAL): writes armor/electrical/electrical-1/state and /result and nothing else, reads nothing
 #   sudo mqtt_identity.sh add network-node network-1   # a network node (ARMOR-NETWORK): writes armor/network/network-1/state and nothing else, reads nothing
+#   sudo mqtt_identity.sh electrical-relays electrical-1 on     # lets that node's relays be devices of the house (armor/device/electrical-1/#): it publishes their state and reads their commands (off again with `off`): NOT part of any install
 #   sudo mqtt_identity.sh electrical-switching electrical-1 on   # lets the server send commands to that node's switch, and the node read them (off again with `off`): NOT part of any install
 #   sudo mqtt_identity.sh add consumer siren   # an alarm consumer: reads armor/server/alert only
 #   sudo mqtt_identity.sh add device kitchen   # one smart device (a plug, a sensor): reads and writes armor/device/kitchen/# only
@@ -21,7 +22,7 @@ MQ="$PREFIX/etc/mosquitto"
 [[ "$(id -u)" -eq 0 ]] || { echo "run as root" >&2; exit 1; }
 [[ -f "$MQ/passwd" && -f "$MQ/acl" ]] || { echo "the A.R.M.O.R. broker is not installed (install_cm5.sh --with-mqtt)" >&2; exit 1; }
 
-usage() { echo "Usage: mqtt_identity.sh add node ID | add solar-node ID | add electrical-node ID | add network-node ID | add consumer NAME | add device NAME | add bridge NAME | upgrade-node NODE_ID | electrical-switching NODE_ID on|off | remove USER" >&2; exit 2; }
+usage() { echo "Usage: mqtt_identity.sh add node ID | add solar-node ID | add electrical-node ID | add network-node ID | add consumer NAME | add device NAME | add bridge NAME | upgrade-node NODE_ID | electrical-switching NODE_ID on|off | electrical-relays NODE_ID on|off | remove USER" >&2; exit 2; }
 ACTION="${1:-}"
 reload_broker() { systemctl reload armor-mosquitto 2>/dev/null || systemctl restart armor-mosquitto; }
 
@@ -98,6 +99,30 @@ case "$ACTION" in
       chown root:armor "$MQ/acl"; chmod 0640 "$MQ/acl"
       reload_broker
       echo "the previous ACL is kept as acl.before-upgrade"
+    fi
+    ;;
+  electrical-relays)
+    # The relays of an electrical node are devices of the device layer (armor/device/<node>/<relay>/state and /set). Only this command lets the node write its states and read its
+    # commands there; the server's own identity already covers armor/device/#. Without the line the broker itself refuses, whatever the node's panel says. Idempotent; the previous ACL is kept.
+    NAME="${2:-}"; STATE="${3:-}"; USER_NAME="electrical-node-$NAME"
+    [[ "$NAME" =~ ^[a-z0-9][a-z0-9_-]{0,63}$ ]] || { echo "the node id must match ^[a-z0-9][a-z0-9_-]{0,63}\$" >&2; exit 2; }
+    [[ "$STATE" == "on" || "$STATE" == "off" ]] || usage
+    grep -qx "user $USER_NAME" "$MQ/acl" || { echo "$USER_NAME does not exist (add electrical-node $NAME first)" >&2; exit 1; }
+    LINE="topic readwrite armor/device/$NAME/#"
+    if awk -v u="user $USER_NAME" -v l="$LINE" 'BEGIN{inb=0; found=0} $0==u{inb=1; next} inb && /^$/{inb=0} inb && $0==l{found=1} END{exit found?0:1}' "$MQ/acl"; then HAS=1; else HAS=0; fi
+    if [[ "$STATE" == "on" ]]; then
+      if [[ "$HAS" -eq 1 ]]; then echo "$USER_NAME already has: $LINE"; else
+        cp -p "$MQ/acl" "$MQ/acl.before-relays"
+        sed -i "/^user $USER_NAME\$/a $LINE" "$MQ/acl"; echo "$USER_NAME now has: $LINE"
+        chown root:armor "$MQ/acl"; chmod 0640 "$MQ/acl"; reload_broker
+        echo "the previous ACL is kept as acl.before-relays; the node also needs remote.relays on in its panel, and a device in Studio with the connection ARMOR node and the name $NAME/<relay>"
+      fi
+    else
+      if [[ "$HAS" -eq 0 ]]; then echo "$USER_NAME does not have: $LINE"; else
+        cp -p "$MQ/acl" "$MQ/acl.before-relays"
+        sed -i "\|^$LINE\$|d" "$MQ/acl"; echo "$USER_NAME no longer has: $LINE"
+        chown root:armor "$MQ/acl"; chmod 0640 "$MQ/acl"; reload_broker
+      fi
     fi
     ;;
   electrical-switching)
