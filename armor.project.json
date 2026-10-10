@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "ecosystem": "A.R.M.O.R.",
   "name": "ARMOR-DEVOPS",
-  "version": "0.4.4",
+  "version": "0.4.5",
   "role": "Repeatable deployment and operations",
   "stack": "Docker Compose / Bash / YAML",
   "technologies": [
@@ -15,7 +15,7 @@
   "maturity": "functional",
   "family": "Operations",
   "parent": "ARMOR-SERVER",
-  "native_version": "0.4.4",
+  "native_version": "0.4.5",
   "build": "docker compose config",
   "notes": "Compose validates the initial service topology; credentials and production network identifiers are externalized."
 }

@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented here.
 
+## [0.4.5] - The identity of an alarm node and the switch for its commands
+
+- **`mqtt_identity.sh add alarm-node ID`:** the identity of an ARMOR-ALARM node, which writes `armor/alarm/ID/state` and `armor/alarm/ID/result` and nothing else and reads nothing.
+- **`mqtt_identity.sh alarm-commands ID on|off`:** the only thing that lets the server arm and disarm an alarm node: the node may read its command topic and the server may write it. Off by default and for that node only; idempotent; the previous ACL is kept as `acl.before-alarm-commands`. Removing the node takes the server's line with it.
+- **The server's identity** now reads `armor/alarm/#` on a new install and, once, on an existing one.
+- **Tests:** `test_mqtt_identity.sh` covers the alarm node's own topics, the two lines, a second `on`, a node that does not exist, a bad state, a bad id, `off` and `remove`.
+
 ## [0.4.4] - The relays of an electrical node can be made reachable from the broker
 
 - **`mqtt_identity.sh electrical-relays ID on|off`:** the only thing that lets an electrical node write its relays' states and read their commands (`topic readwrite armor/device/<node>/#` in the node's own block), so the relays can be devices of the house that the server switches. Off by default and not part of any install; idempotent, it keeps the previous list as `acl.before-relays`, and `off` takes only that line away. The node also needs `remote.relays` on in its panel, and Studio a device with the connection *ARMOR node* and the name `<node>/<relay>`. Tested in `test_mqtt_identity.sh`: nothing is reachable before the `on`, one node's `on` reaches no other node, twice writes the line once, a bad node or state changes nothing, and `off` leaves the node's other topics and the server's rules alone.
