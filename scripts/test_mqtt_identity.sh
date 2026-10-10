@@ -23,6 +23,7 @@ cat >"$ACL" <<'ACL'
 user armor-server
 topic read armor/node/+/telemetry
 topic read armor/electrical/#
+topic read armor/alarm/#
 topic write armor/node/+/command
 topic write armor/server/alert
 topic readwrite armor/device/#
@@ -94,4 +95,31 @@ grep -qx 'topic write armor/electrical/electrical-3/state' <<<"$(block electrica
 grep -qx 'topic readwrite armor/device/#' <<<"$(block armor-server)" || fail "the relays' off took the server's rules"
 run electrical-relays electrical-3 off >/dev/null   # off again is harmless
 
-echo "ARMOR_MQTT_IDENTITY=PASS the switch and the relays of an electrical node are reachable only after an explicit on, and off and remove take them away"
+# An alarm node writes its state and its answers, reads nothing, and its commands are reachable only after an explicit `alarm-commands ... on`, for that node only.
+run add alarm-node alarm-1 >/dev/null
+run add alarm-node alarm-2 >/dev/null
+AL="$(block alarm-node-alarm-1)"
+grep -qx 'topic write armor/alarm/alarm-1/state' <<<"$AL" || fail "the alarm node cannot write its state"
+grep -qx 'topic write armor/alarm/alarm-1/result' <<<"$AL" || fail "the alarm node cannot write its results"
+if grep -q 'topic read\|readwrite\|/#$' <<<"$AL"; then fail "the alarm node has more than it needs: $AL"; fi
+if grep -q 'armor/alarm/alarm-1/command' "$ACL"; then fail "an alarm command is reachable before it was turned on"; fi
+run alarm-commands alarm-1 on >/dev/null
+grep -qx 'topic read armor/alarm/alarm-1/command' <<<"$(block alarm-node-alarm-1)" || fail "the alarm node cannot read its commands after on"
+grep -qx 'topic write armor/alarm/alarm-1/command' <<<"$(block armor-server)" || fail "the server cannot write the alarm command after on"
+if grep -q 'armor/alarm/alarm-2/command' "$ACL"; then fail "another alarm node became reachable"; fi
+BEFORE="$(cat "$ACL")"
+run alarm-commands alarm-1 on >/dev/null
+[[ "$(cat "$ACL")" == "$BEFORE" ]] || fail "a second alarm on changed the ACL"
+if run alarm-commands nothing on >/dev/null 2>&1; then fail "an unknown alarm node was accepted"; fi
+if run alarm-commands alarm-1 maybe >/dev/null 2>&1; then fail "a bad state was accepted for the alarm"; fi
+if run alarm-commands 'Bad Node' on >/dev/null 2>&1; then fail "a bad alarm node id was accepted"; fi
+run alarm-commands alarm-1 off >/dev/null
+if grep -q 'armor/alarm/alarm-1/command' "$ACL"; then fail "off left an alarm command reachable"; fi
+grep -qx 'topic write armor/alarm/alarm-1/state' <<<"$(block alarm-node-alarm-1)" || fail "off took the alarm node's own topics"
+grep -qx 'topic readwrite armor/device/#' <<<"$(block armor-server)" || fail "the alarm off took the server's rules"
+run alarm-commands alarm-2 on >/dev/null
+run remove alarm-node-alarm-2 >/dev/null
+if grep -q 'alarm-2' "$ACL"; then fail "removing the alarm node left something of it"; fi
+grep -qx 'user alarm-node-alarm-1' "$ACL" || fail "removing one alarm node removed another"
+
+echo "ARMOR_MQTT_IDENTITY=PASS the switch and the relays of an electrical node and the commands of an alarm node are reachable only after an explicit on, and off and remove take them away"
