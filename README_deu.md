@@ -39,6 +39,7 @@
 * **Backup und Wiederherstellung:** `scripts/backup_data.sh` erstellt ein AES-256-verschlüsseltes, verifiziertes und mit Prüfsumme versehenes Archiv der Serverdaten (Beweise nur auf Wunsch); `scripts/restore_data.sh` listet es auf oder stellt es wieder her, ohne je vorhandene Daten zu überschreiben. Der Kameraschlüssel ist absichtlich **nicht** im Archiv.
 * **TLS:** ein optionales Compose-Profil `tls` stellt Caddy mit eigener lokaler Zertifizierungsstelle vor Studio ([Details](docs/BACKUP_AND_TLS.md)).
 * **Alle Dienste des Prüfstands:** `install_cm5.sh` installiert auf Wunsch auch den Beobachtungsdienst (`--with-ai`), den Sprachdienst (`--with-voice`), den Administrationsagenten, mit dem Studio Dienste starten, stoppen und neu starten und Konfigurationsdateien aus einer geschlossenen Liste von Aktionen bearbeiten kann (`--with-admin`), und das tägliche verschlüsselte Backup (`--with-backup`); ein späterer Lauf erinnert sich an das zuvor Installierte.
+* **Das Docker-Deployment erreicht die Knoten:** der Broker veröffentlicht seinen Port (`ARMOR_MQTT_BIND`), der Server hat einen Weg nach außen, die Zugriffsregel-Vorlage deckt jede Knotenart ab, und `alarm-relays` öffnet dem Broker das Sirenenrelais eines Alarmknotens.
 
 ## 📂 Struktur des Repositorys
 
@@ -77,6 +78,7 @@ Siehe die [Bereitstellungsgrenze](docs/DEPLOYMENT_BOUNDARY.md).
 * **[ARMOR-STUDIO](https://github.com/JuanenRac/ARMOR-STUDIO)** - Web-Konsole: Kameras, Radar, Alarme, Solarenergie und 2D/3D-Standortdesigner
 * **[ARMOR-ANDROID-CONTROL](https://github.com/JuanenRac/ARMOR-ANDROID-CONTROL)** - Android-Bedienclient mit Live-Radar in 2D/3D
 * **[ARMOR-SERVER-AI](https://github.com/JuanenRac/ARMOR-SERVER-AI)** - Visuelle Inferenzrichtlinie, die ihre Entscheidungen erklärt und nie handelt
+* **[ARMOR-VISION](https://github.com/JuanenRac/ARMOR-VISION)** - Kamerazonen, Masken und Erkennungsregeln für den Jetson Orin NX
 * **[ARMOR-VOICE-AI](https://github.com/JuanenRac/ARMOR-VOICE-AI)** - Offline-Sprachabsichten mit einer nicht fälschbaren Bestätigung
 * **[ARMOR-HARDWARE](https://github.com/JuanenRac/ARMOR-HARDWARE)** - Gehäuse, Elektronik und die Abnahmematrix am Prüfstand
 * **ARMOR-DEVOPS** (dieses Repository) - Bereitstellung, CM5-Prüfstand, Backup und TLS

@@ -39,6 +39,7 @@
 * **バックアップと復元：** `scripts/backup_data.sh` はサーバーデータの AES-256 暗号化、検証済み、チェックサム付きアーカイブを作ります（要求しない限り証拠は含めません）。`scripts/restore_data.sh` はそれを一覧または復元し、既存のデータを決して上書きしません。カメラの鍵は意図的にアーカイブに**入れません**。
 * **TLS：** オプションの `tls` Compose プロファイルは、独自のローカル認証局を持つ Caddy を Studio の前に置きます（[詳細](docs/BACKUP_AND_TLS.md)）。
 * **ベンチのすべてのサービス：** `install_cm5.sh` は、要求に応じて観測サービス（`--with-ai`）、音声サービス（`--with-voice`）、Studio がサービスの起動・停止・再起動と設定ファイルの編集を閉じた操作リストの範囲で行うための管理エージェント（`--with-admin`）、毎日の暗号化バックアップ（`--with-backup`）もインストールします。後で再実行すると、以前にインストールしたものを覚えています。
+* **Docker 構成からノードに届きます：** ブローカーがポートを公開し（`ARMOR_MQTT_BIND`）、サーバーに外向きの経路があり、アクセス規則のテンプレートはすべてのノードの種類をカバーし、`alarm-relays` で警報ノードのサイレン用リレーをブローカーに開放します。
 
 ## 📂 リポジトリの構成
 
@@ -77,6 +78,7 @@ scripts/backup_data.sh --data-dir <data> --out-dir <backups> --passphrase-file <
 * **[ARMOR-STUDIO](https://github.com/JuanenRac/ARMOR-STUDIO)** - Web コンソール：カメラ、レーダー、アラーム、太陽光発電、2D/3D サイト設計
 * **[ARMOR-ANDROID-CONTROL](https://github.com/JuanenRac/ARMOR-ANDROID-CONTROL)** - リアルタイム 2D/3D レーダー付きの Android オペレータークライアント
 * **[ARMOR-SERVER-AI](https://github.com/JuanenRac/ARMOR-SERVER-AI)** - 判断を説明し、決して動作しない視覚推論ポリシー
+* **[ARMOR-VISION](https://github.com/JuanenRac/ARMOR-VISION)** - Jetson Orin NX 向けのカメラのゾーン、マスク、検知ルール
 * **[ARMOR-VOICE-AI](https://github.com/JuanenRac/ARMOR-VOICE-AI)** - 偽造できない確認を備えたオフライン音声インテント
 * **[ARMOR-HARDWARE](https://github.com/JuanenRac/ARMOR-HARDWARE)** - 筐体、電子部品、ベンチ受け入れマトリクス
 * **ARMOR-DEVOPS** (このリポジトリ) - デプロイ、CM5 テストベンチ、バックアップ、TLS

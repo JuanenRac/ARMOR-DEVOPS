@@ -70,9 +70,9 @@ FILES: dict[str, tuple[str, str, tuple[str, ...], str]] = {
     "mosquitto.acl": ("etc/mosquitto/acl", "acl", ("mosquitto",), "MQTT broker: who may read and write which topic"),
 }
 SECRET_KEY = re.compile(r"(PASSWORD|SECRET|TOKEN|KEY|PASS)", re.IGNORECASE)
-ROLES = {"node", "solar-node", "electrical-node", "network-node", "consumer", "device", "bridge"}
+ROLES = {"node", "solar-node", "electrical-node", "network-node", "alarm-node", "consumer", "device", "bridge"}
 NAME = re.compile(r"[a-z0-9][a-z0-9_-]{0,63}")
-USER = re.compile(r"(field-node|solar-node|electrical-node|network-node|alarm|device|bridge)-[a-z0-9][a-z0-9_-]{0,63}")
+USER = re.compile(r"(field-node|solar-node|electrical-node|network-node|alarm-node|alarm|device|bridge)-[a-z0-9][a-z0-9_-]{0,63}")
 
 
 class Refused(Exception):

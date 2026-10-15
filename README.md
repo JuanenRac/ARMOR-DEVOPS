@@ -39,6 +39,7 @@
 * **Backup and restore:** `scripts/backup_data.sh` makes an AES-256 encrypted, verified and checksummed archive of the server data (evidence excluded unless asked); `scripts/restore_data.sh` lists it or restores it without ever overwriting existing data. The camera key is deliberately **not** in the archive.
 * **TLS:** an optional `tls` Compose profile puts Caddy, with its own local certificate authority, in front of Studio ([details](docs/BACKUP_AND_TLS.md)).
 * **Every service of the bench:** `install_cm5.sh` also installs, on request, the observation service (`--with-ai`), the voice service (`--with-voice`), the administration agent that lets Studio start, stop and restart services and edit the configuration files from a closed list of actions (`--with-admin`) and the daily encrypted backup (`--with-backup`); a later run remembers what was installed before.
+* **The Docker deployment reaches the nodes:** the broker publishes its port (`ARMOR_MQTT_BIND`), the server has a way out, the access-list template covers every kind of node, and `alarm-relays` opens the siren relay of an alarm node to the broker.
 
 ## 📂 Repository Structure
 
@@ -77,6 +78,7 @@ See the [deployment boundary](docs/DEPLOYMENT_BOUNDARY.md).
 * **[ARMOR-STUDIO](https://github.com/JuanenRac/ARMOR-STUDIO)** - Web console: cameras, radar, alarms, solar energy and the 2D/3D site designer
 * **[ARMOR-ANDROID-CONTROL](https://github.com/JuanenRac/ARMOR-ANDROID-CONTROL)** - Android operator client with a live 2D/3D radar
 * **[ARMOR-SERVER-AI](https://github.com/JuanenRac/ARMOR-SERVER-AI)** - Visual inference policy that explains its decisions and never actuates
+* **[ARMOR-VISION](https://github.com/JuanenRac/ARMOR-VISION)** - Camera zones, masks and detection rules for the Jetson Orin NX
 * **[ARMOR-VOICE-AI](https://github.com/JuanenRac/ARMOR-VOICE-AI)** - Offline voice intents with a confirmation that cannot be forged
 * **[ARMOR-HARDWARE](https://github.com/JuanenRac/ARMOR-HARDWARE)** - Enclosures, electronics and the bench acceptance matrix
 * **ARMOR-DEVOPS** (this repository) - Deployment, the CM5 test bench, backup and TLS

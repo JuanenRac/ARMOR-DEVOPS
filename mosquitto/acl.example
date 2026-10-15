@@ -21,6 +21,8 @@ topic read armor/node/+/info
 # What the solar gateway nodes and the electrical nodes measure (each node writes only its own subtree, see scripts/mqtt_identity.sh).
 topic read armor/solar/#
 topic read armor/electrical/#
+# What the alarm nodes say about their panels and their answers.
+topic read armor/alarm/#
 # What the network nodes see on the local network.
 topic read armor/network/#
 topic write armor/node/+/command
@@ -29,6 +31,10 @@ topic write armor/server/alert
 # Smart devices (smoke, door, plug, light ...): the server listens on their state and commands them.
 topic readwrite armor/device/#
 
+# A solar gateway node (ARMOR-SOLAR, scripts/mqtt_identity.sh add solar-node ID): the readings of the inverters and batteries on its ports; it reads nothing.
+# user solar-node-solar-1
+# topic write armor/solar/solar-1/#
+#
 # An electrical node (ARMOR-ELECTRICAL, scripts/mqtt_identity.sh add electrical-node ID): it writes what it measures and its answers, and reads nothing.
 # user electrical-node-electrical-1
 # topic write armor/electrical/electrical-1/state
@@ -45,9 +51,13 @@ topic readwrite armor/device/#
 # topic write armor/alarm/alarm-1/result
 #
 # A command to a panel (arm, disarm) is refused by the broker unless BOTH of these lines exist, and only `scripts/mqtt_identity.sh alarm-commands ID on` adds them (`off` removes them). The
-# server also needs ARMOR_ALARM_COMMANDS=1 and the node has to allow it itself (server.commands): three independent switches, and a disarm from the server carries no PIN, so keep them as strict as you want it.
+# server also needs ARMOR_ALARM_COMMANDS=1 and the node has to allow it itself (server.commands): three independent switches. The server asks for the PIN of the signed-in user before it sends a disarm
+# (the PIN never goes to the node), so keep them as strict as you want it.
 #   in the block of alarm-node-alarm-1:   topic read armor/alarm/alarm-1/command
 #   in the block of armor-server:         topic write armor/alarm/alarm-1/command
+#
+# The relays of an electrical node, or the siren relay and the others of an alarm node, are devices of the device layer: they are reachable only after
+# `scripts/mqtt_identity.sh electrical-relays ID on` or `alarm-relays ID on`, which add to the node's block:   topic readwrite armor/device/ID/#
 #
 # Home Assistant (ARMOR-SERVER with ARMOR_HA_DISCOVERY=1) reads the same broker and only needs to read what the nodes publish, and to be able to read its own discovery topics:
 # user home-assistant

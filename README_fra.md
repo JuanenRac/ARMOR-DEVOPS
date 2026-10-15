@@ -39,6 +39,7 @@
 * **Sauvegarde et restauration :** `scripts/backup_data.sh` crée une archive chiffrée AES-256, vérifiée et avec somme de contrôle des données du serveur (sans les preuves sauf demande) ; `scripts/restore_data.sh` la liste ou la restaure sans jamais écraser de données existantes. La clé des caméras n'est volontairement **pas** dans l'archive.
 * **TLS :** un profil Compose `tls` facultatif place Caddy, avec sa propre autorité de certification locale, devant Studio ([détails](docs/BACKUP_AND_TLS.md)).
 * **Tous les services du banc :** `install_cm5.sh` installe aussi, sur demande, le service d'observation (`--with-ai`), le service vocal (`--with-voice`), l'agent d'administration qui permet à Studio de démarrer, arrêter et redémarrer des services et de modifier les fichiers de configuration à partir d'une liste fermée d'actions (`--with-admin`) et la sauvegarde chiffrée quotidienne (`--with-backup`) ; une exécution ultérieure se souvient de ce qui était installé.
+* **Le déploiement Docker atteint les nœuds :** le broker publie son port (`ARMOR_MQTT_BIND`), le serveur a une sortie, le modèle de règles d'accès couvre tous les types de nœud et `alarm-relays` ouvre au broker le relais de sirène d'un nœud d'alarme.
 
 ## 📂 Structure du dépôt
 
@@ -77,6 +78,7 @@ Voir la [frontière de déploiement](docs/DEPLOYMENT_BOUNDARY.md).
 * **[ARMOR-STUDIO](https://github.com/JuanenRac/ARMOR-STUDIO)** - Console web : caméras, radar, alarmes, énergie solaire et concepteur de site 2D/3D
 * **[ARMOR-ANDROID-CONTROL](https://github.com/JuanenRac/ARMOR-ANDROID-CONTROL)** - Client Android de l'opérateur avec radar 2D/3D en direct
 * **[ARMOR-SERVER-AI](https://github.com/JuanenRac/ARMOR-SERVER-AI)** - Politique d'inférence visuelle qui explique ses décisions et n'agit jamais
+* **[ARMOR-VISION](https://github.com/JuanenRac/ARMOR-VISION)** - Zones de caméra, masques et règles de détection pour la Jetson Orin NX
 * **[ARMOR-VOICE-AI](https://github.com/JuanenRac/ARMOR-VOICE-AI)** - Intentions vocales hors ligne avec une confirmation impossible à falsifier
 * **[ARMOR-HARDWARE](https://github.com/JuanenRac/ARMOR-HARDWARE)** - Boîtiers, électronique et matrice d'acceptation sur banc
 * **ARMOR-DEVOPS** (ce dépôt) - Déploiement, banc d'essai CM5, sauvegarde et TLS

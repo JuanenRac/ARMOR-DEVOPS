@@ -116,6 +116,18 @@ if run alarm-commands 'Bad Node' on >/dev/null 2>&1; then fail "a bad alarm node
 run alarm-commands alarm-1 off >/dev/null
 if grep -q 'armor/alarm/alarm-1/command' "$ACL"; then fail "off left an alarm command reachable"; fi
 grep -qx 'topic write armor/alarm/alarm-1/state' <<<"$(block alarm-node-alarm-1)" || fail "off took the alarm node's own topics"
+# The relays of an alarm node (the siren and the others) are devices of the device layer, reachable only after an explicit `alarm-relays ... on`, for that node only.
+if grep -q 'armor/device/alarm-1' "$ACL"; then fail "the relays of a new alarm node are reachable before they were turned on"; fi
+run alarm-relays alarm-1 on >/dev/null
+grep -qx 'topic readwrite armor/device/alarm-1/#' <<<"$(block alarm-node-alarm-1)" || fail "the alarm node cannot use its device topics after on"
+if grep -q 'armor/device/alarm-2' "$ACL"; then fail "another alarm node's relays became reachable"; fi
+grep -qx 'topic write armor/alarm/alarm-1/state' <<<"$(block alarm-node-alarm-1)" || fail "turning the alarm relays on took the node's own topics"
+run alarm-relays alarm-1 on >/dev/null
+[[ "$(grep -c 'armor/device/alarm-1/#' "$ACL")" == "1" ]] || fail "turning the alarm relays on twice wrote the line twice"
+if run alarm-relays nothing on >/dev/null 2>&1; then fail "alarm relays of an unknown node were accepted"; fi
+if run alarm-relays alarm-1 maybe >/dev/null 2>&1; then fail "a bad state was accepted for the alarm relays"; fi
+run alarm-relays alarm-1 off >/dev/null
+if grep -q 'armor/device/alarm-1' "$ACL"; then fail "off left the alarm relays reachable"; fi
 grep -qx 'topic readwrite armor/device/#' <<<"$(block armor-server)" || fail "the alarm off took the server's rules"
 run alarm-commands alarm-2 on >/dev/null
 run remove alarm-node-alarm-2 >/dev/null

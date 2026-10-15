@@ -39,6 +39,7 @@
 * **Backup e ripristino:** `scripts/backup_data.sh` crea un archivio cifrato AES-256, verificato e con checksum dei dati del server (senza le prove salvo richiesta); `scripts/restore_data.sh` lo elenca o lo ripristina senza mai sovrascrivere dati esistenti. La chiave delle telecamere volutamente **non** è nell'archivio.
 * **TLS:** un profilo Compose `tls` opzionale mette Caddy, con una propria autorità di certificazione locale, davanti a Studio ([dettagli](docs/BACKUP_AND_TLS.md)).
 * **Tutti i servizi del banco:** `install_cm5.sh` installa anche, su richiesta, il servizio di osservazione (`--with-ai`), il servizio vocale (`--with-voice`), l'agente di amministrazione che permette a Studio di avviare, fermare e riavviare servizi e modificare i file di configurazione da un elenco chiuso di azioni (`--with-admin`) e il backup cifrato giornaliero (`--with-backup`); un'esecuzione successiva ricorda ciò che era stato installato.
+* **Il deployment Docker raggiunge i nodi:** il broker pubblica la sua porta (`ARMOR_MQTT_BIND`), il server ha una via d'uscita, il modello delle regole di accesso copre ogni tipo di nodo e `alarm-relays` apre al broker il relè della sirena di un nodo d'allarme.
 
 ## 📂 Struttura del repository
 
@@ -77,6 +78,7 @@ Vedi il [confine di distribuzione](docs/DEPLOYMENT_BOUNDARY.md).
 * **[ARMOR-STUDIO](https://github.com/JuanenRac/ARMOR-STUDIO)** - Console web: telecamere, radar, allarmi, energia solare e progettista del sito 2D/3D
 * **[ARMOR-ANDROID-CONTROL](https://github.com/JuanenRac/ARMOR-ANDROID-CONTROL)** - Client Android dell'operatore con radar 2D/3D in tempo reale
 * **[ARMOR-SERVER-AI](https://github.com/JuanenRac/ARMOR-SERVER-AI)** - Politica di inferenza visiva che spiega le sue decisioni e non agisce mai
+* **[ARMOR-VISION](https://github.com/JuanenRac/ARMOR-VISION)** - Zone delle telecamere, maschere e regole di rilevamento per la Jetson Orin NX
 * **[ARMOR-VOICE-AI](https://github.com/JuanenRac/ARMOR-VOICE-AI)** - Intenti vocali offline con una conferma impossibile da falsificare
 * **[ARMOR-HARDWARE](https://github.com/JuanenRac/ARMOR-HARDWARE)** - Contenitori, elettronica e matrice di accettazione da banco
 * **ARMOR-DEVOPS** (questo repository) - Distribuzione, banco di prova CM5, backup e TLS

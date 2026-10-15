@@ -1,7 +1,7 @@
 # A.R.M.O.R. service topology (Jetson or any Docker host).
 # Copyright (C) 2026 JuanenRac (Electro Hobby 3D). GPL-3.0-or-later.
 #
-# Only Studio is published, and only on the loopback address. Put a TLS reverse
+# Studio is published on the loopback address, and so is the broker's port (ARMOR_MQTT_BIND puts it on the address of the field network, for the nodes). Put a TLS reverse
 # proxy or a VPN in front of it before any remote access. Secrets come from .env
 # (created by scripts/generate_secrets.sh) and from ./secrets, never from git.
 name: armor
@@ -23,7 +23,10 @@ services:
       - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
       - broker-data:/mosquitto/data
     secrets: [mqtt_password_file, mqtt_acl_file]
-    networks: [armor_core]
+    # The nodes are on the LAN: a port on an internal network can not be published, so the broker is on the edge network too. It listens on loopback unless ARMOR_MQTT_BIND is the
+    # address of the interface of the field network (the broker is never anonymous, and the ACL gives each node only its own topics).
+    ports: ["${ARMOR_MQTT_BIND:-127.0.0.1}:1883:1883"]
+    networks: [armor_core, armor_edge]
 
   server:
     <<: *hardened
@@ -51,7 +54,9 @@ services:
       ARMOR_ALERT_WEBHOOK_SECRET: ${ARMOR_ALERT_WEBHOOK_SECRET:-}
     depends_on:
       broker: { condition: service_started }
-    networks: [armor_core]
+    # The server reaches out: the alarms to Telegram and the webhook, the cameras of the LAN, the releases of GitHub for the nodes' updates and the inspection of the router. No port of
+    # it is published; Studio's proxy reaches it over the core network.
+    networks: [armor_core, armor_edge]
 
   studio:
     <<: *hardened

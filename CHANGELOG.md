@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented here.
 
+## [0.4.6] - The Docker deployment reaches the nodes; the broker's rules know the alarm nodes
+
+- **The nodes can reach the broker in the Docker deployment:** the broker is on the edge network as well as the core one and publishes its port (`ARMOR_MQTT_BIND`, loopback by default; the address of the field network's interface for the nodes). The server is on the edge network too, so it reaches Telegram, the webhook, the cameras of the LAN, the releases of GitHub for the nodes' updates and the router it inspects (the core network alone was internal and none of that could work). `docs/DEPLOYMENT_BOUNDARY.md` says so.
+- **`mosquitto/acl.example` is up to date:** the server reads `armor/alarm/#`, and there are blocks for solar nodes, for the relays of electrical and alarm nodes, and the note that a disarm from the server asks for a PIN.
+- **`mqtt_identity.sh alarm-relays NODE on|off`** (like `electrical-relays`): the siren relay and the others of an alarm node are devices of the device layer and were mute to the broker. Tested. The admin agent can create an `alarm-node` account (Studio could not before).
+
 ## [0.4.5] - The identity of an alarm node and the switch for its commands
 
 - **`mqtt_identity.sh add alarm-node ID`:** the identity of an ARMOR-ALARM node, which writes `armor/alarm/ID/state` and `armor/alarm/ID/result` and nothing else and reads nothing.

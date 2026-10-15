@@ -39,6 +39,7 @@
 * **备份与恢复：** `scripts/backup_data.sh` 生成服务器数据的 AES-256 加密、已验证且带校验和的压缩包（除非要求，否则不含证据）；`scripts/restore_data.sh` 列出或恢复它，且绝不覆盖现有数据。摄像头密钥有意**不**放入压缩包。
 * **TLS：** 可选的 `tls` Compose 配置在 Studio 前放置带自己本地证书颁发机构的 Caddy（[详情](docs/BACKUP_AND_TLS.md)）。
 * **试验台的全部服务：** `install_cm5.sh` 还可按需安装观察服务（`--with-ai`）、语音服务（`--with-voice`）、让 Studio 能按封闭的操作清单启动、停止、重启服务并编辑配置文件的管理代理（`--with-admin`），以及每日加密备份（`--with-backup`）；之后再次运行会记住之前安装的内容。
+* **Docker 部署可以连到节点：** 代理发布其端口（`ARMOR_MQTT_BIND`），服务器有对外通路，访问规则模板涵盖所有节点类型，`alarm-relays` 向代理开放报警节点的警笛继电器。
 
 ## 📂 仓库结构
 
@@ -77,6 +78,7 @@ scripts/backup_data.sh --data-dir <data> --out-dir <backups> --passphrase-file <
 * **[ARMOR-STUDIO](https://github.com/JuanenRac/ARMOR-STUDIO)** - 网页控制台：摄像头、雷达、报警、太阳能和 2D/3D 场地设计器
 * **[ARMOR-ANDROID-CONTROL](https://github.com/JuanenRac/ARMOR-ANDROID-CONTROL)** - 带实时 2D/3D 雷达的 Android 操作员客户端
 * **[ARMOR-SERVER-AI](https://github.com/JuanenRac/ARMOR-SERVER-AI)** - 会解释决策且从不执行动作的视觉推理策略
+* **[ARMOR-VISION](https://github.com/JuanenRac/ARMOR-VISION)** - Jetson Orin NX 上的摄像头区域、遮罩与检测规则
 * **[ARMOR-VOICE-AI](https://github.com/JuanenRac/ARMOR-VOICE-AI)** - 带无法伪造确认的离线语音意图
 * **[ARMOR-HARDWARE](https://github.com/JuanenRac/ARMOR-HARDWARE)** - 外壳、电子器件和台架验收矩阵
 * **ARMOR-DEVOPS** (本仓库) - 部署、CM5 测试台、备份与 TLS

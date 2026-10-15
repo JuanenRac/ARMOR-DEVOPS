@@ -24,7 +24,7 @@ MQ="$PREFIX/etc/mosquitto"
 [[ "$(id -u)" -eq 0 ]] || { echo "run as root" >&2; exit 1; }
 [[ -f "$MQ/passwd" && -f "$MQ/acl" ]] || { echo "the A.R.M.O.R. broker is not installed (install_cm5.sh --with-mqtt)" >&2; exit 1; }
 
-usage() { echo "Usage: mqtt_identity.sh add node ID | add solar-node ID | add electrical-node ID | add network-node ID | add alarm-node ID | add consumer NAME | add device NAME | add bridge NAME | upgrade-node NODE_ID | electrical-switching NODE_ID on|off | alarm-commands NODE_ID on|off | electrical-relays NODE_ID on|off | remove USER" >&2; exit 2; }
+usage() { echo "Usage: mqtt_identity.sh add node ID | add solar-node ID | add electrical-node ID | add network-node ID | add alarm-node ID | add consumer NAME | add device NAME | add bridge NAME | upgrade-node NODE_ID | electrical-switching NODE_ID on|off | alarm-commands NODE_ID on|off | electrical-relays NODE_ID on|off | alarm-relays NODE_ID on|off | remove USER" >&2; exit 2; }
 ACTION="${1:-}"
 reload_broker() { systemctl reload armor-mosquitto 2>/dev/null || systemctl restart armor-mosquitto; }
 
@@ -109,13 +109,13 @@ case "$ACTION" in
       echo "the previous ACL is kept as acl.before-upgrade"
     fi
     ;;
-  electrical-relays)
+  electrical-relays|alarm-relays)
     # The relays of an electrical node are devices of the device layer (armor/device/<node>/<relay>/state and /set). Only this command lets the node write its states and read its
     # commands there; the server's own identity already covers armor/device/#. Without the line the broker itself refuses, whatever the node's panel says. Idempotent; the previous ACL is kept.
-    NAME="${2:-}"; STATE="${3:-}"; USER_NAME="electrical-node-$NAME"
+    NAME="${2:-}"; STATE="${3:-}"; KIND="${ACTION%-relays}"; USER_NAME="$KIND-node-$NAME"
     [[ "$NAME" =~ ^[a-z0-9][a-z0-9_-]{0,63}$ ]] || { echo "the node id must match ^[a-z0-9][a-z0-9_-]{0,63}\$" >&2; exit 2; }
     [[ "$STATE" == "on" || "$STATE" == "off" ]] || usage
-    grep -qx "user $USER_NAME" "$MQ/acl" || { echo "$USER_NAME does not exist (add electrical-node $NAME first)" >&2; exit 1; }
+    grep -qx "user $USER_NAME" "$MQ/acl" || { echo "$USER_NAME does not exist (add $KIND-node $NAME first)" >&2; exit 1; }
     LINE="topic readwrite armor/device/$NAME/#"
     if awk -v u="user $USER_NAME" -v l="$LINE" 'BEGIN{inb=0; found=0} $0==u{inb=1; next} inb && /^$/{inb=0} inb && $0==l{found=1} END{exit found?0:1}' "$MQ/acl"; then HAS=1; else HAS=0; fi
     if [[ "$STATE" == "on" ]]; then

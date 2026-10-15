@@ -3,13 +3,12 @@
 The compose file is the topology of the whole system on one Docker host. It is
 intentionally conservative:
 
-* **Only Studio is published**, on `127.0.0.1:8088`. Studio's nginx proxies `/api/` to the
-  server, so the browser only ever talks to one origin and the session cookie stays
-  same-origin. Put a TLS reverse proxy or a VPN in front of it (and set
-  `ARMOR_COOKIE_SECURE=1`) before any remote access.
-* **The core network is internal**: the broker and the server have no route out and no
-  published port. Field nodes reach the broker through the network infrastructure, with VLAN
-  policy mapped there and not in an unreviewed container.
+* **Studio is published** on `127.0.0.1:8088`, and **the broker's port** on `127.0.0.1:1883` unless `ARMOR_MQTT_BIND` holds the address of the interface of the field network (set it
+  there for the nodes to reach the broker; never `0.0.0.0` on a machine that also faces the internet). Studio's nginx proxies `/api/` to the server, so the browser only ever talks to one
+  origin and the session cookie stays same-origin. Put a TLS reverse proxy or a VPN in front of it (and set `ARMOR_COOKIE_SECURE=1`) before any remote access.
+* **The server has no published port but does have a way out**: it is on the core network (where Studio and the broker reach it) and on the edge network, because it must reach Telegram,
+  the webhook, the cameras of the LAN, the releases of GitHub that update the nodes and the router it inspects. Remove it from the edge network to cut all of that off, knowing what stops
+  working. VLAN policy is still mapped in the network infrastructure and the host firewall, not in an unreviewed container.
 * **Every container is hardened**: read-only root filesystem, `no-new-privileges`, all
   capabilities dropped (Studio adds back only what nginx needs to start).
 * **Secrets never enter the repository or an image.** `scripts/generate_secrets.sh` creates
@@ -19,8 +18,8 @@ intentionally conservative:
   through an approved secret store.
 * **The broker is not anonymous.** One user per field node, and the ACL lets a node write only its
   own telemetry and health (its last will is a health message) and read only its own commands. Only
-  `armor-server` reads every node and sends commands. The listener is plain MQTT inside the
-  internal network; add TLS before a node connects across an untrusted segment.
+  `armor-server` reads every node and sends commands. The listener is plain MQTT, on the core network and on the port published above;
+  add TLS before a node connects across an untrusted segment.
 * **State lives in two named volumes** (`server-data` holds the camera vault, evidence and audit
   log; `broker-data` the broker's persistence). Back them up; keep `ARMOR_CAMERA_CONFIG_KEY`
   separately from the volume.
