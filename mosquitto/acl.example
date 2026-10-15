@@ -39,6 +39,22 @@ topic readwrite armor/device/#
 #   in the block of electrical-node-electrical-1:   topic read armor/electrical/electrical-1/command
 #   in the block of armor-server:                   topic write armor/electrical/electrical-1/command
 
+# An alarm node (ARMOR-ALARM, scripts/mqtt_identity.sh add alarm-node ID): it writes the state of its panel and its answers, and reads nothing.
+# user alarm-node-alarm-1
+# topic write armor/alarm/alarm-1/state
+# topic write armor/alarm/alarm-1/result
+#
+# A command to a panel (arm, disarm) is refused by the broker unless BOTH of these lines exist, and only `scripts/mqtt_identity.sh alarm-commands ID on` adds them (`off` removes them). The
+# server also needs ARMOR_ALARM_COMMANDS=1 and the node has to allow it itself (server.commands): three independent switches, and a disarm from the server carries no PIN, so keep them as strict as you want it.
+#   in the block of alarm-node-alarm-1:   topic read armor/alarm/alarm-1/command
+#   in the block of armor-server:         topic write armor/alarm/alarm-1/command
+#
+# Home Assistant (ARMOR-SERVER with ARMOR_HA_DISCOVERY=1) reads the same broker and only needs to read what the nodes publish, and to be able to read its own discovery topics:
+# user home-assistant
+# topic read armor/#
+# topic read homeassistant/#
+# and, in the block of armor-server, so that it may describe the entities (retained):   topic write homeassistant/#
+#
 # A network node (ARMOR-NETWORK, scripts/mqtt_identity.sh add network-node ID): it writes what it sees on the local network and reads nothing.
 # user network-node-network-1
 # topic write armor/network/network-1/state

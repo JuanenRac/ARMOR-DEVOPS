@@ -8,6 +8,7 @@ All notable changes to this project are documented here.
 - **`mqtt_identity.sh alarm-commands ID on|off`:** the only thing that lets the server arm and disarm an alarm node: the node may read its command topic and the server may write it. Off by default and for that node only; idempotent; the previous ACL is kept as `acl.before-alarm-commands`. Removing the node takes the server's line with it.
 - **The server's identity** now reads `armor/alarm/#` on a new install and, once, on an existing one.
 - **Tests:** `test_mqtt_identity.sh` covers the alarm node's own topics, the two lines, a second `on`, a node that does not exist, a bad state, a bad id, `off` and `remove`.
+- **`mosquitto/acl.example` describes the alarm nodes** (their own topics, and the two lines that must both exist for the server to arm or disarm a panel, with the three independent switches) **and Home Assistant** (read access to what the nodes publish and to its discovery topics, and the server's right to write them).
 
 ## [0.4.4] - The relays of an electrical node can be made reachable from the broker
 
