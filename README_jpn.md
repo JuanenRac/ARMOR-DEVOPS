@@ -34,12 +34,10 @@
 * **中核マシン用のホストファイアウォール**（`scripts/firewall_core.sh`）：ブローカーのポートはフィールドネットワークからのみ、サーバーと Studio のポートはクライアントのネットワークからのみ（指定した場合）許可し、他には一切触れずそれ以外を許可する専用テーブルに入れます。`apply --rollback-after` は確認しないとルールを自動的に取り除くため、設定ミスで締め出されません。ルールと拒否のテストがあります（36 件、何も読み込みません）。どのマシンにも読み込んだことはなく、VLAN 自体はルーターとスイッチ向けの設計のままです。
 * **CM5 テストベンチ：** `scripts/deploy_cm5.sh` はきれいなコピーでビルドし、アーカイブを送って `scripts/install_cm5.sh` を実行します。これは専用のユーザー、専用のディレクトリ、専用ポートの 2 つの systemd ユニット（`--with-mqtt` で 3 つ：A.R.M.O.R. 専用の Mosquitto をポート 18883 で、実際の CM5 で確認済み）を作り、リソース制限を設け、他のプロジェクトには決して触れません（[詳細](docs/CM5_TEST_BENCH.md)）。
 * **Compose のトポロジー：** ノードごとに ID を持つ非匿名の Mosquitto ブローカー、サーバー、`/api/` を中継する nginx の背後にある Studio。公開されるのは Studio だけで、ループバック上です。堅牢化されたコンテナー、内部コアネットワーク、状態用の名前付きボリューム。
-* **ベンチのブローカー上のデバイスと測定値：** サーバーは `armor/device/#` を購読して操作でき、`armor/node/+/info`、`armor/solar/#`、`armor/electrical/#` を読めます。`scripts/mqtt_identity.sh add device NAME` は 1 つのデバイスに専用トピックを、`add bridge NAME` は Zigbee2MQTT や Shelly のブリッジにすべてを与えます。 `scripts/mqtt_identity.sh electrical-switching NODE_ID on` だけが、サーバーが電気ノードの開閉器へコマンドを送れるようにします（既定ではオフ。`off` で取り消せます）。 `add alarm-node ID` は警報ノードに `armor/alarm/ID/state` と `result` だけを与え、`scripts/mqtt_identity.sh alarm-commands NODE_ID on` がサーバーによる警戒セット・解除を許可する唯一の手段です（既定ではオフ。`off` で取り消し）。サーバーは `armor/alarm/#` を読みます。
+* **ベンチのブローカー上のデバイスと測定値：** サーバーは `armor/device/#` を購読して操作でき、`armor/node/+/info`、`armor/solar/#`、`armor/electrical/#` を読めます。`scripts/mqtt_identity.sh add device NAME` は 1 つのデバイスに専用トピックを、`add bridge NAME` は Zigbee2MQTT や Shelly のブリッジにすべてを与えます。 `scripts/mqtt_identity.sh electrical-switching NODE_ID on` だけが、サーバーが電気ノードの開閉器へコマンドを送れるようにします（既定ではオフ。`off` で取り消せます）。
 * **シークレット：** `scripts/generate_secrets.sh` はランダムなシークレットを作り、何も表示しません。`scripts/check-required-env.sh` は、欠落、見本、短すぎる、重複した値を拒否します。
 * **バックアップと復元：** `scripts/backup_data.sh` はサーバーデータの AES-256 暗号化、検証済み、チェックサム付きアーカイブを作ります（要求しない限り証拠は含めません）。`scripts/restore_data.sh` はそれを一覧または復元し、既存のデータを決して上書きしません。カメラの鍵は意図的にアーカイブに**入れません**。
 * **TLS：** オプションの `tls` Compose プロファイルは、独自のローカル認証局を持つ Caddy を Studio の前に置きます（[詳細](docs/BACKUP_AND_TLS.md)）。
-* **ベンチのすべてのサービス：** `install_cm5.sh` は、要求に応じて観測サービス（`--with-ai`）、音声サービス（`--with-voice`）、Studio がサービスの起動・停止・再起動と設定ファイルの編集を閉じた操作リストの範囲で行うための管理エージェント（`--with-admin`）、毎日の暗号化バックアップ（`--with-backup`）もインストールします。後で再実行すると、以前にインストールしたものを覚えています。
-* **Docker 構成からノードに届きます：** ブローカーがポートを公開し（`ARMOR_MQTT_BIND`）、サーバーに外向きの経路があり、アクセス規則のテンプレートはすべてのノードの種類をカバーし、`alarm-relays` で警報ノードのサイレン用リレーをブローカーに開放します。
 
 ## 📂 リポジトリの構成
 
@@ -71,14 +69,12 @@ scripts/backup_data.sh --data-dir <data> --out-dir <backups> --passphrase-file <
 * **[ARMOR-RADAR](https://github.com/JuanenRac/ARMOR-RADAR)** - ESP32-S3 用フィールドノードのファームウェア。レーダー 3 基と独自の Web パネル付き
 * **[ARMOR-SOLAR](https://github.com/JuanenRac/ARMOR-SOLAR)** - 太陽光インバーターとバッテリーのプロトコル、およびゲートウェイノードのメッセージ
 * **[ARMOR-ELECTRICAL](https://github.com/JuanenRac/ARMOR-ELECTRICAL)** - 電気ノード：電力量計、電力網の計測メッセージ、開閉のルール
-* **[ARMOR-ALARM](https://github.com/JuanenRac/ARMOR-ALARM)** - 警報ノードと警報盤：警戒区域、警戒セット、遅延、サイレン、PIN。サーバーがあってもなくても
 * **[ARMOR-HMI](https://github.com/JuanenRac/ARMOR-HMI)** - タッチパネル：壁面ディスプレイでのシステム状態表示、警戒・確認操作、音声アシスタントの拠点
 * **[ARMOR-NETWORK](https://github.com/JuanenRac/ARMOR-NETWORK)** - ローカルネットワーク：機器、インターネット、そして変化
 * **[ARMOR-SERVER](https://github.com/JuanenRac/ARMOR-SERVER)** - 中央コーディネーター：テレメトリ、アラーム、デバイス、太陽光の測定値、カメラ
 * **[ARMOR-STUDIO](https://github.com/JuanenRac/ARMOR-STUDIO)** - Web コンソール：カメラ、レーダー、アラーム、太陽光発電、2D/3D サイト設計
 * **[ARMOR-ANDROID-CONTROL](https://github.com/JuanenRac/ARMOR-ANDROID-CONTROL)** - リアルタイム 2D/3D レーダー付きの Android オペレータークライアント
 * **[ARMOR-SERVER-AI](https://github.com/JuanenRac/ARMOR-SERVER-AI)** - 判断を説明し、決して動作しない視覚推論ポリシー
-* **[ARMOR-VISION](https://github.com/JuanenRac/ARMOR-VISION)** - Jetson Orin NX 向けのカメラのゾーン、マスク、検知ルール
 * **[ARMOR-VOICE-AI](https://github.com/JuanenRac/ARMOR-VOICE-AI)** - 偽造できない確認を備えたオフライン音声インテント
 * **[ARMOR-HARDWARE](https://github.com/JuanenRac/ARMOR-HARDWARE)** - 筐体、電子部品、ベンチ受け入れマトリクス
 * **ARMOR-DEVOPS** (このリポジトリ) - デプロイ、CM5 テストベンチ、バックアップ、TLS

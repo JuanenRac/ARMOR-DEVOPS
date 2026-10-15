@@ -2,7 +2,7 @@
 
 All notable changes to this project are documented here.
 
-## [0.4.7] - Audit round two: pinned proxy image
+## [0.4.7] - Pinned proxy image
 
 - The proxy image is pinned to caddy:2.9, and build leftovers are ignored by git.
 
