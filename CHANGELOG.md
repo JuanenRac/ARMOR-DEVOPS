@@ -2,6 +2,18 @@
 
 All notable changes to this project are documented here.
 
+## [0.4.8] - The maintenance helper: updates from GitHub, the system's updates and the root console
+
+- **armor_maintenance_agent.py:** a second helper, apart from the admin agent (which keeps its closed list, no network and a read-only system): it compares what is installed on the machine with the newest release of each program on GitHub (server, Studio, the network watcher, the observation service, the voice gateway and the helper scripts) and installs one or all of them.
+- Every installation downloads the package of the release, checks its SHA-256 against the hash the release publishes (a release without a hash is not installed), refuses archives with files outside their folder, keeps a copy of what it replaces, puts the new one in, restarts the service, asks whether it works and puts the old one back if it does not.
+- The server and Studio are put in a new release folder made from the current one with hard links (it costs nothing), `current` points to it once it is ready, and the previous one stays for a rollback; the dependencies are installed again only when their lock file changed.
+- The operating system: the list of what can be upgraded, the upgrade with the progress apt reports, whether it needs a reboot, and the reboot.
+- A root console, off unless ARMOR_MAINT_CONSOLE=1 is set on purpose: one command at a time, a time limit, the folder remembered, the output bounded and followed, and a way to stop it.
+- Everything that changes the machine runs one at a time, as a job with steps, a percentage and a log that can be followed; the last operations are kept.
+- `package_component.py` packs each program the way the helper installs it and publishes it as the release of its repository, with the hash next to it, and refuses a release title that talks about the process.
+- `install_cm5.sh --with-maintenance` installs the helper with its own unit, socket and token; `test_maintenance_agent.sh` runs its tests (updates, hash, rollback, apt progress, console, socket).
+- Versions of four components are understood by the comparison (0.8.0 is 0.8.0.0).
+
 ## [0.4.7] - Pinned proxy image
 
 - The proxy image is pinned to caddy:2.9, and build leftovers are ignored by git.

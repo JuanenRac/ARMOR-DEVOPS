@@ -30,6 +30,7 @@ MQTT_PORT="18883"
 WITH_MQTT=0
 WITH_BACKUP=0
 WITH_ADMIN=0
+WITH_MAINT=0
 WITH_VOICE=0
 WITH_AI=0
 VOICE_PORT="18090"
@@ -55,6 +56,8 @@ Usage: install_cm5.sh --public-host HOST [--apply] [--server-port N] [--studio-p
   --mqtt-port    broker port (default ${MQTT_PORT}; never the standard 1883, which other software may use)
   --with-admin   also run the admin agent (armor-admin, as root, with a closed list of what it may do) so that an administrator can start, stop and
                  restart the services, edit their settings and add MQTT accounts from Studio; the server itself stays unprivileged
+  --with-maintenance  also run the maintenance helper (armor-maintenance, as root): from Studio an administrator updates the A.R.M.O.R. programs from GitHub,
+                 updates and reboots the operating system, and (only if ARMOR_MAINT_CONSOLE=1 is set in its environment file) uses a root console
   --with-ai      also run the observation service (armor-server-ai): it looks at the cameras through the server, notices movement, weighs it with the radar tracks and
                  the light, and tells the server, which raises the alarm while the system is armed; it holds no camera password and its token opens four routes only
   --with-voice   also run the voice gateway (armor-voice, on 127.0.0.1 only): the closed list of fifteen written and spoken commands (arm and disarm are confirmed
@@ -77,6 +80,7 @@ while [[ $# -gt 0 ]]; do
     --mqtt-port) MQTT_PORT="${2:-}"; shift 2 ;;
     --with-backup) WITH_BACKUP=1; shift ;;
     --with-admin) WITH_ADMIN=1; shift ;;
+    --with-maintenance) WITH_MAINT=1; shift ;;
     --with-voice) WITH_VOICE=1; shift ;;
     --with-ai) WITH_AI=1; shift ;;
     --bind) BIND_ADDRESS="${2:-}"; shift 2 ;;
@@ -91,6 +95,7 @@ fail() { echo "ERROR: $*" >&2; exit 1; }
 [[ -f "$PREFIX/etc/armor.mqtt.env" ]] && WITH_MQTT=1
 [[ -f "$PREFIX/etc/armor.backup.passphrase" ]] && WITH_BACKUP=1
 [[ -f "$PREFIX/etc/armor.admin.env" ]] && WITH_ADMIN=1
+[[ -f "$PREFIX/etc/armor.maint.env" ]] && WITH_MAINT=1
 [[ -f "$PREFIX/etc/armor.voice.env" ]] && WITH_VOICE=1
 [[ -f "$PREFIX/etc/armor.ai.env" ]] && WITH_AI=1
 say()  { echo "[armor-install] $*"; }
@@ -160,6 +165,7 @@ for pair in "${REACH_UNIQUE[@]}"; do say "  also reachable : ${pair%%=*} (server
 [[ "$WITH_AI" -ne 1 ]] || say "  armor-server-ai: looks at the cameras through the server (movement, weighed with the radars and the light) and tells it; its own token opens only four routes of the server"
 [[ "$WITH_VOICE" -ne 1 ]] || say "  armor-voice    : 127.0.0.1:$VOICE_PORT (written and spoken commands: a closed list of fifteen, arm and disarm confirmed in two turns; only this machine can reach it)"
 [[ "$WITH_BACKUP" -ne 1 ]] || say "  armor-backup   : daily, encrypted, kept under $PREFIX/backups"
+[[ "$WITH_MAINT" -ne 1 ]] || say "  armor-maintenance: root helper on /run/armor-maint.sock (group $SERVICE_USER): updates from GitHub, the system's updates and, only if turned on in $PREFIX/etc/armor.maint.env, a root console"
 [[ "$WITH_ADMIN" -ne 1 ]] || say "  armor-admin    : root agent on /run/armor-admin.sock (group $SERVICE_USER), allowed only the A.R.M.O.R. services, their settings files and the broker accounts"
 say "  other software : untouched"
 if [[ "$APPLY" -ne 1 ]]; then say "dry run only - add --apply to install"; exit 0; fi
@@ -255,6 +261,25 @@ if [[ "$WITH_ADMIN" -eq 1 ]]; then
   chown "root:$SERVICE_USER" "$PREFIX/etc/armor.admin.env"; chmod 0640 "$PREFIX/etc/armor.admin.env"
   ADMIN_ENV_LINE="EnvironmentFile=$PREFIX/etc/armor.admin.env
 Environment=ARMOR_ADMIN_SOCKET=/run/armor-admin.sock"
+fi
+
+MAINT_ENV_LINE=""
+if [[ "$WITH_MAINT" -eq 1 ]]; then
+  command -v python3 >/dev/null || fail "--with-maintenance needs python3"
+  say "installing the maintenance helper"
+  install -d -m 0755 -o root -g root "$PREFIX/bin"
+  install -m 0755 -o root -g root "$RELEASE_DIR/scripts/armor_maintenance_agent.py" "$PREFIX/bin/armor_maintenance_agent.py"
+  if [[ -f "$RELEASE_DIR/armor.project.json" ]]; then
+    sed -n 's/^[[:space:]]*"version"[[:space:]]*:[[:space:]]*"\([0-9.]*\)".*/\1/p' "$RELEASE_DIR/armor.project.json" | head -1 >"$PREFIX/bin/VERSION" || true
+    chmod 0644 "$PREFIX/bin/VERSION"
+  fi
+  if [[ ! -f "$PREFIX/etc/armor.maint.env" ]]; then
+    # The console stays OFF until somebody turns it on here, on purpose (ARMOR_MAINT_CONSOLE=1).
+    ( umask 0137; printf 'ARMOR_MAINT_TOKEN=%s\n# ARMOR_MAINT_CONSOLE=1\n' "$(head -c 48 /dev/urandom | base64 | tr -d '\n=+/' | head -c 40)" >"$PREFIX/etc/armor.maint.env" )
+  fi
+  chown "root:$SERVICE_USER" "$PREFIX/etc/armor.maint.env"; chmod 0640 "$PREFIX/etc/armor.maint.env"
+  MAINT_ENV_LINE="EnvironmentFile=$PREFIX/etc/armor.maint.env
+Environment=ARMOR_MAINT_SOCKET=/run/armor-maint.sock"
 fi
 
 VOICE_ENV_LINE=""
@@ -385,6 +410,7 @@ EnvironmentFile=$ENV_FILE
 EnvironmentFile=$PREFIX/etc/armor.network.env
 $MQTT_ENV_LINE
 $ADMIN_ENV_LINE
+$MAINT_ENV_LINE
 $VOICE_ENV_LINE
 $AI_ENV_LINE
 ExecStart=$(command -v node) $PREFIX/current/server/dist/server.mjs
@@ -501,6 +527,36 @@ WantedBy=multi-user.target
 EOF
 fi
 
+if [[ "$WITH_MAINT" -eq 1 ]]; then
+  # Not hardened like the admin agent on purpose: it needs the network (GitHub), write access to the programs and the system (apt), and the console needs everything.
+  cat >/etc/systemd/system/armor-maintenance.service <<EOF
+[Unit]
+Description=A.R.M.O.R. maintenance helper (updates from GitHub, the system's updates, and the root console when it is turned on)
+After=local-fs.target network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+EnvironmentFile=$PREFIX/etc/armor.maint.env
+Environment=ARMOR_PREFIX=$PREFIX
+ExecStart=$(command -v python3) $PREFIX/bin/armor_maintenance_agent.py --socket /run/armor-maint.sock --group $SERVICE_USER
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+ProtectHome=true
+PrivateTmp=true
+ProtectKernelModules=true
+LockPersonality=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+MemoryMax=512M
+TasksMax=256
+
+[Install]
+WantedBy=multi-user.target
+EOF
+fi
+
 if [[ "$WITH_ADMIN" -eq 1 ]]; then
   cat >/etc/systemd/system/armor-admin.service <<EOF
 [Unit]
@@ -574,6 +630,10 @@ fi
 if [[ "$WITH_ADMIN" -eq 1 ]]; then
   systemctl enable armor-admin >/dev/null
   systemctl restart armor-admin
+fi
+if [[ "$WITH_MAINT" -eq 1 ]]; then
+  systemctl enable armor-maintenance >/dev/null
+  systemctl restart armor-maintenance
 fi
 if [[ "$WITH_VOICE" -eq 1 ]]; then
   systemctl enable armor-voice >/dev/null
