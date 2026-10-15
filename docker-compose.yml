@@ -77,7 +77,7 @@ services:
   proxy:
     <<: *hardened
     profiles: [tls]
-    image: caddy:2
+    image: caddy:2.9   # pinned to a series; pin a digest once a build has been tried on the target machine
     # The caddy binary carries a file capability (bind low ports); with every capability dropped it can not even start.
     cap_add: [NET_BIND_SERVICE]
     environment:

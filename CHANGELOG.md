@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented here.
 
+## [0.4.7] - Audit round two: pinned proxy image
+
+- The proxy image is pinned to caddy:2.9, and build leftovers are ignored by git.
+
 ## [0.4.6] - The Docker deployment reaches the nodes; the broker's rules know the alarm nodes
 
 - **The nodes can reach the broker in the Docker deployment:** the broker is on the edge network as well as the core one and publishes its port (`ARMOR_MQTT_BIND`, loopback by default; the address of the field network's interface for the nodes). The server is on the edge network too, so it reaches Telegram, the webhook, the cameras of the LAN, the releases of GitHub for the nodes' updates and the router it inspects (the core network alone was internal and none of that could work). `docs/DEPLOYMENT_BOUNDARY.md` says so.
