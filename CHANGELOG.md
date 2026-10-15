@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented here.
 
+## [0.5.0] - A system upgrade can install a kernel
+
+- **The maintenance unit no longer sets `ProtectKernelModules`:** it made `/lib/modules` read-only, so a kernel package could not be installed from Studio (the upgrade failed halfway and left `raspi-firmware` half-configured). The memory limit of the unit is 1 GB, which the initramfs build needs.
+- A test keeps the unit free of sandbox options that make the system read-only.
+
 ## [0.4.9] - The list of the last operations can be emptied; the maintenance unit keeps its capabilities
 
 - **armor_maintenance_agent.py 0.1.1:** `POST /v1/history/clear` empties the list of the last operations (the file keeps the last 200, the view shows 60).

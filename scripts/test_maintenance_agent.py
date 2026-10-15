@@ -371,6 +371,15 @@ exit 0
         self.assertIn("dpkg --configure -a", self.apt_calls())
         self.assertIn("-f", self.apt_calls())
 
+    def test_the_unit_of_the_helper_can_write_where_a_kernel_package_writes(self) -> None:
+        installer = (Path(__file__).parent / "install_cm5.sh").read_text(encoding="utf-8")
+        start = installer.index("armor-maintenance.service <<EOF") if "armor-maintenance.service <<EOF" in installer else installer.index("Description=A.R.M.O.R. maintenance helper")
+        unit = installer[start:installer.index("[Install]", start)]
+        unit = " ".join(line for line in unit.splitlines() if not line.lstrip().startswith("#"))   # what the unit sets, not what its comments say
+        self.assertNotIn("ProtectKernelModules", unit)
+        self.assertNotIn("ProtectSystem", unit)
+        self.assertIn("MemoryMax=1G", unit)
+
     def test_an_unknown_mode_is_refused(self) -> None:
         self.fake_apt()
         with self.assertRaises(self.agent.Refused):

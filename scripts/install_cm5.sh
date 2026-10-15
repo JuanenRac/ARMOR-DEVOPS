@@ -542,13 +542,13 @@ Environment=ARMOR_PREFIX=$PREFIX
 ExecStart=$(command -v python3) $PREFIX/bin/armor_maintenance_agent.py --socket /run/armor-maint.sock --group $SERVICE_USER
 Restart=on-failure
 RestartSec=3
+# No ProtectKernelModules: it makes /lib/modules read-only, and a kernel package (a system upgrade) writes there; the memory limit leaves room to build the initramfs.
 NoNewPrivileges=true
 ProtectHome=true
 PrivateTmp=true
-ProtectKernelModules=true
 LockPersonality=true
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
-MemoryMax=512M
+MemoryMax=1G
 TasksMax=256
 
 [Install]
