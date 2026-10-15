@@ -536,8 +536,7 @@ After=local-fs.target network-online.target
 
 [Service]
 Type=simple
-User=root
-Group=root
+# No User=/Group=: a service is root by default, and naming root explicitly next to the sandboxing options leaves it without CAP_SETUID, so apt cannot drop to its own user (_apt).
 EnvironmentFile=$PREFIX/etc/armor.maint.env
 Environment=ARMOR_PREFIX=$PREFIX
 ExecStart=$(command -v python3) $PREFIX/bin/armor_maintenance_agent.py --socket /run/armor-maint.sock --group $SERVICE_USER

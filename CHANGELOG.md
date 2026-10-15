@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented here.
 
+## [0.4.9] - The list of the last operations can be emptied; the maintenance unit keeps its capabilities
+
+- **armor_maintenance_agent.py 0.1.1:** `POST /v1/history/clear` empties the list of the last operations (the file keeps the last 200, the view shows 60).
+- **install_cm5.sh:** the maintenance unit no longer sets `User=root` and `Group=root`: with the sandbox options that drops CAP_SETUID and apt could not switch to its own user.
+- **System upgrade modes:** `full` (apt-get full-upgrade, for what a plain upgrade keeps back) and `repair` (dpkg --configure -a, then apt-get -f install); the overview of the system lists the packages kept back and the ones left half-installed (`kept_back`, `broken`).
+- Tests for all of it.
+
 ## [0.4.8] - The maintenance helper: updates from GitHub, the system's updates and the root console
 
 - **armor_maintenance_agent.py:** a second helper, apart from the admin agent (which keeps its closed list, no network and a read-only system): it compares what is installed on the machine with the newest release of each program on GitHub (server, Studio, the network watcher, the observation service, the voice gateway and the helper scripts) and installs one or all of them.

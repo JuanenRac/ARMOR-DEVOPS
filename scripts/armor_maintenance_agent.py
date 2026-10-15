@@ -39,10 +39,11 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-AGENT_VERSION = "0.1.0"
+AGENT_VERSION = "0.1.1"
 PREFIX = Path(os.environ.get("ARMOR_PREFIX", "/opt/armor"))
 SYSTEMCTL = os.environ.get("ARMOR_SYSTEMCTL", "systemctl")
 APT_GET = os.environ.get("ARMOR_APT_GET", "apt-get")
+DPKG = os.environ.get("ARMOR_DPKG", "dpkg")
 APT = os.environ.get("ARMOR_APT", "apt")
 GITHUB_API = os.environ.get("ARMOR_GITHUB_API", "https://api.github.com").rstrip("/")
 GITHUB_OWNER = os.environ.get("ARMOR_GITHUB_OWNER", "JuanenRac")
@@ -242,7 +243,7 @@ def record_history(job: Job) -> None:
         DATA_DIR.mkdir(parents=True, exist_ok=True)
         entries = json.loads(history_path().read_text(encoding="utf-8")) if history_path().exists() else []
         entries.append({"id": job.id, "kind": job.kind, "label": job.label, "state": job.state, "error": job.error, "started": job.started, "finished": job.finished, "result": job.result})
-        history_path().write_text(json.dumps(entries[-60:]), encoding="utf-8")
+        history_path().write_text(json.dumps(entries[-200:]), encoding="utf-8")
     except (OSError, ValueError):
         pass
 
@@ -250,9 +251,19 @@ def record_history(job: Job) -> None:
 def history() -> list[dict[str, object]]:
     try:
         data = json.loads(history_path().read_text(encoding="utf-8"))
-        return data[-30:][::-1] if isinstance(data, list) else []
+        return data[-60:][::-1] if isinstance(data, list) else []
     except (OSError, ValueError):
         return []
+
+
+def clear_history() -> int:
+    """Forget the list of the last operations (what the machine did stays as it is); returns how many were forgotten."""
+    count = len(history())
+    try:
+        history_path().unlink(missing_ok=True)
+    except OSError:
+        raise Refused(500, "history_not_cleared")
+    return count
 
 
 # ---- downloading and unpacking ------------------------------------------------------------------------------------------------------------------
@@ -650,6 +661,42 @@ def upgradable() -> list[dict[str, str]]:
     return packages
 
 
+_ATTENTION: dict[str, object] = {"at": 0.0, "kept_back": [], "broken": []}
+
+
+def system_attention() -> dict[str, list[str]]:
+    """What a plain upgrade cannot settle: the packages it keeps back (a new kernel, for one, needs others installed or removed) and the packages left half-installed or half-configured.
+    Reading the first one simulates an upgrade (a second or two), so the answer is kept for a minute."""
+    import time as _time
+    if float(_ATTENTION["at"]) and _time.monotonic() - float(_ATTENTION["at"]) < 60:
+        return {"kept_back": list(_ATTENTION["kept_back"]), "broken": list(_ATTENTION["broken"])}  # type: ignore[arg-type]
+    kept: list[str] = []
+    try:
+        simulated = subprocess.run([APT_GET, "-s", "upgrade"], capture_output=True, text=True, timeout=120, env=apt_environment(), check=False)
+        reading = False
+        for line in simulated.stdout.splitlines():
+            if line.startswith("The following packages have been kept back"):
+                reading = True
+                continue
+            if reading:
+                if line.startswith("  "):
+                    kept.extend(line.split())
+                else:
+                    reading = False
+    except (OSError, subprocess.SubprocessError):
+        pass
+    broken: list[str] = []
+    try:
+        audit = subprocess.run([DPKG, "--audit"], capture_output=True, text=True, timeout=60, env=apt_environment(), check=False)
+        for line in audit.stdout.splitlines():
+            if line.startswith(" ") and line.strip():
+                broken.append(line.split()[0])
+    except (OSError, subprocess.SubprocessError):
+        pass
+    _ATTENTION.update({"at": _time.monotonic(), "kept_back": kept, "broken": broken})
+    return {"kept_back": kept[:50], "broken": broken[:50]}
+
+
 def os_state() -> dict[str, object]:
     release: dict[str, str] = {}
     try:
@@ -663,8 +710,9 @@ def os_state() -> dict[str, object]:
         uptime = float(Path("/proc/uptime").read_text().split()[0])
     except (OSError, ValueError):
         uptime = 0.0
+    attention = system_attention()
     return {"name": release.get("PRETTY_NAME", ""), "kernel": kernel, "uptime_s": int(uptime), "reboot_required": Path("/var/run/reboot-required").exists(),
-            "packages": upgradable()[:200]}
+            "packages": upgradable()[:200], "kept_back": attention["kept_back"], "broken": attention["broken"]}
 
 
 def system_check_job() -> Job:
@@ -699,13 +747,28 @@ def system_check_job() -> Job:
     return job
 
 
-def system_upgrade_job() -> Job:
-    job = Job("system-upgrade", [("refresh", "update the list"), ("download", "download the packages"), ("install", "install them")], label="apt upgrade")
+UPGRADE_MODES = ("upgrade", "full", "repair")
+
+
+def system_upgrade_job(mode: str = "upgrade") -> Job:
+    """`upgrade` installs newer versions of what is installed and keeps back what needs anything else; `full` (apt full-upgrade) also installs and removes what the new versions need - the way
+    a new kernel gets in; `repair` finishes the packages left half-installed (dpkg --configure -a) and fixes broken dependencies (apt-get -f install)."""
+    if mode not in UPGRADE_MODES:
+        raise Refused(422, "bad_mode")
+    steps = [("configure", "finish the half-installed packages"), ("fix", "fix the broken dependencies")] if mode == "repair" else [("refresh", "update the list"), ("download", "download the packages"), ("install", "install them")]
+    job = Job("system-upgrade", steps, label={"upgrade": "apt upgrade", "full": "apt full-upgrade", "repair": "apt repair"}[mode])
     remember(job)
 
     def work() -> None:
         with WORK:
             try:
+                if mode == "repair":
+                    repair(job)
+                    job.result = {"reboot_required": Path("/var/run/reboot-required").exists()}
+                    _ATTENTION["at"] = 0.0
+                    job.finish()
+                    record_history(job)
+                    return
                 job.step("refresh", "running", 20)
                 refresh = subprocess.run([APT_GET, "update"], capture_output=True, text=True, timeout=600, env=apt_environment(), check=False)
                 job.say("apt-get update " + ("done" if refresh.returncode == 0 else "failed"))
@@ -715,7 +778,7 @@ def system_upgrade_job() -> Job:
                 before = upgradable()
                 job.say(f"{len(before)} packages to upgrade")
                 read_end, write_end = os.pipe()
-                command = [APT_GET, "-y", "-o", "Dpkg::Options::=--force-confold", "-o", "Dpkg::Options::=--force-confdef", f"-o", f"APT::Status-Fd={write_end}", "upgrade"]
+                command = [APT_GET, "-y", "-o", "Dpkg::Options::=--force-confold", "-o", "Dpkg::Options::=--force-confdef", f"-o", f"APT::Status-Fd={write_end}", "full-upgrade" if mode == "full" else "upgrade"]
                 process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=apt_environment(), pass_fds=(write_end,))
                 os.close(write_end)
 
@@ -744,6 +807,7 @@ def system_upgrade_job() -> Job:
                 job.step("download", "done")
                 job.step("install", "done")
                 job.result = {"upgraded": len(before), "reboot_required": Path("/var/run/reboot-required").exists()}
+                _ATTENTION["at"] = 0.0
                 job.finish()
             except Refused as refusal:
                 job.say(f"failed: {refusal.code}")
@@ -755,6 +819,30 @@ def system_upgrade_job() -> Job:
 
     threading.Thread(target=work, daemon=True).start()
     return job
+
+
+def stream(job: Job, command: list[str], timeout: int = 3 * 3600) -> int:
+    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=apt_environment())
+    assert process.stdout is not None
+    for line in process.stdout:
+        text = line.rstrip()
+        if text:
+            job.say(text)
+    return process.wait(timeout=timeout)
+
+
+def repair(job: Job) -> None:
+    """Finish what an interrupted or failed installation left behind, then let apt settle the dependencies. Both steps run even if the first one fails: the second often fixes it."""
+    job.step("configure", "running", 30)
+    job.say("dpkg --configure -a")
+    first = stream(job, [DPKG, "--configure", "-a", "--force-confold", "--force-confdef"])
+    job.step("configure", "done" if first == 0 else "failed", 100)
+    job.step("fix", "running", 30)
+    job.say("apt-get -f install")
+    second = stream(job, [APT_GET, "-y", "-f", "-o", "Dpkg::Options::=--force-confold", "-o", "Dpkg::Options::=--force-confdef", "install"])
+    job.step("fix", "done" if second == 0 else "failed", 100)
+    if second != 0:
+        raise Refused(502, "apt_repair_failed")
 
 
 def reboot_machine() -> dict[str, object]:
@@ -924,9 +1012,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
             elif method == "POST" and parts == ["system", "upgrade"]:
                 if any(job.state == "running" for job in JOBS.values()):
                     raise Refused(409, "busy")
-                self.reply(202, system_upgrade_job().view())
+                data = self.body()
+                mode = data.get("mode") if isinstance(data.get("mode"), str) else "upgrade"
+                self.reply(202, system_upgrade_job(str(mode)).view())
             elif method == "POST" and parts == ["system", "reboot"]:
                 self.reply(202, reboot_machine())
+            elif method == "POST" and parts == ["history", "clear"]:
+                self.reply(200, {"ok": True, "cleared": clear_history()})
             elif method == "GET" and len(parts) == 2 and parts[0] == "jobs":
                 job = JOBS.get(parts[1])
                 if not job:

@@ -251,6 +251,15 @@ class MaintenanceTest(unittest.TestCase):
         self.assertIn("unhealthy_rolled_back", view["error"])
         self.assertEqual(os.readlink(self.prefix / "current"), before)
 
+    def test_the_list_of_operations_can_be_emptied(self) -> None:
+        self.fake_apt()
+        self.wait(self.agent.system_check_job())
+        self.assertGreaterEqual(len(self.agent.history()), 1)
+        count = self.agent.clear_history()
+        self.assertGreaterEqual(count, 1)
+        self.assertEqual(self.agent.history(), [])
+        self.assertEqual(self.agent.clear_history(), 0)         # emptying an empty list is not an error
+
     # ---- the console ----
     def test_the_console_runs_a_command_and_remembers_the_folder(self) -> None:
         job = self.agent.console_run("echo hello; cd /tmp; pwd", "/", 20)
@@ -302,13 +311,23 @@ echo "bar/stable 2.0 all [upgradable from: 1.9]"
         aptget.write_text("""#!/bin/sh
 fd=""
 for a in "$@"; do case "$a" in APT::Status-Fd=*) fd="${a#APT::Status-Fd=}";; esac; done
+echo "$@" >> "$(dirname "$0")/apt-calls.txt"
 if [ "$1" = "update" ]; then echo "Hit:1 http://deb stable InRelease"; exit 0; fi
+if [ "$1" = "-s" ]; then echo "The following packages have been kept back:"; echo "  linux-image-rpi-2712 rpi-swap"; echo "0 upgraded, 0 newly installed"; exit 0; fi
 if [ -n "$fd" ]; then echo "dlstatus:1:40.0:Downloading" >&$fd; echo "dlstatus:2:100.0:Downloading" >&$fd; echo "pmstatus:libfoo:0.0:Preparing" >&$fd; echo "pmstatus:libfoo:100.0:Installed" >&$fd; fi
 echo "Setting up libfoo"
 exit """ + ("100" if fail else "0") + chr(10), encoding="utf-8")
-        for script in (apt, aptget):
+        dpkg = root / "dpkg"
+        dpkg.write_text("""#!/bin/sh
+echo "dpkg $@" >> "$(dirname "$0")/apt-calls.txt"
+if [ "$1" = "--audit" ]; then echo "The following packages are only half configured:"; echo " raspi-firmware  firmware for the Raspberry Pi"; exit 0; fi
+echo "Setting up raspi-firmware"
+exit 0
+""", encoding="utf-8")
+        for script in (apt, aptget, dpkg):
             script.chmod(script.stat().st_mode | stat.S_IEXEC)
-        self.agent.APT, self.agent.APT_GET = str(apt), str(aptget)
+        self.agent.APT, self.agent.APT_GET, self.agent.DPKG = str(apt), str(aptget), str(dpkg)
+        self.agent._ATTENTION["at"] = 0.0
 
     def test_the_packages_that_can_be_upgraded_are_listed(self) -> None:
         self.fake_apt()
@@ -331,6 +350,37 @@ exit """ + ("100" if fail else "0") + chr(10), encoding="utf-8")
         self.assertTrue(all(step["state"] == "done" for step in view["steps"]), view["steps"])
         self.assertTrue(any("Setting up libfoo" in line for line in view["log"]))
         self.assertEqual(view["result"]["upgraded"], 2)
+
+    def apt_calls(self) -> str:
+        path = Path(self.tmp.name) / "apt-calls.txt"
+        return path.read_text(encoding="utf-8") if path.exists() else ""
+
+    def test_a_full_upgrade_uses_full_upgrade_and_a_plain_one_does_not(self) -> None:
+        self.fake_apt()
+        self.assertEqual(self.wait(self.agent.system_upgrade_job("upgrade"))["state"], "done")
+        self.assertNotIn("full-upgrade", self.apt_calls())
+        view = self.wait(self.agent.system_upgrade_job("full"))
+        self.assertEqual(view["state"], "done", view["log"])
+        self.assertIn("full-upgrade", self.apt_calls())
+
+    def test_a_repair_finishes_the_half_installed_packages_and_fixes_the_dependencies(self) -> None:
+        self.fake_apt()
+        view = self.wait(self.agent.system_upgrade_job("repair"))
+        self.assertEqual(view["state"], "done", view["log"])
+        self.assertEqual([step["id"] for step in view["steps"]], ["configure", "fix"])
+        self.assertIn("dpkg --configure -a", self.apt_calls())
+        self.assertIn("-f", self.apt_calls())
+
+    def test_an_unknown_mode_is_refused(self) -> None:
+        self.fake_apt()
+        with self.assertRaises(self.agent.Refused):
+            self.agent.system_upgrade_job("everything")
+
+    def test_what_a_plain_upgrade_keeps_back_and_what_is_half_installed_are_reported(self) -> None:
+        self.fake_apt()
+        state = self.agent.system_attention()
+        self.assertEqual(state["kept_back"], ["linux-image-rpi-2712", "rpi-swap"])
+        self.assertEqual(state["broken"], ["raspi-firmware"])
 
     def test_a_system_upgrade_that_fails_says_so(self) -> None:
         self.fake_apt(fail=True)
