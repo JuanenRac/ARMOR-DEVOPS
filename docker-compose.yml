@@ -15,7 +15,7 @@ x-hardened: &hardened
 services:
   broker:
     <<: *hardened
-    image: eclipse-mosquitto:2
+    image: eclipse-mosquitto:2.0.21   # a patch version, not the floating series: an update of the broker is a decision, not something a pull does
     # The image starts as root and drops to its own user; that needs these three, everything else stays dropped.
     cap_add: [CHOWN, SETUID, SETGID]
     tmpfs: ["/tmp", "/mosquitto/log"]

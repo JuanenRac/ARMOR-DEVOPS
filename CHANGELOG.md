@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented here.
 
+## [0.5.1] - Mosquitto over TLS, a pinned broker image and a quieter maintenance unit
+
+- A Mosquitto configuration and a compose file for TLS are included.
+- The broker image is pinned to a version instead of following the latest one.
+
 ## [0.5.0] - A system upgrade can install a kernel
 
 - **The maintenance unit no longer sets `ProtectKernelModules`:** it made `/lib/modules` read-only, so a kernel package could not be installed from Studio (the upgrade failed halfway and left `raspi-firmware` half-configured). The memory limit of the unit is 1 GB, which the initramfs build needs.
