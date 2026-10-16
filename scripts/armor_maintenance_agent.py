@@ -144,7 +144,7 @@ def latest_release(component: str, force: bool = False) -> dict[str, object]:
     else:
         assets = {str(asset.get("name")): str(asset.get("browser_download_url")) for asset in data.get("assets", []) if isinstance(asset, dict)}
         result = {"version": clean_version(str(data.get("tag_name", ""))), "tag": str(data.get("tag_name", "")), "published": str(data.get("published_at", "")), "assets": assets,
-                  "notes": str(data.get("body", ""))[:1500]}
+                  "notes": str(data.get("body", ""))[:6000]}
         if not result["version"]:
             result = {"error": "no_release"}
     _cache[repo] = (time.time(), result)
