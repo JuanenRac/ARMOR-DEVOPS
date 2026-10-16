@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented here.
 
+## [0.5.2] - The broker lets the alarm panel read its Zigbee zones
+
+- The alarm node's identity may read armor/alarm/<node>/zigbee, the Zigbee zones the server tells it, and nothing else without the explicit alarm-commands switch.
+- The server's identity may write armor/alarm/+/zigbee, on a new install and when upgrading one.
+- The identity test covers the new read line and that the node has no other read.
+
 ## [0.5.1] - Mosquitto over TLS, a pinned broker image and a quieter maintenance unit
 
 - A Mosquitto configuration and a compose file for TLS are included.

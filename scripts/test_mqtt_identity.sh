@@ -101,7 +101,8 @@ run add alarm-node alarm-2 >/dev/null
 AL="$(block alarm-node-alarm-1)"
 grep -qx 'topic write armor/alarm/alarm-1/state' <<<"$AL" || fail "the alarm node cannot write its state"
 grep -qx 'topic write armor/alarm/alarm-1/result' <<<"$AL" || fail "the alarm node cannot write its results"
-if grep -q 'topic read\|readwrite\|/#$' <<<"$AL"; then fail "the alarm node has more than it needs: $AL"; fi
+grep -qx 'topic read armor/alarm/alarm-1/zigbee' <<<"$AL" || fail "the alarm node cannot read the Zigbee zones the server tells it"
+if grep -v '^user ' <<<"$AL" | grep -v 'topic read armor/alarm/alarm-1/zigbee' | grep -q 'topic read\|readwrite\|/#$'; then fail "the alarm node has more than it needs: $AL"; fi
 if grep -q 'armor/alarm/alarm-1/command' "$ACL"; then fail "an alarm command is reachable before it was turned on"; fi
 run alarm-commands alarm-1 on >/dev/null
 grep -qx 'topic read armor/alarm/alarm-1/command' <<<"$(block alarm-node-alarm-1)" || fail "the alarm node cannot read its commands after on"
