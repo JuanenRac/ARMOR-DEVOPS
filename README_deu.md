@@ -15,42 +15,61 @@
   <a href="README_por.md">🇵🇹 Português</a>
 </p>
 
-### Bereitstellungstopologie und der isolierte CM5-Prüfstand
+### Bereitstellung, der CM5-Testaufbau, seine Updates von GitHub und die Wartung der Anlage
 
 <p align="center">
   <img src="https://img.shields.io/badge/License-GPL%203.0-blue.svg" alt="GPL 3.0">
   <img src="https://img.shields.io/badge/Deploy-Docker%20Compose-2496ed.svg" alt="Deploy">
   <img src="https://img.shields.io/badge/Bench-systemd-FFB020.svg" alt="Bench">
-  <img src="https://img.shields.io/badge/Maturity-functional-00E5FF.svg" alt="Maturity">
+  <img src="https://img.shields.io/badge/Version-0.5.2-0f6cbd.svg" alt="Version">
+  <img src="https://img.shields.io/badge/Maturity-established-2EA44F.svg" alt="Maturity">
 </p>
 
 ---
 
-**Ehrlichkeitsprüfung - was heute läuft:** Der Installer des CM5-Prüfstands wurde auf einer echten CM5 ausgeführt, die andere Software hostet und gesund blieb. Die Docker-Compose-Topologie und ihr optionales TLS-Profil wurden mit der Docker Engine in WSL wirklich gebaut und ausgeführt (`scripts/test_compose.sh`, 12 Prüfungen, die drei Fehler fanden und behoben), aber **nicht auf dem Jetson**. Die Backup- und Wiederherstellungsskripte haben einen bestandenen Rundlauftest.
+**Ehrlichkeitsprüfung - was heute läuft:** Der Installer des CM5-Testaufbaus wurde auf einem echten CM5 ausgeführt, der andere Software beherbergt und gesund blieb, und der Aufbau läuft im täglichen Einsatz mit dem Server, Studio, dem Netzwerkknoten, den Beobachtungs- und Sprachdiensten, dem Broker und den zwei Helfern unten; Updates seiner Komponenten von GitHub (über Studio) wurden darauf durchgeführt. Die Docker-Compose-Topologie und ihr optionales TLS-Profil wurden mit Docker Engine in WSL wirklich gebaut und ausgeführt (`scripts/test_compose.sh`), aber **nicht auf dem Jetson**. Die Sicherungs- und Wiederherstellungsskripte haben einen bestandenen Hin-und-zurück-Test, und die beiden Helfer haben eigene Tests. **Nicht** bewiesen: eine saubere Installation auf einer Maschine, die das Projekt noch nie gesehen hat, und die ganze Docker-Topologie auf ihrem Ziel.
 
 ---
 
+## 📋 Auf einen Blick
+
+| | |
+|---|---|
+| Version | `0.5.2` |
+| Reifegrad | Etabliert |
+| Technik | Docker Compose / Bash / YAML |
+| Auf echter Hardware | Betreibt den CM5-Testaufbau im täglichen Einsatz, auf einem echten CM5, der andere Software beherbergt; noch nicht auf dem Jetson |
+
 ## 🎯 Überblick
 
-* **Eine Host-Firewall für den zentralen Rechner** (`scripts/firewall_core.sh`): der Port des Brokers nur aus dem Feldnetz, die Ports von Server und Studio nur aus dem Netz der Clients (wenn angegeben), in einer eigenen Tabelle, die nichts anderes erwähnt und den Rest annimmt; `apply --rollback-after` entfernt die Regeln wieder, wenn Sie sie nicht bestätigen, ein Fehler sperrt Sie also nicht aus. Regeln und Ablehnungen sind getestet (36 Prüfungen, nichts wird geladen); sie wurde noch auf keinem Rechner geladen, und die VLANs selbst sind weiter ein Entwurf für Router und Switch.
-* **CM5-Prüfstand:** `scripts/deploy_cm5.sh` baut in einer sauberen Kopie, sendet ein Archiv und führt `scripts/install_cm5.sh` aus, das einen eigenen Benutzer, ein eigenes Verzeichnis und zwei systemd-Units auf eigenen Ports anlegt (drei mit `--with-mqtt`: das eigene Mosquitto von A.R.M.O.R. auf Port 18883, auf einer echten CM5 geprüft), mit Ressourcenlimits, und nie ein anderes Projekt anfasst ([Details](docs/CM5_TEST_BENCH.md)).
-* **Compose-Topologie:** ein nicht anonymer Mosquitto-Broker mit einer Identität je Knoten, der Server und Studio hinter einem nginx, der `/api/` weiterreicht; nur Studio wird veröffentlicht, auf Loopback. Gehärtete Container, ein internes Kernnetz und benannte Volumes für den Zustand.
-* **Geräte und Messwerte am Broker des Prüfstands:** der Server darf `armor/device/#` hören und ansteuern und `armor/node/+/info`, `armor/solar/#` sowie `armor/electrical/#` lesen; `scripts/mqtt_identity.sh add device NAME` gibt einem Gerät eigene Topics und `add bridge NAME` einer Zigbee2MQTT- oder Shelly-Brücke alle. `scripts/mqtt_identity.sh electrical-switching NODE_ID on` ist das Einzige, was dem Server erlaubt, den Schalter eines Elektroknotens anzusteuern (standardmäßig aus; `off` nimmt es wieder weg).
-* **Geheimnisse:** `scripts/generate_secrets.sh` erzeugt zufällige Geheimnisse und druckt keines; `scripts/check-required-env.sh` lehnt fehlende, Platzhalter-, kurze oder wiederholte Werte ab.
-* **Backup und Wiederherstellung:** `scripts/backup_data.sh` erstellt ein AES-256-verschlüsseltes, verifiziertes und mit Prüfsumme versehenes Archiv der Serverdaten (Beweise nur auf Wunsch); `scripts/restore_data.sh` listet es auf oder stellt es wieder her, ohne je vorhandene Daten zu überschreiben. Der Kameraschlüssel ist absichtlich **nicht** im Archiv.
-* **TLS:** ein optionales Compose-Profil `tls` stellt Caddy mit eigener lokaler Zertifizierungsstelle vor Studio ([Details](docs/BACKUP_AND_TLS.md)).
+* **CM5-Testaufbau:** `scripts/deploy_cm5.sh` baut in einer sauberen Kopie, sendet ein Archiv und führt `scripts/install_cm5.sh` aus, das einen eigenen Benutzer, ein eigenes Verzeichnis und systemd-Einheiten auf eigenen Ports für Server und Studio anlegt und, mit Optionen, den MQTT-Broker, den Netzwerkknoten, den Beobachtungsdienst, das Sprach-Gateway, den Administrationsagenten, den Wartungshelfer und die tägliche Sicherung. Es berührt nie, was die Maschine sonst ausführt.
+* **Der Wartungshelfer** (`armor_maintenance_agent.py`): die Updates der eigenen Komponenten der Anlage von GitHub (er lädt das Release-Paket, prüft seinen SHA-256 und tauscht es mit Rückfall ein), die des Betriebssystems und eine optionale Root-Konsole, alles vom Reiter *Updates* in Studio aus gesteuert; die Konsole ist aus, solange sie nicht eingeschaltet wird.
+* **Der Administrationsagent** (`armor_admin_agent.py`): der einzige privilegierte Teil, mit einer geschlossenen Liste von Diensten, Einstellungsdateien und Broker-Konten, sodass Studio nie Root braucht.
+* **Pakete jeder Version:** `scripts/package_component.py` baut das Paket einer Komponente (Studio, Server, Netzwerk, Beobachtungsdienst, Sprach-Gateway, DevOps), schreibt seinen SHA-256 daneben und veröffentlicht es als GitHub-Release.
+* **Compose-Topologie:** ein nicht anonymer Mosquitto-Broker mit einer Identität je Knoten und einer ACL (einschließlich der Alarmknoten und der Zigbee-Zonen, die der Server ihnen sagt), der Server und Studio hinter einem nginx, der `/api/` weiterleitet; nur Studio wird veröffentlicht, auf Loopback. Gehärtete Container, festgelegte Images, ein internes Kernnetz und benannte Volumes für den Zustand.
+* **TLS:** ein optionales `tls`-Compose-Profil stellt Caddy mit eigener lokaler Zertifizierungsstelle vor Studio, und eine Mosquitto-Konfiguration über TLS wird mitgeliefert ([Details](docs/BACKUP_AND_TLS.md)).
+* **Eine Host-Firewall für die Kernmaschine** (`scripts/firewall_core.sh`): der Broker-Port nur aus dem Feldnetz, die Ports von Server und Studio nur aus dem Netz der Clients (wenn angegeben), in einer eigenen Tabelle, die nichts anderes erwähnt.
+* **Geheimnisse:** `scripts/generate_secrets.sh` erzeugt zufällige Geheimnisse und gibt keines aus; `scripts/check-required-env.sh` lehnt fehlende, Platzhalter-, zu kurze oder wiederholte Werte ab.
+* **Sicherung und Wiederherstellung:** `scripts/backup_data.sh` erzeugt ein AES-256-verschlüsseltes, verifiziertes Archiv der Serverdaten mit Prüfsumme (Beweise nur auf Wunsch); `scripts/restore_data.sh` listet es auf oder stellt es wieder her, ohne je vorhandene Daten zu überschreiben.
+
+## 🧩 Rolle in A.R.M.O.R.
+
+ARMOR-DEVOPS ist der Weg, auf dem alles andere auf eine Maschine kommt und aktuell bleibt. Es installiert Server, Studio, den Netzwerkknoten, die Beobachtungs- und Sprachdienste und den Broker am CM5-Testaufbau, erstellt die Pakete jeder Version, die der Reiter *Updates* von [ARMOR-STUDIO](https://github.com/JuanenRac/ARMOR-STUDIO) von GitHub installiert, und hält die zwei kleinen Helfer, mit denen Studio die Anlage aktualisieren und ihre Dienste verwalten kann, ohne je als Root zu laufen.
 
 ## 📂 Struktur des Repositorys
 
 ```text
 ARMOR-DEVOPS/
-├── docker-compose.yml, .env.example, mosquitto/
+├── docker-compose.yml, docker-compose.tls.yml, .env.example, mosquitto/ (broker, TLS profile, ACL example)
 ├── caddy/     Caddyfile (TLS)
-├── scripts/   deploy_cm5, install_cm5, generate_secrets, check-required-env, validate-compose, backup_data, restore_data, test_backup, test_compose, firewall_core, test_firewall, mqtt_identity
+├── scripts/   deploy_cm5, install_cm5, package_component, armor_admin_agent, armor_maintenance_agent, generate_secrets, check-required-env, backup_data, restore_data, firewall_core, mqtt_identity, tests of the agents, the backup, the firewall and the Compose topology
+│   └── dist-packages/   the packages of each release (Studio, server, network, observation, voice, DevOps) with their SHA-256
 └── docs/      DEPLOYMENT_BOUNDARY, CM5_TEST_BENCH, BACKUP_AND_TLS
 ```
 
 ## 🛠️ Entwicklungsumgebung
+
+**Voraussetzungen:** Docker Engine with Compose (for the container topology), a CM5 or any Debian-based machine reachable by SSH (for the test bench), Bash, `ssh` and `tar` on the machine that deploys
 
 ```bash
 scripts/generate_secrets.sh          # .env and secrets/ (Git-ignored)
@@ -70,12 +89,14 @@ Siehe die [Bereitstellungsgrenze](docs/DEPLOYMENT_BOUNDARY.md).
 * **[ARMOR-RADAR](https://github.com/JuanenRac/ARMOR-RADAR)** - Feldknoten-Firmware für ESP32-S3 mit drei Radaren und eigenem Web-Panel
 * **[ARMOR-SOLAR](https://github.com/JuanenRac/ARMOR-SOLAR)** - Protokolle für Solar-Wechselrichter und -Batterien und die Nachrichten eines Gateway-Knotens
 * **[ARMOR-ELECTRICAL](https://github.com/JuanenRac/ARMOR-ELECTRICAL)** - Elektroknoten: Zähler, die Nachricht der Netzmesswerte und die Regeln fürs Schalten
+* **[ARMOR-ALARM](https://github.com/JuanenRac/ARMOR-ALARM)** - Alarmknoten und Alarmzentrale: Zonen, Scharfschalten, Verzögerungen, Sirene und PIN, mit dem Server oder ohne ihn
 * **[ARMOR-HMI](https://github.com/JuanenRac/ARMOR-HMI)** - Touch-Panel: der Systemzustand auf einem Wandbildschirm, Scharf- und Quittieren sowie das Zuhause des Sprachassistenten
 * **[ARMOR-NETWORK](https://github.com/JuanenRac/ARMOR-NETWORK)** - Das lokale Netzwerk: seine Geräte, das Internet und was sich ändert
 * **[ARMOR-SERVER](https://github.com/JuanenRac/ARMOR-SERVER)** - Zentraler Koordinator: Telemetrie, Alarme, Geräte, Solarmesswerte und Kameras
 * **[ARMOR-STUDIO](https://github.com/JuanenRac/ARMOR-STUDIO)** - Web-Konsole: Kameras, Radar, Alarme, Solarenergie und 2D/3D-Standortdesigner
 * **[ARMOR-ANDROID-CONTROL](https://github.com/JuanenRac/ARMOR-ANDROID-CONTROL)** - Android-Bedienclient mit Live-Radar in 2D/3D
 * **[ARMOR-SERVER-AI](https://github.com/JuanenRac/ARMOR-SERVER-AI)** - Visuelle Inferenzrichtlinie, die ihre Entscheidungen erklärt und nie handelt
+* **[ARMOR-VISION](https://github.com/JuanenRac/ARMOR-VISION)** - Kamerazonen, Masken und Erkennungsregeln für den Jetson Orin NX
 * **[ARMOR-VOICE-AI](https://github.com/JuanenRac/ARMOR-VOICE-AI)** - Offline-Sprachabsichten mit einer nicht fälschbaren Bestätigung
 * **[ARMOR-HARDWARE](https://github.com/JuanenRac/ARMOR-HARDWARE)** - Gehäuse, Elektronik und die Abnahmematrix am Prüfstand
 * **ARMOR-DEVOPS** (dieses Repository) - Bereitstellung, CM5-Prüfstand, Backup und TLS

@@ -12,7 +12,7 @@
     "VLAN"
   ],
   "deployment_target": "NVIDIA Jetson Orin NX and administration host",
-  "maturity": "functional",
+  "maturity": "established",
   "family": "Operations",
   "parent": "ARMOR-SERVER",
   "native_version": "0.5.2",

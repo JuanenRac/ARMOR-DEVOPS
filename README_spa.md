@@ -15,42 +15,61 @@
   <a href="README_por.md">🇵🇹 Português</a>
 </p>
 
-### Topología de despliegue y el banco de pruebas aislado en CM5
+### Despliegue, el banco de pruebas de la CM5, sus actualizaciones desde GitHub y el mantenimiento de la instalación
 
 <p align="center">
   <img src="https://img.shields.io/badge/License-GPL%203.0-blue.svg" alt="GPL 3.0">
   <img src="https://img.shields.io/badge/Deploy-Docker%20Compose-2496ed.svg" alt="Deploy">
   <img src="https://img.shields.io/badge/Bench-systemd-FFB020.svg" alt="Bench">
-  <img src="https://img.shields.io/badge/Maturity-functional-00E5FF.svg" alt="Maturity">
+  <img src="https://img.shields.io/badge/Version-0.5.2-0f6cbd.svg" alt="Version">
+  <img src="https://img.shields.io/badge/Maturity-established-2EA44F.svg" alt="Maturity">
 </p>
 
 ---
 
-**Comprobación de honestidad - qué funciona hoy:** El instalador del banco CM5 se ha ejecutado en una CM5 real que aloja otro software, y este siguió sano. La topología de Docker Compose y su perfil TLS opcional se han construido y ejecutado de verdad con Docker Engine en WSL (`scripts/test_compose.sh`, 12 comprobaciones, que encontró y arregló tres fallos), pero **no en la Jetson**. Los scripts de copia de seguridad y restauración tienen una prueba de ida y vuelta que pasa.
+**Comprobación de honestidad - qué funciona hoy:** El instalador del banco de la CM5 se ha ejecutado en una CM5 real que aloja otro software, que siguió sano, y el banco corre en uso diario con el servidor, Studio, el nodo de red, los servicios de observación y de voz, el broker y los dos ayudantes de abajo; en él se han hecho actualizaciones de sus componentes desde GitHub (a través de Studio). La topología Docker Compose y su perfil TLS opcional se han construido y ejecutado de verdad con Docker Engine en WSL (`scripts/test_compose.sh`), pero **no en la Jetson**. Los scripts de copia de seguridad y restauración tienen una prueba de ida y vuelta que pasa, y los dos ayudantes tienen sus propios tests. Lo que **no** está probado: una instalación limpia en una máquina que nunca ha visto el proyecto y toda la topología Docker en su destino.
 
 ---
 
+## 📋 De un vistazo
+
+| | |
+|---|---|
+| Versión | `0.5.2` |
+| Madurez | Establecido |
+| Tecnología | Docker Compose / Bash / YAML |
+| En hardware real | Gobierna el banco de pruebas de la CM5 en uso diario, en una CM5 real que aloja otro software; aún no en la Jetson |
+
 ## 🎯 Descripción general
 
-* **Un cortafuegos de la máquina central** (`scripts/firewall_core.sh`): el puerto del broker solo desde la red de campo, los del servidor y Studio solo desde la red de los clientes (si se indica), en una tabla propia que no menciona nada más y acepta el resto; `apply --rollback-after` quita las reglas de nuevo si no las confirmas, así que un error no te deja fuera. Las reglas y los rechazos están probados (36 comprobaciones, no se carga nada); no se ha cargado en ninguna máquina todavía, y las VLAN en sí siguen siendo un diseño para el router y el switch.
-* **Banco de pruebas CM5:** `scripts/deploy_cm5.sh` compila en una copia limpia, envía un archivo y ejecuta `scripts/install_cm5.sh`, que crea su propio usuario, su propio directorio y dos unidades systemd en puertos propios (tres con `--with-mqtt`: el Mosquitto propio de A.R.M.O.R. en el puerto 18883, comprobado en una CM5 real), con límites de recursos, y nunca toca otro proyecto ([detalles](docs/CM5_TEST_BENCH.md)).
-* **Topología Compose:** un broker Mosquitto no anónimo con una identidad por nodo, el servidor y Studio tras un nginx que hace de proxy de `/api/`; solo se publica Studio, en loopback. Contenedores endurecidos, red interna y volúmenes con nombre para el estado.
-* **Dispositivos y lecturas en el broker del banco:** el servidor puede escuchar y ordenar `armor/device/#` y leer `armor/node/+/info`, `armor/solar/#` y `armor/electrical/#`; `scripts/mqtt_identity.sh add device NAME` da a un dispositivo sus propios temas y `add bridge NAME` a un puente Zigbee2MQTT o Shelly todos ellos. `scripts/mqtt_identity.sh electrical-switching NODE_ID on` es lo único que permite al servidor ordenar el conmutador de un nodo eléctrico (desactivado por defecto; `off` lo retira).
-* **Secretos:** `scripts/generate_secrets.sh` crea secretos aleatorios sin imprimir ninguno; `scripts/check-required-env.sh` rechaza valores ausentes, de ejemplo, cortos o repetidos.
-* **Copia de seguridad y restauración:** `scripts/backup_data.sh` crea un archivo cifrado con AES-256, verificado y con suma de comprobación de los datos del servidor (sin evidencias salvo que se pida); `scripts/restore_data.sh` lo lista o lo restaura sin sobrescribir nunca datos existentes. La clave de cámaras **no** va en el archivo, a propósito.
-* **TLS:** un perfil `tls` opcional de Compose pone Caddy, con su propia autoridad de certificados local, delante de Studio ([detalles](docs/BACKUP_AND_TLS.md)).
+* **Banco de pruebas de la CM5:** `scripts/deploy_cm5.sh` compila en una copia limpia, envía un archivo y ejecuta `scripts/install_cm5.sh`, que crea su propio usuario, su propio directorio y unidades systemd en sus propios puertos para el servidor y Studio y, con opciones, el broker MQTT, el nodo de red, el servicio de observación, la pasarela de voz, el agente de administración, el ayudante de mantenimiento y la copia de seguridad diaria. Nunca toca lo demás que corre la máquina.
+* **El ayudante de mantenimiento** (`armor_maintenance_agent.py`): las actualizaciones de los componentes de la propia instalación desde GitHub (descarga el paquete de la versión, comprueba su SHA-256 y lo cambia con vuelta atrás), las del sistema operativo y una consola root opcional, todo gobernado desde la pestaña *Actualizaciones* de Studio; la consola está apagada salvo que se active.
+* **El agente de administración** (`armor_admin_agent.py`): la única parte con privilegios, con una lista cerrada de servicios, ficheros de ajustes y cuentas del broker, de modo que Studio nunca necesita root.
+* **Paquetes de cada versión:** `scripts/package_component.py` construye el paquete de un componente (Studio, servidor, red, servicio de observación, pasarela de voz, DevOps), escribe su SHA-256 al lado y lo publica como versión de GitHub.
+* **Topología Compose:** un broker Mosquitto no anónimo con una identidad por nodo y una ACL (incluidos los nodos de alarma y las zonas Zigbee que les dice el servidor), el servidor y Studio tras un nginx que hace de proxy de `/api/`; solo Studio se publica, en loopback. Contenedores endurecidos, imágenes fijadas, una red interna del núcleo y volúmenes con nombre para el estado.
+* **TLS:** un perfil `tls` opcional de Compose pone Caddy, con su propia autoridad certificadora local, delante de Studio, y se ofrece una configuración de Mosquitto sobre TLS ([detalles](docs/BACKUP_AND_TLS.md)).
+* **Un cortafuegos de host para la máquina central** (`scripts/firewall_core.sh`): el puerto del broker solo desde la red de campo, los del servidor y Studio solo desde la red de los clientes (cuando se da), en una tabla propia que no menciona nada más.
+* **Secretos:** `scripts/generate_secrets.sh` crea secretos aleatorios y no imprime ninguno; `scripts/check-required-env.sh` rechaza valores ausentes, de ejemplo, cortos o repetidos.
+* **Copia de seguridad y restauración:** `scripts/backup_data.sh` hace un archivo cifrado con AES-256, verificado y con suma de comprobación de los datos del servidor (sin evidencias salvo que se pidan); `scripts/restore_data.sh` lo lista o lo restaura sin sobrescribir nunca datos existentes.
+
+## 🧩 Papel en A.R.M.O.R.
+
+ARMOR-DEVOPS es cómo todo lo demás llega a una máquina y se mantiene al día. Instala el servidor, Studio, el nodo de red, los servicios de observación y de voz y el broker en el banco de pruebas de la CM5, hace los paquetes de cada versión que la pestaña *Actualizaciones* de [ARMOR-STUDIO](https://github.com/JuanenRac/ARMOR-STUDIO) instala desde GitHub, y guarda los dos pequeños ayudantes que dejan a Studio actualizar la instalación y gestionar sus servicios sin ejecutarse nunca como root.
 
 ## 📂 Estructura del repositorio
 
 ```text
 ARMOR-DEVOPS/
-├── docker-compose.yml, .env.example, mosquitto/
+├── docker-compose.yml, docker-compose.tls.yml, .env.example, mosquitto/ (broker, TLS profile, ACL example)
 ├── caddy/     Caddyfile (TLS)
-├── scripts/   deploy_cm5, install_cm5, generate_secrets, check-required-env, validate-compose, backup_data, restore_data, test_backup, test_compose, firewall_core, test_firewall, mqtt_identity
+├── scripts/   deploy_cm5, install_cm5, package_component, armor_admin_agent, armor_maintenance_agent, generate_secrets, check-required-env, backup_data, restore_data, firewall_core, mqtt_identity, tests of the agents, the backup, the firewall and the Compose topology
+│   └── dist-packages/   the packages of each release (Studio, server, network, observation, voice, DevOps) with their SHA-256
 └── docs/      DEPLOYMENT_BOUNDARY, CM5_TEST_BENCH, BACKUP_AND_TLS
 ```
 
 ## 🛠️ Entorno de desarrollo
+
+**Requisitos:** Docker Engine with Compose (for the container topology), a CM5 or any Debian-based machine reachable by SSH (for the test bench), Bash, `ssh` and `tar` on the machine that deploys
 
 ```bash
 scripts/generate_secrets.sh          # .env and secrets/ (Git-ignored)
@@ -70,12 +89,14 @@ Véase el [límite de despliegue](docs/DEPLOYMENT_BOUNDARY.md).
 * **[ARMOR-RADAR](https://github.com/JuanenRac/ARMOR-RADAR)** - Firmware del nodo de campo para ESP32-S3 con tres radares y su propio panel web
 * **[ARMOR-SOLAR](https://github.com/JuanenRac/ARMOR-SOLAR)** - Protocolos de inversores y baterías solares y los mensajes de un nodo pasarela
 * **[ARMOR-ELECTRICAL](https://github.com/JuanenRac/ARMOR-ELECTRICAL)** - Nodo eléctrico: contadores, el mensaje de las lecturas de la red y las reglas para maniobrar
+* **[ARMOR-ALARM](https://github.com/JuanenRac/ARMOR-ALARM)** - Nodo y central de alarma: zonas, armado, retardos, sirena y PIN, con el servidor o sin él
 * **[ARMOR-HMI](https://github.com/JuanenRac/ARMOR-HMI)** - Panel táctil: el estado del sistema en una pantalla de pared, armar y reconocer alarmas, y el hogar del asistente de voz
 * **[ARMOR-NETWORK](https://github.com/JuanenRac/ARMOR-NETWORK)** - La red local: sus dispositivos, internet y lo que cambia
 * **[ARMOR-SERVER](https://github.com/JuanenRac/ARMOR-SERVER)** - Coordinador central: telemetría, alarmas, dispositivos, lecturas solares y cámaras
 * **[ARMOR-STUDIO](https://github.com/JuanenRac/ARMOR-STUDIO)** - Consola web: cámaras, radar, alarmas, energía solar y el diseñador de sitio 2D/3D
 * **[ARMOR-ANDROID-CONTROL](https://github.com/JuanenRac/ARMOR-ANDROID-CONTROL)** - Cliente Android del operador con radar 2D/3D en vivo
 * **[ARMOR-SERVER-AI](https://github.com/JuanenRac/ARMOR-SERVER-AI)** - Política de inferencia visual que explica sus decisiones y nunca actúa
+* **[ARMOR-VISION](https://github.com/JuanenRac/ARMOR-VISION)** - Zonas de cámara, máscaras y reglas de detección para la Jetson Orin NX
 * **[ARMOR-VOICE-AI](https://github.com/JuanenRac/ARMOR-VOICE-AI)** - Intenciones de voz sin conexión con una confirmación imposible de falsificar
 * **[ARMOR-HARDWARE](https://github.com/JuanenRac/ARMOR-HARDWARE)** - Cajas, electrónica y la matriz de aceptación en banco
 * **ARMOR-DEVOPS** (este repositorio) - Despliegue, el banco de pruebas de la CM5, copias de seguridad y TLS
