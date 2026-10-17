@@ -5,7 +5,7 @@ set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 [[ -f .env ]] || { echo "ERROR: .env is missing; run scripts/generate_secrets.sh" >&2; exit 2; }
 
-read_value() { grep -E "^$1=" .env | head -1 | cut -d= -f2-; }
+read_value() { grep -E "^$1=" .env | head -1 | cut -d= -f2- || true; }   # a missing variable is an empty value, said below, not the end of the script
 status=0
 for variable in ARMOR_INGEST_TOKEN ARMOR_CONTROL_TOKEN ARMOR_OPERATOR_TOKEN ARMOR_CAMERA_CONFIG_KEY ARMOR_STUDIO_PASSWORD ARMOR_MQTT_PASSWORD; do
   value="$(read_value "$variable")"

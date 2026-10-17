@@ -2,6 +2,18 @@
 
 All notable changes to this project are documented here.
 
+## [0.5.3] - Redeploys that keep the bench working, and a Compose setup that passes its settings on
+
+- **`deploy_cm5.sh` sends the whole release:** the maintenance helper, the firewall script and the manifest were missing, so redeploying a bench that had the helper failed halfway (after the build, before anything was switched) and the helper never learned this repository's version. It also forwards `--with-maintenance`, `--server-port`, `--studio-port`, `--mqtt-port` and `--bind`, and the installer checks that every file it needs is there before it changes anything.
+- **`--bind` works:** the health check, the server's broker URL and the observation service use the address the services really listen on (the loopback when they listen everywhere), and the AI service uses `https` when the server does.
+- **The maintenance helper's health check follows the install** (port, address, `https` with the bench's own certificate), so an update of the server is no longer rolled back as *unhealthy* on an install with TLS or other ports.
+- **The broker keeps its port** across redeploys when `--mqtt-port` is not repeated, and the server's URL follows it.
+- **ACL:** `mqtt_identity.sh` removes a line only from the block of its own identity (turning the relays of a node off no longer takes the same line from a device with the same name); the example ACL has the Zigbee zone topics.
+- **Old copies are pruned per component and by time** (the newest six of each `maint-<component>-*`); what the installer set aside is never touched.
+- A bad `Content-Length` is refused with 400 by both agents. The installer no longer leaves its restrictive `umask` on for the rest of the run.
+- **Compose:** the server container receives the settings the `.env` documents (disarm PIN, alert options, alarm commands, switching, Home Assistant, Telegram, ntfy, trusted proxy), the cookie follows `https` by itself, the TLS overlay really stops publishing the plain broker port, HSTS is short by default (`ARMOR_TLS_HSTS`) and Studio's port can be published for the clients' network (`ARMOR_STUDIO_BIND`). Scripts are executable in the repository and a missing variable no longer ends the environment check silently.
+- Documents and manifest say what is true (the bench's packages, the units to remove, four volumes and the CA key, the real technologies and maturity). Tests: one more for the ACL case and one for the pruning.
+
 ## [0.5.2] - The broker lets the alarm panel read its Zigbee zones
 
 - The alarm node's identity may read armor/alarm/<node>/zigbee, the Zigbee zones the server tells it, and nothing else without the explicit alarm-commands switch.
@@ -57,7 +69,7 @@ All notable changes to this project are documented here.
 
 ## [0.4.4] - The relays of an electrical node can be made reachable from the broker
 
-- **`mqtt_identity.sh electrical-relays ID on|off`:** the only thing that lets an electrical node write its relays' states and read their commands (`topic readwrite armor/device/<node>/#` in the node's own block), so the relays can be devices of the house that the server switches. Off by default and not part of any install; idempotent, it keeps the previous list as `acl.before-relays`, and `off` takes only that line away. The node also needs `remote.relays` on in its panel, and Studio a device with the connection *ARMOR node* and the name `<node>/<relay>`. Tested in `test_mqtt_identity.sh`: nothing is reachable before the `on`, one node's `on` reaches no other node, twice writes the line once, a bad node or state changes nothing, and `off` leaves the node's other topics and the server's rules alone.
+- **`mqtt_identity.sh electrical-relays ID on|off`:** the only thing that lets an electrical node write its relays' states and read their commands (`topic readwrite armor/device/<node>/#` in the node's own block), so the relays can be devices of the house that the server switches. Off by default and not part of any install; idempotent, it keeps the previous list as `acl.before-relays`, and `off` takes only that line away from the node's own block (before 0.5.3 it took it from every block that had it). The node also needs `remote.relays` on in its panel, and Studio a device with the connection *ARMOR node* and the name `<node>/<relay>`. Tested in `test_mqtt_identity.sh`: nothing is reachable before the `on`, one node's `on` reaches no other node, twice writes the line once, a bad node or state changes nothing, and `off` leaves the node's other topics and the server's rules alone.
 
 ## [0.4.3] - The administration agent can pause and resume a service
 

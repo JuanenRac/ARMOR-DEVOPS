@@ -21,8 +21,8 @@
   <img src="https://img.shields.io/badge/License-GPL%203.0-blue.svg" alt="GPL 3.0">
   <img src="https://img.shields.io/badge/Deploy-Docker%20Compose-2496ed.svg" alt="Deploy">
   <img src="https://img.shields.io/badge/Bench-systemd-FFB020.svg" alt="Bench">
-  <img src="https://img.shields.io/badge/Version-0.5.2-0f6cbd.svg" alt="Version">
-  <img src="https://img.shields.io/badge/Maturity-established-2EA44F.svg" alt="Maturity">
+  <img src="https://img.shields.io/badge/Version-0.5.3-0f6cbd.svg" alt="Version">
+  <img src="https://img.shields.io/badge/Maturity-functional-00E5FF.svg" alt="Maturity">
 </p>
 
 ---
@@ -35,8 +35,8 @@
 
 | | |
 |---|---|
-| バージョン | `0.5.2` |
-| 成熟度 | 確立 |
+| バージョン | `0.5.3` |
+| 成熟度 | 機能する |
 | 技術 | Docker Compose / Bash / YAML |
 | 実機での確認 | 他のソフトウェアも載る実際の CM5 で CM5 テストベンチを日常的に運用。Jetson ではまだ |
 

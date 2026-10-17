@@ -6,7 +6,7 @@
 # Copyright (C) 2026 JuanenRac (Electro Hobby 3D)
 # GPL-3.0-or-later - see LICENSE
 # =============================================================================
-# Usage: deploy_cm5.sh --host 192.168.0.180 --user <user> --key ~/.ssh/id_key [--port N] [--public-host H] [--apply] [--with-mqtt] [--with-admin] [--with-voice] [--with-ai] [--with-backup]
+# Usage: deploy_cm5.sh --host 192.168.0.180 --user <user> --key ~/.ssh/id_key [--port N] [--public-host H] [--apply] [--with-mqtt] [--with-admin] [--with-voice] [--with-ai] [--with-backup] [--with-maintenance] [--server-port N] [--studio-port N] [--mqtt-port N] [--bind ADDRESS]
 #        --port N          the SSH port, when it is not 22 (a router that forwards a public port to it)
 #        --public-host H   the address the browser uses, when it is not --host
 #        [--also-reach http://PUBLIC:2601=http://PUBLIC:2600] [--forget-reach]   (another address the browser may log in from)
@@ -27,12 +27,14 @@ while [[ $# -gt 0 ]]; do
     --with-voice) EXTRA="$EXTRA --with-voice"; shift ;;
     --with-ai) EXTRA="$EXTRA --with-ai"; shift ;;
     --with-backup) EXTRA="$EXTRA --with-backup"; shift ;;
+    --with-maintenance) EXTRA="$EXTRA --with-maintenance"; shift ;;
+    --mqtt-port|--server-port|--studio-port|--bind) EXTRA="$EXTRA $1 $(printf '%q' "${2:-}")"; shift 2 ;;
     --also-reach) EXTRA="$EXTRA --also-reach $(printf '%q' "${2:-}")"; shift 2 ;;
     --forget-reach) EXTRA="$EXTRA --forget-reach"; shift ;;
     *) echo "unknown option: $1" >&2; exit 2 ;;
   esac
 done
-[[ -n "$HOST" && -n "$USER_NAME" ]] || { echo "usage: deploy_cm5.sh --host H --user U [--key K] [--port N] [--public-host H] [--apply] [--with-mqtt] [--with-admin] [--with-voice] [--with-ai] [--with-backup] [--also-reach STUDIO_URL=SERVER_URL]" >&2; exit 2; }
+[[ -n "$HOST" && -n "$USER_NAME" ]] || { echo "usage: deploy_cm5.sh --host H --user U [--key K] [--port N] [--public-host H] [--apply] [--with-mqtt] [--with-admin] [--with-voice] [--with-ai] [--with-backup] [--with-maintenance] [--server-port N] [--studio-port N] [--mqtt-port N] [--bind ADDRESS] [--also-reach STUDIO_URL=SERVER_URL]" >&2; exit 2; }
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 SSH_OPTS=(-o BatchMode=yes -o ConnectTimeout=10)
@@ -63,7 +65,9 @@ cp -r "$WORK/build/ARMOR-SERVER/dist" "$WORK/release/server/dist"
 cp "$WORK/build/ARMOR-SERVER/package.json" "$WORK/build/ARMOR-SERVER/package-lock.json" "$WORK/release/server/"
 cp -r "$WORK/build/ARMOR-STUDIO/dist" "$WORK/release/studio/dist"
 cp "$WORK/build/ARMOR-STUDIO/tools/serve.mjs" "$WORK/release/studio/tools/"
-cp "$ROOT/ARMOR-DEVOPS/scripts/install_cm5.sh" "$ROOT/ARMOR-DEVOPS/scripts/mqtt_identity.sh" "$ROOT/ARMOR-DEVOPS/scripts/armor_admin_agent.py" "$ROOT/ARMOR-DEVOPS/scripts/backup_data.sh" "$ROOT/ARMOR-DEVOPS/scripts/restore_data.sh" "$WORK/release/scripts/"
+cp "$ROOT/ARMOR-DEVOPS/scripts/install_cm5.sh" "$ROOT/ARMOR-DEVOPS/scripts/mqtt_identity.sh" "$ROOT/ARMOR-DEVOPS/scripts/armor_admin_agent.py" "$ROOT/ARMOR-DEVOPS/scripts/armor_maintenance_agent.py" "$ROOT/ARMOR-DEVOPS/scripts/firewall_core.sh" "$ROOT/ARMOR-DEVOPS/scripts/backup_data.sh" "$ROOT/ARMOR-DEVOPS/scripts/restore_data.sh" "$WORK/release/scripts/"
+# The installer reads the version of this repository from here (it is what the maintenance helper shows for "devops").
+cp "$ROOT/ARMOR-DEVOPS/armor.project.json" "$WORK/release/"
 # The voice gateway is plain Python with nothing to build: its package goes as it is (without caches), and is installed only with --with-voice.
 if [[ -d "$ROOT/ARMOR-VOICE-AI/src/armor_voice_ai" ]]; then
   mkdir -p "$WORK/release/voice"

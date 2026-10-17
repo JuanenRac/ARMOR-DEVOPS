@@ -29,6 +29,7 @@ import re
 import shutil
 import signal
 import socketserver
+import ssl
 import subprocess
 import sys
 import tarfile
@@ -123,9 +124,11 @@ def installed_version(component: str) -> str:
 _cache: dict[str, tuple[float, dict[str, object]]] = {}
 
 
-def http_get(url: str, accept: str = "application/vnd.github+json", timeout: float = 20.0) -> bytes:
+def http_get(url: str, accept: str = "application/vnd.github+json", timeout: float = 20.0, local_tls: bool = False) -> bytes:
     request = urllib.request.Request(url, headers={"Accept": accept, "User-Agent": "armor-maintenance", **({"Authorization": f"Bearer {GITHUB_TOKEN}"} if GITHUB_TOKEN else {})})
-    with urllib.request.urlopen(request, timeout=timeout) as response:                      # noqa: S310 - the address is fixed to GitHub (or a test server)
+    # local_tls: the health check of this machine's own server, which may serve https with its own certificate (nothing leaves the machine, nothing secret is sent).
+    context = ssl._create_unverified_context() if local_tls and url.startswith("https://") else None   # noqa: S323
+    with urllib.request.urlopen(request, timeout=timeout, context=context) as response:     # noqa: S310 - the address is fixed to GitHub (or a test server)
         return response.read(2 * 1024 * 1024)
 
 
@@ -144,7 +147,7 @@ def latest_release(component: str, force: bool = False) -> dict[str, object]:
     else:
         assets = {str(asset.get("name")): str(asset.get("browser_download_url")) for asset in data.get("assets", []) if isinstance(asset, dict)}
         result = {"version": clean_version(str(data.get("tag_name", ""))), "tag": str(data.get("tag_name", "")), "published": str(data.get("published_at", "")), "assets": assets,
-                  "notes": str(data.get("body", ""))[:6000]}
+                  "notes": str(data.get("body", ""))[:30000]}
         if not result["version"]:
             result = {"error": "no_release"}
     _cache[repo] = (time.time(), result)
@@ -350,7 +353,7 @@ def healthy(component: str, unit: str, wait: float = 40.0) -> bool:
     while time.time() < deadline:
         if component == "server":
             try:
-                if b'"ok":true' in http_get(HEALTH_URL, accept="application/json", timeout=3.0).replace(b" ", b""):
+                if b'"ok":true' in http_get(HEALTH_URL, accept="application/json", timeout=3.0, local_tls=True).replace(b" ", b""):
                     return True
             except (urllib.error.URLError, OSError, TimeoutError):
                 pass
@@ -383,9 +386,10 @@ def own(path: Path, owner: str) -> None:
     subprocess.run(["chown", "-R", f"{owner}:{owner}", str(path)], capture_output=True, check=False)
 
 
-def prune_old(folder: Path) -> None:
+def prune_old(folder: Path, prefix: str = "") -> None:
+    """Keep the newest KEEP_OLD folders that start with `prefix` (by time of modification); anything else in the folder - what the installer set aside - is never touched."""
     try:
-        entries = sorted((entry for entry in folder.iterdir() if entry.is_dir()), key=lambda entry: entry.name)   # the names are the times they were made
+        entries = sorted((entry for entry in folder.iterdir() if entry.is_dir() and entry.name.startswith(prefix)), key=lambda entry: entry.stat().st_mtime)
         for entry in entries[:-KEEP_OLD]:
             shutil.rmtree(entry, ignore_errors=True)
     except OSError:
@@ -520,7 +524,7 @@ def replace_tree(job: Job, component: str, staged: Path) -> dict[str, object]:
         systemctl("restart", unit)
         raise Refused(500, "unhealthy_rolled_back")
     job.step("check", "done")
-    prune_old(PREFIX / "releases-old")
+    prune_old(PREFIX / "releases-old", f"maint-{component}-")
     return {"backup": backup.name}
 
 
@@ -965,7 +969,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.wfile.write(payload)
 
     def body(self) -> dict[str, object]:
-        length = int(self.headers.get("Content-Length") or 0)
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            raise Refused(400, "bad_length") from None
+        if length < 0:
+            raise Refused(400, "bad_length")
         if length > 64 * 1024:
             raise Refused(413, "body_too_large")
         raw = self.rfile.read(length) if length else b"{}"

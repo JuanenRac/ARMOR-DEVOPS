@@ -15,7 +15,9 @@ https://{$ARMOR_TLS_HOST:localhost}:8443 {
 	tls internal
 	encode gzip
 	header {
-		Strict-Transport-Security "max-age=31536000"
+		# HSTS belongs to a host name, not to a port: with the default name "localhost" a long value would make the browser refuse plain http://localhost:<any port> (Studio of
+		# development, the other local programs) for as long as it lasts. The default is five minutes; raise ARMOR_TLS_HSTS (seconds) for a host name that only ever serves https.
+		Strict-Transport-Security "max-age={$ARMOR_TLS_HSTS:300}"
 		X-Content-Type-Options "nosniff"
 		Referrer-Policy "no-referrer"
 		-Server

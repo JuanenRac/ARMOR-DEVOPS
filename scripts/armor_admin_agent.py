@@ -286,7 +286,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.wfile.write(payload)
 
     def body(self) -> dict[str, object]:
-        length = int(self.headers.get("Content-Length") or 0)
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            raise Refused(400, "bad_length") from None
+        if length < 0:
+            raise Refused(400, "bad_length")
         if length > MAX_FILE_BYTES + 4096:
             raise Refused(413, "body_too_large")
         raw = self.rfile.read(length) if length else b"{}"

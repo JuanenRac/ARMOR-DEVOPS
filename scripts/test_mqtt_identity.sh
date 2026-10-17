@@ -94,6 +94,12 @@ if grep -q 'armor/device/electrical-3' "$ACL"; then fail "off left the relays re
 grep -qx 'topic write armor/electrical/electrical-3/state' <<<"$(block electrical-node-electrical-3)" || fail "turning the relays off took the node's own topics"
 grep -qx 'topic readwrite armor/device/#' <<<"$(block armor-server)" || fail "the relays' off took the server's rules"
 run electrical-relays electrical-3 off >/dev/null   # off again is harmless
+# The same line in the block of a device with the same name must survive the node's off (the removal is scoped to the node's own block).
+run add device garage >/dev/null
+run add electrical-node garage >/dev/null
+run electrical-relays garage on >/dev/null
+run electrical-relays garage off >/dev/null
+grep -qx 'topic readwrite armor/device/garage/#' <<<"$(block device-garage)" || fail "off for the node took the line of the device with the same name"
 
 # An alarm node writes its state and its answers, reads nothing, and its commands are reachable only after an explicit `alarm-commands ... on`, for that node only.
 run add alarm-node alarm-1 >/dev/null

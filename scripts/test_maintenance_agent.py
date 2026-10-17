@@ -251,6 +251,24 @@ class MaintenanceTest(unittest.TestCase):
         self.assertIn("unhealthy_rolled_back", view["error"])
         self.assertEqual(os.readlink(self.prefix / "current"), before)
 
+    def test_old_copies_are_pruned_per_component_and_the_installers_are_left_alone(self) -> None:
+        old = self.prefix / "releases-old"
+        old.mkdir(exist_ok=True)
+        now = time.time()
+        for index in range(9):
+            folder = old / f"maint-voice-{index}"
+            folder.mkdir()
+            os.utime(folder, (now + index, now + index))
+        (old / "maint-ai-1").mkdir()
+        (old / "20261016-000000").mkdir()
+        self.agent.prune_old(old, "maint-voice-")
+        voice = sorted(entry.name for entry in old.glob("maint-voice-*"))
+        self.assertEqual(len(voice), self.agent.KEEP_OLD)
+        self.assertIn("maint-voice-8", voice)
+        self.assertNotIn("maint-voice-0", voice)
+        self.assertTrue((old / "maint-ai-1").exists())
+        self.assertTrue((old / "20261016-000000").exists())
+
     def test_the_list_of_operations_can_be_emptied(self) -> None:
         self.fake_apt()
         self.wait(self.agent.system_check_job())

@@ -21,8 +21,9 @@ topic read armor/node/+/info
 # What the solar gateway nodes and the electrical nodes measure (each node writes only its own subtree, see scripts/mqtt_identity.sh).
 topic read armor/solar/#
 topic read armor/electrical/#
-# What the alarm nodes say about their panels and their answers.
+# What the alarm nodes say about their panels and their answers, and the state of the Zigbee zones the server tells them while it holds the radio (information, never a command).
 topic read armor/alarm/#
+topic write armor/alarm/+/zigbee
 # What the network nodes see on the local network.
 topic read armor/network/#
 topic write armor/node/+/command
@@ -45,10 +46,11 @@ topic readwrite armor/device/#
 #   in the block of electrical-node-electrical-1:   topic read armor/electrical/electrical-1/command
 #   in the block of armor-server:                   topic write armor/electrical/electrical-1/command
 
-# An alarm node (ARMOR-ALARM, scripts/mqtt_identity.sh add alarm-node ID): it writes the state of its panel and its answers, and reads nothing.
+# An alarm node (ARMOR-ALARM, scripts/mqtt_identity.sh add alarm-node ID): it writes the state of its panel and its answers, and reads only the state of its Zigbee zones.
 # user alarm-node-alarm-1
 # topic write armor/alarm/alarm-1/state
 # topic write armor/alarm/alarm-1/result
+# topic read armor/alarm/alarm-1/zigbee
 #
 # A command to a panel (arm, disarm) is refused by the broker unless BOTH of these lines exist, and only `scripts/mqtt_identity.sh alarm-commands ID on` adds them (`off` removes them). The
 # server also needs ARMOR_ALARM_COMMANDS=1 and the node has to allow it itself (server.commands): three independent switches. The server asks for the PIN of the signed-in user before it sends a disarm

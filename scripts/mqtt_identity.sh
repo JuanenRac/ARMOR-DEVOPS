@@ -26,6 +26,9 @@ MQ="$PREFIX/etc/mosquitto"
 
 usage() { echo "Usage: mqtt_identity.sh add node ID | add solar-node ID | add electrical-node ID | add network-node ID | add alarm-node ID | add consumer NAME | add device NAME | add bridge NAME | upgrade-node NODE_ID | electrical-switching NODE_ID on|off | alarm-commands NODE_ID on|off | electrical-relays NODE_ID on|off | alarm-relays NODE_ID on|off | remove USER" >&2; exit 2; }
 ACTION="${1:-}"
+# Removes one line from the block of ONE identity ("user NAME" up to the next blank line), never from the others: the same line (topic readwrite armor/device/garage/#) can be in the
+# blocks of a device and of a node with the same name.
+drop_line() { awk -v u="user $1" -v l="$2" 'BEGIN{inb=0} $0==u{inb=1; print; next} inb && /^$/{inb=0} inb && $0==l{next} {print}' "$MQ/acl" >"$MQ/acl.tmp" && cat "$MQ/acl.tmp" >"$MQ/acl"; rm -f "$MQ/acl.tmp"; }
 reload_broker() { systemctl reload armor-mosquitto 2>/dev/null || systemctl restart armor-mosquitto; }
 
 case "$ACTION" in
@@ -129,7 +132,7 @@ case "$ACTION" in
     else
       if [[ "$HAS" -eq 0 ]]; then echo "$USER_NAME does not have: $LINE"; else
         cp -p "$MQ/acl" "$MQ/acl.before-relays"
-        sed -i "\|^$LINE\$|d" "$MQ/acl"; echo "$USER_NAME no longer has: $LINE"
+        drop_line "$USER_NAME" "$LINE"; echo "$USER_NAME no longer has: $LINE"
         chown root:armor "$MQ/acl"; chmod 0640 "$MQ/acl"; reload_broker
       fi
     fi
@@ -154,7 +157,7 @@ case "$ACTION" in
       else
         if ! has_line "$WHO" "$LINE"; then echo "$WHO does not have: $LINE"; continue; fi
         [[ "$CHANGED" -eq 1 ]] || cp -p "$MQ/acl" "$MQ/acl.before-alarm-commands"
-        sed -i "\#^$LINE\$#d" "$MQ/acl"; CHANGED=1; echo "$WHO no longer has: $LINE"
+        drop_line "$WHO" "$LINE"; CHANGED=1; echo "$WHO no longer has: $LINE"
       fi
     done
     if [[ "$CHANGED" -eq 1 ]]; then
@@ -183,7 +186,7 @@ case "$ACTION" in
       else
         if ! has_line "$WHO" "$LINE"; then echo "$WHO does not have: $LINE"; continue; fi
         [[ "$CHANGED" -eq 1 ]] || cp -p "$MQ/acl" "$MQ/acl.before-switching"
-        sed -i "\#^$LINE\$#d" "$MQ/acl"; CHANGED=1; echo "$WHO no longer has: $LINE"
+        drop_line "$WHO" "$LINE"; CHANGED=1; echo "$WHO no longer has: $LINE"
       fi
     done
     if [[ "$CHANGED" -eq 1 ]]; then

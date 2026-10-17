@@ -7,8 +7,8 @@
 # file, and is verified by decrypting it again before the script reports success.
 # It never includes the environment file: the camera key (ARMOR_CAMERA_CONFIG_KEY)
 # must be kept somewhere else, because the vault is unreadable without it.
-# Recorded media can be large; by default only files up to --max-media-mb are kept
-# out of the archive (evidence is excluded unless --with-media is given).
+# Recorded media can be large: the whole media folder is left out of the archive
+# unless --with-media is given.
 set -euo pipefail
 
 usage() {

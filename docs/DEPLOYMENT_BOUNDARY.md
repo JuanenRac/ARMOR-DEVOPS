@@ -10,7 +10,7 @@ intentionally conservative:
   the webhook, the cameras of the LAN, the releases of GitHub that update the nodes and the router it inspects. Remove it from the edge network to cut all of that off, knowing what stops
   working. VLAN policy is still mapped in the network infrastructure and the host firewall, not in an unreviewed container.
 * **Every container is hardened**: read-only root filesystem, `no-new-privileges`, all
-  capabilities dropped (Studio adds back only what nginx needs to start).
+  capabilities dropped (Studio, the broker and the TLS proxy add back only what they need to start).
 * **Secrets never enter the repository or an image.** `scripts/generate_secrets.sh` creates
   `.env` and the two broker files in `secrets/` (all Git-ignored) with random values and
   prints none. `scripts/check-required-env.sh` refuses missing, placeholder or short values and
@@ -20,9 +20,9 @@ intentionally conservative:
   own telemetry and health (its last will is a health message) and read only its own commands. Only
   `armor-server` reads every node and sends commands. The listener is plain MQTT, on the core network and on the port published above;
   add TLS before a node connects across an untrusted segment.
-* **State lives in two named volumes** (`server-data` holds the camera vault, evidence and audit
-  log; `broker-data` the broker's persistence). Back them up; keep `ARMOR_CAMERA_CONFIG_KEY`
-  separately from the volume.
+* **State lives in four named volumes** (`server-data` holds the camera vault, evidence and audit
+  log; `broker-data` the broker's persistence; `proxy-data` and `proxy-config` the TLS proxy's, and `proxy-data` holds the **private key of Caddy's local certificate authority**: protect and
+  back it up like the secrets). Back them up; keep `ARMOR_CAMERA_CONFIG_KEY` separately from the volume.
 
 `scripts/validate-compose.sh` runs `docker compose config` (Docker is required and is not installed on the development PC); it validates the topology, not a
 running system. For a bench without Docker see [CM5 test bench](CM5_TEST_BENCH.md).

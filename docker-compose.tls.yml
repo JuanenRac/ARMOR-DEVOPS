@@ -1,12 +1,14 @@
-# Adds TLS to the broker: nodes and the server connect to mqtts://<host>:8883 (certificate files in secrets/, never committed).
+# Adds TLS to the broker: nodes connect to mqtts://<host>:8883 (certificate files in secrets/, never committed) and the plain port 1883 stops being published. The server of this
+# installation keeps speaking plain MQTT to the broker over the internal network of the containers (mqtt://broker:1883), which nothing outside reaches.
 #   docker compose -f docker-compose.yml -f docker-compose.tls.yml up -d
+# Needs Docker Compose 2.24 or newer (the `!override` below replaces the list of ports instead of adding to it).
 services:
   broker:
     volumes:
       - ./mosquitto/mosquitto-tls.conf:/mosquitto/config/mosquitto.conf:ro
       - broker-data:/mosquitto/data
     secrets: [mqtt_password_file, mqtt_acl_file, mqtt_tls_ca, mqtt_tls_cert, mqtt_tls_key]
-    ports: ["${ARMOR_MQTT_BIND:-127.0.0.1}:8883:8883"]
+    ports: !override ["${ARMOR_MQTT_BIND:-127.0.0.1}:8883:8883"]
 
 secrets:
   mqtt_tls_ca:

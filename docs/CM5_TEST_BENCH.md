@@ -16,7 +16,7 @@ touching anything else on the machine. This is a test bench, not the Jetson depl
 * limits what the bench can take from the machine (`Nice`, `CPUWeight`, `IOWeight`,
   `MemoryMax`, `TasksMax`) and hardens the units (`ProtectSystem=strict`, `NoNewPrivileges`,
   empty capability set and restricted address families);
-* never edits, restarts or reads another project's files, opens a firewall port or installs a package;
+* never edits, restarts or reads another project's files or opens a firewall port, and installs no package itself (the optional maintenance helper, when an administrator asks for a system upgrade, does run `apt`);
 * keeps secrets in `/opt/armor/etc/armor.env` (mode 0640, `root:armor`), generated once and
   kept across upgrades, and never prints them;
 * keeps the four newest releases and moves older ones aside instead of deleting them.
@@ -73,12 +73,11 @@ front before leaving it open, and never forward the broker's port (18883): only 
 
 ## What is not on the bench
 
-FFmpeg (so live video, snapshots and recordings answer *not configured*) and an MQTT broker are
-not installed: installing packages on a shared machine is a decision for its owner. Both are
-optional in the server. To try them, install FFmpeg and set `ARMOR_FFMPEG_PATH` in the units'
-environment, and point `ARMOR_MQTT_URL` at a broker.
+The installer installs no package. FFmpeg is used when it is already on the machine (the installer detects it and points the server at it); without it live video, snapshots and
+recordings answer *not configured*. The bench's own MQTT broker is optional (`--with-mqtt`, or an install that already has one keeps it): without it, point `ARMOR_MQTT_URL` at a
+broker you already run.
 
 ## Removing it
 
-Stop and disable `armor-server` and `armor-studio`, remove their unit files and move `/opt/armor`
-aside. Nothing else on the machine refers to them.
+Stop and disable `armor-server` and `armor-studio` and, if they were installed, `armor-mosquitto`, `armor-admin`, `armor-maintenance`, `armor-voice`, `armor-server-ai` and `armor-backup.timer`
+(with `armor-backup.service`), remove their unit files and move `/opt/armor` aside. Nothing else on the machine refers to them.

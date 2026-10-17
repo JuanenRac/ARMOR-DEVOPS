@@ -14,7 +14,7 @@
 #     broker on its own port, with its own passwords and ACL, never the system broker
 #   * resource limits so the bench can never starve the other software
 # What it never does: edit, restart or read anything belonging to another
-# project, open a port outside the two below, or touch the firewall.
+# project, open a port outside the ones below (the two web ports, plus the broker's and the voice gateway's when they are installed), or touch the firewall.
 #
 # Usage (as root, from the unpacked release):
 #   install_cm5.sh --public-host 192.168.0.180           # dry run: prints the plan
@@ -31,6 +31,7 @@ WITH_MQTT=0
 WITH_BACKUP=0
 WITH_ADMIN=0
 WITH_MAINT=0
+MQTT_PORT_GIVEN=0
 WITH_VOICE=0
 WITH_AI=0
 VOICE_PORT="18090"
@@ -77,7 +78,7 @@ while [[ $# -gt 0 ]]; do
     --also-reach) ALSO_REACH+=("${2:-}"); shift 2 ;;
     --forget-reach) FORGET_REACH=1; shift ;;
     --with-mqtt) WITH_MQTT=1; shift ;;
-    --mqtt-port) MQTT_PORT="${2:-}"; shift 2 ;;
+    --mqtt-port) MQTT_PORT="${2:-}"; MQTT_PORT_GIVEN=1; shift 2 ;;
     --with-backup) WITH_BACKUP=1; shift ;;
     --with-admin) WITH_ADMIN=1; shift ;;
     --with-maintenance) WITH_MAINT=1; shift ;;
@@ -96,6 +97,11 @@ fail() { echo "ERROR: $*" >&2; exit 1; }
 [[ -f "$PREFIX/etc/armor.backup.passphrase" ]] && WITH_BACKUP=1
 [[ -f "$PREFIX/etc/armor.admin.env" ]] && WITH_ADMIN=1
 [[ -f "$PREFIX/etc/armor.maint.env" ]] && WITH_MAINT=1
+# The broker keeps the port it was installed with when --mqtt-port is not repeated (the nodes are configured with it).
+if [[ "$MQTT_PORT_GIVEN" -eq 0 && -f "$PREFIX/etc/armor.mqtt.env" ]]; then
+  OLD_MQTT_PORT="$(sed -n 's#^ARMOR_MQTT_URL=mqtt://[^:/]*:\([0-9]*\).*#\1#p' "$PREFIX/etc/armor.mqtt.env" | head -1)"
+  [[ -z "$OLD_MQTT_PORT" ]] || MQTT_PORT="$OLD_MQTT_PORT"
+fi
 [[ -f "$PREFIX/etc/armor.voice.env" ]] && WITH_VOICE=1
 [[ -f "$PREFIX/etc/armor.ai.env" ]] && WITH_AI=1
 say()  { echo "[armor-install] $*"; }
@@ -119,6 +125,14 @@ if [[ -f "$OLD_NETWORK_ENV" ]] && grep -q '^TLS_CERT_PATH=.' "$OLD_NETWORK_ENV";
   SCHEME="https"; TLS_ENV_LINES="$(grep -E '^(TLS_CERT_PATH|TLS_KEY_PATH|ARMOR_COOKIE_SECURE)=' "$OLD_NETWORK_ENV" || true)"
 fi
 CURL_TLS=(); [[ "$SCHEME" == "https" ]] && CURL_TLS=(-k)
+# The services listen only on --bind: the programs of this machine reach them on that address (on the loopback when they listen everywhere).
+LOCAL_HOST="127.0.0.1"; [[ "$BIND_ADDRESS" == "0.0.0.0" ]] || LOCAL_HOST="$BIND_ADDRESS"
+# Everything that is going to be copied is checked before anything is changed.
+for needed in scripts/mqtt_identity.sh; do
+  [[ -f "$RELEASE_DIR/$needed" ]] || fail "the release has no $needed"
+done
+[[ "$WITH_ADMIN" -ne 1 || -f "$RELEASE_DIR/scripts/armor_admin_agent.py" ]] || fail "the release has no scripts/armor_admin_agent.py (needed by the admin agent)"
+[[ "$WITH_MAINT" -ne 1 || -f "$RELEASE_DIR/scripts/armor_maintenance_agent.py" ]] || fail "the release has no scripts/armor_maintenance_agent.py (needed by the maintenance helper; deploy_cm5.sh sends it)"
 STUDIO_ORIGINS="$SCHEME://$PUBLIC_HOST:$STUDIO_PORT"; SERVER_ORIGINS="$SCHEME://$PUBLIC_HOST:$SERVER_PORT"; REACH_UNIQUE=()
 for pair in "${REACH_PAIRS[@]}"; do
   studio="${pair%%=*}"; server="${pair#*=}"
@@ -201,7 +215,7 @@ ENV_FILE="$PREFIX/etc/armor.env"
 random() { head -c "$1" /dev/urandom | base64 | tr -d '\n=+/' | head -c "$2"; }
 if [[ ! -f "$ENV_FILE" ]]; then
   say "creating $ENV_FILE with new random secrets (kept across upgrades)"
-  umask 0137
+  OLD_UMASK="$(umask)"; umask 0137
   cat >"$ENV_FILE" <<EOF
 # A.R.M.O.R. test-bench environment. Generated once; never committed or printed.
 ARMOR_INGEST_TOKEN=$(random 64 43)
@@ -211,6 +225,7 @@ ARMOR_CAMERA_CONFIG_KEY=$(random 96 64)
 ARMOR_STUDIO_USERNAME=admin
 ARMOR_STUDIO_PASSWORD=$(random 48 32)
 EOF
+  umask "$OLD_UMASK"
   chown "root:$SERVICE_USER" "$ENV_FILE"; chmod 0640 "$ENV_FILE"
 fi
 
@@ -220,8 +235,9 @@ if [[ "$WITH_BACKUP" -eq 1 ]]; then
   BACKUP_PASS_FILE="$PREFIX/etc/armor.backup.passphrase"
   if [[ ! -f "$BACKUP_PASS_FILE" ]]; then
     say "creating $BACKUP_PASS_FILE with a new random passphrase (kept across upgrades - copy it somewhere else too, or old backups become unreadable if this disk is lost)"
-    umask 0177
+    OLD_UMASK="$(umask)"; umask 0177
     random 32 24 >"$BACKUP_PASS_FILE"
+    umask "$OLD_UMASK"
     chown "root:$SERVICE_USER" "$BACKUP_PASS_FILE"; chmod 0640 "$BACKUP_PASS_FILE"
   fi
 fi
@@ -349,9 +365,11 @@ topic write armor/server/alert
 topic readwrite armor/device/#
 ACL
     chown "root:$SERVICE_USER" "$MQ/passwd" "$MQ/acl"; chmod 0640 "$MQ/passwd" "$MQ/acl"
-    ( umask 0137; printf 'ARMOR_MQTT_URL=mqtt://127.0.0.1:%s\nARMOR_MQTT_USERNAME=armor-server\nARMOR_MQTT_PASSWORD=%s\n' "$MQTT_PORT" "$SERVER_MQTT_PASSWORD" >"$PREFIX/etc/armor.mqtt.env" )
+    ( umask 0137; printf 'ARMOR_MQTT_URL=mqtt://%s:%s\nARMOR_MQTT_USERNAME=armor-server\nARMOR_MQTT_PASSWORD=%s\n' "$LOCAL_HOST" "$MQTT_PORT" "$SERVER_MQTT_PASSWORD" >"$PREFIX/etc/armor.mqtt.env" )
     chown "root:$SERVICE_USER" "$PREFIX/etc/armor.mqtt.env"; chmod 0640 "$PREFIX/etc/armor.mqtt.env"
   fi
+  # The address and port in the server's URL follow the broker's (--bind and --mqtt-port may have changed since the first install).
+  sed -i "s#^ARMOR_MQTT_URL=.*#ARMOR_MQTT_URL=mqtt://$LOCAL_HOST:$MQTT_PORT#" "$PREFIX/etc/armor.mqtt.env"
   # An install made before devices existed: let the server listen on, and command, the devices' topics too.
   # An install made before the nodes said where their panel is, or before solar gateways or electrical nodes existed: let the server read those topics too (each line added once).
   for ACL_LINE in 'topic read armor/node/+/info' 'topic read armor/solar/#' 'topic read armor/electrical/#' 'topic read armor/alarm/#' 'topic read armor/network/#' 'topic write armor/alarm/+/zigbee'; do
@@ -488,7 +506,7 @@ Type=simple
 User=$SERVICE_USER
 Group=$SERVICE_USER
 Environment=PYTHONPATH=$PREFIX/ai
-Environment=ARMOR_AI_SERVER_URL=http://127.0.0.1:$SERVER_PORT
+Environment=ARMOR_AI_SERVER_URL=$SCHEME://$LOCAL_HOST:$SERVER_PORT
 EnvironmentFile=$PREFIX/etc/armor.ai.env
 ExecStart=$(command -v python3) -m armor_server_ai.service
 Restart=on-failure
@@ -540,6 +558,7 @@ Type=simple
 # No User=/Group=: a service is root by default, and naming root explicitly next to the sandboxing options leaves it without CAP_SETUID, so apt cannot drop to its own user (_apt).
 EnvironmentFile=$PREFIX/etc/armor.maint.env
 Environment=ARMOR_PREFIX=$PREFIX
+Environment=ARMOR_HEALTH_URL=$SCHEME://$LOCAL_HOST:$SERVER_PORT/healthz
 ExecStart=$(command -v python3) $PREFIX/bin/armor_maintenance_agent.py --socket /run/armor-maint.sock --group $SERVICE_USER
 Restart=on-failure
 RestartSec=3
@@ -648,7 +667,7 @@ systemctl restart armor-server armor-studio
 say "waiting for the services"
 ok=0
 for _ in $(seq 1 30); do
-  if curl -fsS "${CURL_TLS[@]}" "$SCHEME://127.0.0.1:$SERVER_PORT/healthz" >/dev/null 2>&1 && curl -fsS "${CURL_TLS[@]}" "$SCHEME://127.0.0.1:$STUDIO_PORT/healthz" >/dev/null 2>&1; then ok=1; break; fi
+  if curl -fsS "${CURL_TLS[@]}" "$SCHEME://$LOCAL_HOST:$SERVER_PORT/healthz" >/dev/null 2>&1 && curl -fsS "${CURL_TLS[@]}" "$SCHEME://$LOCAL_HOST:$STUDIO_PORT/healthz" >/dev/null 2>&1; then ok=1; break; fi
   sleep 1
 done
 if [[ "$ok" -ne 1 ]]; then
