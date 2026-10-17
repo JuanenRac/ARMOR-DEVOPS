@@ -141,4 +141,19 @@ run remove alarm-node-alarm-2 >/dev/null
 if grep -q 'alarm-2' "$ACL"; then fail "removing the alarm node left something of it"; fi
 grep -qx 'user alarm-node-alarm-1' "$ACL" || fail "removing one alarm node removed another"
 
+# The touch panel may say that it is alive and where its page is, and nothing else; Home Assistant's discovery is a line of the server's block that is there only on request.
+run add hmi-node panel-1 >/dev/null
+grep -qx 'topic write armor/node/panel-1/health' <<<"$(block hmi-node-panel-1)" || fail "the panel cannot say it is alive"
+grep -qx 'topic write armor/node/panel-1/info' <<<"$(block hmi-node-panel-1)" || fail "the panel cannot say where its page is"
+if grep -q 'armor/node/panel-1/telemetry\|armor/device/panel-1' "$ACL"; then fail "the panel can send radar tracks or use devices"; fi
+if grep -qx 'topic write homeassistant/#' "$ACL"; then fail "Home Assistant discovery was reachable before it was asked for"; fi
+run ha-discovery on >/dev/null
+grep -qx 'topic write homeassistant/#' <<<"$(block armor-server)" || fail "ha-discovery on did not give the server the line"
+run ha-discovery on >/dev/null
+[[ "$(grep -c 'topic write homeassistant/#' "$ACL")" == "1" ]] || fail "turning discovery on twice wrote the line twice"
+run ha-discovery off >/dev/null
+if grep -q 'homeassistant' "$ACL"; then fail "ha-discovery off left the line"; fi
+run ha-discovery on casa >/dev/null
+grep -qx 'topic write casa/#' <<<"$(block armor-server)" || fail "a prefix of its own was not honoured"
+if run ha-discovery on 'bad prefix' >/dev/null 2>&1; then fail "a prefix with a space was accepted"; fi
 echo "ARMOR_MQTT_IDENTITY=PASS the switch and the relays of an electrical node and the commands of an alarm node are reachable only after an explicit on, and off and remove take them away"

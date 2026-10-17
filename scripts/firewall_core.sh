@@ -115,7 +115,8 @@ case "$COMMAND" in
     if (( ROLLBACK > 0 )); then
       command -v systemd-run >/dev/null 2>&1 || { nft delete table inet "$TABLE"; fail "--rollback-after needs systemd-run; the rules were removed again"; }
       systemctl stop "$ROLLBACK_UNIT.timer" 2>/dev/null || true
-      systemd-run --unit "$ROLLBACK_UNIT" --on-active="${ROLLBACK}s" "$(command -v nft)" delete table inet "$TABLE" >/dev/null
+      # taking the rules away also takes away the boot unit that would load them again: "it undoes itself" must hold after a reboot too
+      systemd-run --unit "$ROLLBACK_UNIT" --on-active="${ROLLBACK}s" /bin/sh -c "$(command -v nft) delete table inet $TABLE; systemctl disable $UNIT.service >/dev/null 2>&1; rm -f /etc/systemd/system/$UNIT.service" >/dev/null
       echo "they will be REMOVED again in ${ROLLBACK} s unless you run: sudo $0 confirm"
     fi
     if (( PERSIST )); then

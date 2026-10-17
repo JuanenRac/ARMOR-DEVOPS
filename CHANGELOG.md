@@ -2,6 +2,15 @@
 
 All notable changes to this project are documented here.
 
+## [0.5.4] - The network watcher and the voice gateway get installed, and the broker rules fit what the programs do
+
+- **`--with-network` installs the network watcher** (`armor-network`, with `--network-node-id`, default `house-1`): its own unit with a short list of capabilities, its own folder, and its own token derived from the ingest token the way the server does, in a file that holds nothing else. The unit used to be written by hand and the update of "network" from Studio rolled back every time because the unit did not exist.
+- **The voice gateway comes with what it needs to carry a turn:** the server it asks and the token for it, a file for the speech programs (`armor.voice.engines`, commented examples; none is installed) and 256 MB instead of 64, which the speech programs share.
+- **Broker:** `mqtt_identity.sh add hmi-node ID` (the touch panel may say it is alive and where its page is, not send radar tracks) and `ha-discovery on|off [PREFIX]` (the line the server needs for Home Assistant to find its entities; without it the broker dropped them in silence). The server's block no longer holds the line for `armor/node/+/command`, which nobody sends or reads.
+- **The units hide their command lines from other users** (`ProtectProc=invisible`), because a camera's address with its password is on the command line of the program that takes a picture.
+- **The firewall that undoes itself (`--rollback-after`) undoes the boot unit too**; the machine is not restarted while something is being installed (the helper answers 409); the set-aside releases keep only the six newest; the broker image of the secrets generator is the pinned one; the release packages are no longer files of the repository (they are assets of the GitHub releases).
+- Tests: the identity test covers the panel and the discovery line, the helper's test covers the restart.
+
 ## [0.5.3] - Redeploys that keep the bench working, and a Compose setup that passes its settings on
 
 - **`deploy_cm5.sh` sends the whole release:** the maintenance helper, the firewall script and the manifest were missing, so redeploying a bench that had the helper failed halfway (after the build, before anything was switched) and the helper never learned this repository's version. It also forwards `--with-maintenance`, `--server-port`, `--studio-port`, `--mqtt-port` and `--bind`, and the installer checks that every file it needs is there before it changes anything.

@@ -269,6 +269,16 @@ class MaintenanceTest(unittest.TestCase):
         self.assertTrue((old / "maint-ai-1").exists())
         self.assertTrue((old / "20261016-000000").exists())
 
+    def test_the_machine_is_not_restarted_while_something_is_being_installed(self) -> None:
+        busy = self.agent.Job("system", [("upgrade", "Upgrade")])
+        self.agent.JOBS[busy.id] = busy
+        try:
+            with self.assertRaises(self.agent.Refused) as caught:
+                self.agent.reboot_machine()
+            self.assertEqual(caught.exception.code, "busy")
+        finally:
+            del self.agent.JOBS[busy.id]
+
     def test_the_list_of_operations_can_be_emptied(self) -> None:
         self.fake_apt()
         self.wait(self.agent.system_check_job())

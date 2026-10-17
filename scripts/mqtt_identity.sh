@@ -24,7 +24,7 @@ MQ="$PREFIX/etc/mosquitto"
 [[ "$(id -u)" -eq 0 ]] || { echo "run as root" >&2; exit 1; }
 [[ -f "$MQ/passwd" && -f "$MQ/acl" ]] || { echo "the A.R.M.O.R. broker is not installed (install_cm5.sh --with-mqtt)" >&2; exit 1; }
 
-usage() { echo "Usage: mqtt_identity.sh add node ID | add solar-node ID | add electrical-node ID | add network-node ID | add alarm-node ID | add consumer NAME | add device NAME | add bridge NAME | upgrade-node NODE_ID | electrical-switching NODE_ID on|off | alarm-commands NODE_ID on|off | electrical-relays NODE_ID on|off | alarm-relays NODE_ID on|off | remove USER" >&2; exit 2; }
+usage() { echo "Usage: mqtt_identity.sh add node ID | add solar-node ID | add electrical-node ID | add network-node ID | add alarm-node ID | add hmi-node ID | add consumer NAME | add device NAME | add bridge NAME | upgrade-node NODE_ID | electrical-switching NODE_ID on|off | alarm-commands NODE_ID on|off | electrical-relays NODE_ID on|off | alarm-relays NODE_ID on|off | ha-discovery on|off [PREFIX] | remove USER" >&2; exit 2; }
 ACTION="${1:-}"
 # Removes one line from the block of ONE identity ("user NAME" up to the next blank line), never from the others: the same line (topic readwrite armor/device/garage/#) can be in the
 # blocks of a device and of a node with the same name.
@@ -41,6 +41,7 @@ case "$ACTION" in
       electrical-node) USER_NAME="electrical-node-$NAME" ;;
       network-node) USER_NAME="network-node-$NAME" ;;
       alarm-node) USER_NAME="alarm-node-$NAME" ;;
+      hmi-node) USER_NAME="hmi-node-$NAME" ;;
       consumer) USER_NAME="alarm-$NAME" ;;
       device) USER_NAME="device-$NAME" ;;
       bridge) USER_NAME="bridge-$NAME" ;;
@@ -61,6 +62,10 @@ case "$ACTION" in
         echo "topic readwrite armor/device/$NAME/#"
         # A node that also reads solar inverters and batteries publishes them as armor/solar/<node>/<device>/state.
         echo "topic write armor/solar/$NAME/#"
+      elif [[ "$ROLE" == "hmi-node" ]]; then
+        # ARMOR-HMI, the touch panel: it only says that it is alive (health) and where its web page is (info). It sends no telemetry, so it cannot make up radar tracks.
+        echo "topic write armor/node/$NAME/health"
+        echo "topic write armor/node/$NAME/info"
       elif [[ "$ROLE" == "solar-node" ]]; then
         # ARMOR-SOLAR: the readings of the inverters and batteries on its serial ports, armor/solar/<node>/<device>/state; it reads nothing.
         echo "topic write armor/solar/$NAME/#"
@@ -90,6 +95,29 @@ case "$ACTION" in
     reload_broker
     echo "user: $USER_NAME"
     echo "password: $PASSWORD"
+    ;;
+  ha-discovery)
+    # Home Assistant finds the entities by the discovery messages the server publishes (retained) under a prefix, `homeassistant` by default. Without this line the broker drops them
+    # in silence. Idempotent; `off` takes only that line away from the server's block.
+    STATE="${2:-}"; PREFIX_NAME="${3:-homeassistant}"
+    [[ "$STATE" == "on" || "$STATE" == "off" ]] || usage
+    [[ "$PREFIX_NAME" =~ ^[A-Za-z0-9_-]{1,32}$ ]] || { echo "the prefix must match ^[A-Za-z0-9_-]{1,32}\$" >&2; exit 2; }
+    grep -qx "user armor-server" "$MQ/acl" || { echo "the server's identity (armor-server) is not in the ACL" >&2; exit 1; }
+    LINE="topic write $PREFIX_NAME/#"
+    HAS="$(awk -v u="user armor-server" -v l="$LINE" 'BEGIN{inb=0; found=0} $0==u{inb=1; next} inb && /^$/{inb=0} inb && $0==l{found=1} END{print found}' "$MQ/acl")"
+    if [[ "$STATE" == "on" ]]; then
+      if [[ "$HAS" == "1" ]]; then echo "armor-server already has: $LINE"; else
+        cp -p "$MQ/acl" "$MQ/acl.before-ha"
+        sed -i "/^user armor-server\$/a $LINE" "$MQ/acl"; echo "armor-server now has: $LINE"
+        chown root:armor "$MQ/acl"; chmod 0640 "$MQ/acl"; reload_broker
+      fi
+    else
+      if [[ "$HAS" != "1" ]]; then echo "armor-server does not have: $LINE"; else
+        cp -p "$MQ/acl" "$MQ/acl.before-ha"
+        drop_line "armor-server" "$LINE"; echo "armor-server no longer has: $LINE"
+        chown root:armor "$MQ/acl"; chmod 0640 "$MQ/acl"; reload_broker
+      fi
+    fi
     ;;
   upgrade-node)
     NAME="${2:-}"; USER_NAME="field-node-$NAME"

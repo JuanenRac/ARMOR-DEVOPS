@@ -850,6 +850,9 @@ def repair(job: Job) -> None:
 
 
 def reboot_machine() -> dict[str, object]:
+    busy = [job for job in JOBS.values() if job.state == "running"]
+    if busy:
+        raise Refused(409, "busy")   # a restart in the middle of an upgrade of the system leaves it half installed
     subprocess.run(["systemd-run", "--on-active=5", SYSTEMCTL, "reboot"], capture_output=True, check=False)
     return {"ok": True, "in_s": 5}
 

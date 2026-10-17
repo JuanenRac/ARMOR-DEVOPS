@@ -6,3 +6,6 @@ secrets/
 __pycache__/
 
 *.pyc
+
+# release packages are assets of the GitHub releases, not files of the repository (python scripts/package_component.py writes them here)
+scripts/dist-packages/

@@ -33,6 +33,8 @@ WITH_ADMIN=0
 WITH_MAINT=0
 MQTT_PORT_GIVEN=0
 WITH_VOICE=0
+WITH_NETWORK=0
+NETWORK_NODE_ID=""
 WITH_AI=0
 VOICE_PORT="18090"
 BIND_ADDRESS="0.0.0.0"
@@ -61,6 +63,8 @@ Usage: install_cm5.sh --public-host HOST [--apply] [--server-port N] [--studio-p
                  updates and reboots the operating system, and (only if ARMOR_MAINT_CONSOLE=1 is set in its environment file) uses a root console
   --with-ai      also run the observation service (armor-server-ai): it looks at the cameras through the server, notices movement, weighs it with the radar tracks and
                  the light, and tells the server, which raises the alarm while the system is armed; it holds no camera password and its token opens four routes only
+  --with-network also run the network watcher (armor-network): it looks at the local network, tells the server what changes and changes nothing; it gets its own token
+                 (--network-node-id NAME, default house-1)
   --with-voice   also run the voice gateway (armor-voice, on 127.0.0.1 only): the closed list of fifteen written and spoken commands (arm and disarm are confirmed
                  in two turns; the server asks it and carries out what it accepts, so the phone can send commands as text or voice)
   --with-backup  a daily encrypted backup of $PREFIX/data (a timer; see scripts/backup_data.sh), kept under $PREFIX/backups
@@ -83,6 +87,8 @@ while [[ $# -gt 0 ]]; do
     --with-admin) WITH_ADMIN=1; shift ;;
     --with-maintenance) WITH_MAINT=1; shift ;;
     --with-voice) WITH_VOICE=1; shift ;;
+    --with-network) WITH_NETWORK=1; shift ;;
+    --network-node-id) NETWORK_NODE_ID="${2:-}"; shift 2 ;;
     --with-ai) WITH_AI=1; shift ;;
     --bind) BIND_ADDRESS="${2:-}"; shift 2 ;;
     --prefix) PREFIX="${2:-}"; shift 2 ;;
@@ -103,6 +109,11 @@ if [[ "$MQTT_PORT_GIVEN" -eq 0 && -f "$PREFIX/etc/armor.mqtt.env" ]]; then
   [[ -z "$OLD_MQTT_PORT" ]] || MQTT_PORT="$OLD_MQTT_PORT"
 fi
 [[ -f "$PREFIX/etc/armor.voice.env" ]] && WITH_VOICE=1
+[[ -f "$PREFIX/etc/armor.network-node.env" ]] && WITH_NETWORK=1
+if [[ -z "$NETWORK_NODE_ID" ]]; then   # an upgrade keeps the name the watcher was installed with
+  NETWORK_NODE_ID="$(sed -n 's/^ARMOR_NETWORK_NODE_ID=//p' "$PREFIX/etc/armor.network-node.env" 2>/dev/null | head -1)"
+  NETWORK_NODE_ID="${NETWORK_NODE_ID:-house-1}"
+fi
 [[ -f "$PREFIX/etc/armor.ai.env" ]] && WITH_AI=1
 say()  { echo "[armor-install] $*"; }
 
@@ -318,6 +329,22 @@ if [[ "$WITH_VOICE" -eq 1 ]]; then
     ( umask 0137; printf 'ARMOR_VOICE_CONFIRM_SECRET=%s\n' "$(random 48 40)" >"$PREFIX/etc/armor.voice.secret" )
   fi
   chown "root:$SERVICE_USER" "$PREFIX/etc/armor.voice.secret"; chmod 0640 "$PREFIX/etc/armor.voice.secret"
+  # What the gateway needs to carry a turn through: the server it asks (with the token of an operator, the only one that can) and, optionally, the speech programs.
+  OPERATOR_TOKEN="$(sed -n 's/^ARMOR_OPERATOR_TOKEN=//p' "$ENV_FILE" | head -1)"
+  ( umask 0137; printf 'ARMOR_VOICE_SERVER_TOKEN=%s\n' "$OPERATOR_TOKEN" >"$PREFIX/etc/armor.voice.server" )
+  chown "root:$SERVICE_USER" "$PREFIX/etc/armor.voice.server"; chmod 0640 "$PREFIX/etc/armor.voice.server"
+  if [[ ! -f "$PREFIX/etc/armor.voice.engines" ]]; then
+    ( umask 0137; cat >"$PREFIX/etc/armor.voice.engines" <<'ENGINES'
+# The speech programs of the gateway (none is installed with it). Each reads its input on the standard input and writes its result on the standard output; no shell is used.
+# Speech to text: gets a WAVE file (16 kHz, 16-bit, mono), writes the words. Text to speech: gets the words, writes a WAVE file (16 kHz, 16-bit, mono).
+# The programs run with a short environment (PATH, HOME, LANG, TMPDIR and the variables that start with ARMOR_VOICE_ENGINE_). They share the 256 MB of the service: a model that needs
+# more asks for a higher MemoryMax in a drop-in of armor-voice.service.
+#ARMOR_VOICE_STT_COMMAND=/opt/armor/voice-engines/stt.sh
+#ARMOR_VOICE_TTS_COMMAND=/opt/armor/voice-engines/tts.sh
+ENGINES
+    )
+    chown "root:$SERVICE_USER" "$PREFIX/etc/armor.voice.engines"; chmod 0640 "$PREFIX/etc/armor.voice.engines"
+  fi
   VOICE_ENV_LINE="EnvironmentFile=$PREFIX/etc/armor.voice.env
 Environment=ARMOR_VOICE_URL=http://127.0.0.1:$VOICE_PORT"
 fi
@@ -340,6 +367,29 @@ if [[ "$WITH_AI" -eq 1 ]]; then
   AI_ENV_LINE="EnvironmentFile=$PREFIX/etc/armor.ai.env"
 fi
 
+if [[ "$WITH_NETWORK" -eq 1 ]]; then
+  command -v python3 >/dev/null || fail "--with-network needs python3"
+  command -v openssl >/dev/null || fail "--with-network needs openssl (it derives the token of the watcher)"
+  [[ -d "$RELEASE_DIR/network/src/armor_network" ]] || fail "this release carries no network watcher (network/src/armor_network)"
+  [[ "$NETWORK_NODE_ID" =~ ^[a-z0-9][a-z0-9_-]{0,63}$ ]] || fail "--network-node-id must match ^[a-z0-9][a-z0-9_-]{0,63}\$"
+  say "installing the network watcher as '$NETWORK_NODE_ID'"
+  NETWORK_APP="$PREFIX/apps/ARMOR-NETWORK"
+  rm -rf "$NETWORK_APP"
+  install -d -m 0755 -o root -g root "$PREFIX/apps" "$NETWORK_APP"
+  cp -r "$RELEASE_DIR/network/src" "$NETWORK_APP/src"
+  for extra in pyproject.toml armor.project.json; do [[ ! -f "$RELEASE_DIR/network/$extra" ]] || cp "$RELEASE_DIR/network/$extra" "$NETWORK_APP/$extra"; done
+  find "$NETWORK_APP" -name __pycache__ -prune -exec rm -rf {} + 2>/dev/null || true
+  chown -R root:root "$NETWORK_APP"; chmod -R u=rwX,go=rX "$NETWORK_APP"
+  install -d -o "$SERVICE_USER" -g "$SERVICE_USER" -m 0750 "$PREFIX/data/network-watch"
+  # The watcher gets ITS OWN token, derived from the ingest token the way the server derives it: a saved login for `inspect` is only handed to the node that has it, and the process
+  # that reads hostile data from the network never sees the other secrets of the server.
+  INGEST_TOKEN="$(sed -n 's/^ARMOR_INGEST_TOKEN=//p' "$ENV_FILE" | head -1)"
+  [[ -n "$INGEST_TOKEN" ]] || fail "$ENV_FILE has no ARMOR_INGEST_TOKEN"
+  NODE_TOKEN="$(printf 'armor-node:%s' "$NETWORK_NODE_ID" | openssl dgst -sha256 -hmac "$INGEST_TOKEN" | sed 's/^.*= //')"
+  ( umask 0137; printf 'ARMOR_INGEST_TOKEN=%s\nARMOR_NETWORK_NODE_ID=%s\n' "$NODE_TOKEN" "$NETWORK_NODE_ID" >"$PREFIX/etc/armor.network-node.env" )
+  chown "root:$SERVICE_USER" "$PREFIX/etc/armor.network-node.env"; chmod 0640 "$PREFIX/etc/armor.network-node.env"
+fi
+
 MQTT_ENV_LINE=""
 if [[ "$WITH_MQTT" -eq 1 ]]; then
   say "configuring A.R.M.O.R.'s own MQTT broker on port $MQTT_PORT"
@@ -359,7 +409,6 @@ topic read armor/solar/#
 topic read armor/electrical/#
 topic read armor/alarm/#
 topic read armor/network/#
-topic write armor/node/+/command
 topic write armor/alarm/+/zigbee
 topic write armor/server/alert
 topic readwrite armor/device/#
@@ -398,6 +447,9 @@ ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
 PrivateDevices=true
+# Other users of this machine do not see the command lines of these processes (a camera's address with its password is one, while a picture is being taken).
+ProtectProc=invisible
+ProcSubset=pid
 ProtectKernelTunables=true
 ProtectKernelModules=true
 ProtectControlGroups=true
@@ -534,12 +586,55 @@ Group=$SERVICE_USER
 Environment=PYTHONPATH=$PREFIX/voice
 EnvironmentFile=$PREFIX/etc/armor.voice.env
 EnvironmentFile=$PREFIX/etc/armor.voice.secret
+EnvironmentFile=$PREFIX/etc/armor.voice.server
+EnvironmentFile=-$PREFIX/etc/armor.voice.engines
+Environment=ARMOR_VOICE_SERVER_URL=$SCHEME://$LOCAL_HOST:$SERVER_PORT
 ExecStart=$(command -v python3) -m armor_voice_ai.service --host 127.0.0.1 --port $VOICE_PORT
 Restart=on-failure
 RestartSec=3
-MemoryMax=64M
-TasksMax=32
+MemoryMax=256M
+TasksMax=64
 $HARDENING
+
+[Install]
+WantedBy=multi-user.target
+EOF
+fi
+
+if [[ "$WITH_NETWORK" -eq 1 ]]; then
+  # It needs `ping` (a raw ICMP socket from the system's own program: CAP_NET_RAW stays, the rest of the capabilities go) and the network, and writes only its own folder.
+  cat >/etc/systemd/system/armor-network.service <<EOF
+[Unit]
+Description=A.R.M.O.R. network watcher (it looks at the local network and tells the server; it changes nothing)
+After=network-online.target armor-server.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=$SERVICE_USER
+Group=$SERVICE_USER
+Environment=PYTHONPATH=$PREFIX/apps/ARMOR-NETWORK/src
+EnvironmentFile=$PREFIX/etc/armor.network-node.env
+ExecStart=$(command -v python3) -m armor_network watch --node-id $NETWORK_NODE_ID --server-url $SCHEME://$LOCAL_HOST:$SERVER_PORT --data-dir $PREFIX/data/network-watch
+Restart=on-failure
+RestartSec=5
+MemoryMax=128M
+TasksMax=256
+ReadWritePaths=$PREFIX/data/network-watch
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ProtectProc=invisible
+ProcSubset=pid
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+LockPersonality=true
+RestrictSUIDSGID=true
+CapabilityBoundingSet=CAP_NET_RAW
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+SystemCallArchitectures=native
 
 [Install]
 WantedBy=multi-user.target
@@ -658,6 +753,10 @@ if [[ "$WITH_VOICE" -eq 1 ]]; then
   systemctl enable armor-voice >/dev/null
   systemctl restart armor-voice
 fi
+if [[ "$WITH_NETWORK" -eq 1 ]]; then
+  systemctl enable armor-network >/dev/null
+  systemctl restart armor-network
+fi
 if [[ "$WITH_AI" -eq 1 ]]; then
   systemctl enable armor-server-ai >/dev/null
 fi
@@ -678,6 +777,8 @@ fi
 # Keep the four newest releases; older ones are moved aside, never deleted.
 mkdir -p "$PREFIX/releases-old"
 ls -1dt "$PREFIX"/releases/*/ 2>/dev/null | tail -n +5 | while read -r old; do mv "$old" "$PREFIX/releases-old/" || true; done
+# ... and the set-aside ones are not kept for ever either (each holds its node_modules): the six newest stay. The copies the maintenance helper makes (maint-*) are pruned by the helper.
+ls -1dt "$PREFIX"/releases-old/[0-9]*/ 2>/dev/null | tail -n +7 | while read -r old; do rm -rf -- "$old" || true; done
 
 say "A.R.M.O.R. is running"
 say "  Studio : $SCHEME://$PUBLIC_HOST:$STUDIO_PORT"
