@@ -13,7 +13,7 @@
     "Mosquitto"
   ],
   "deployment_target": "CM5 test bench (systemd) and any Docker host",
-  "maturity": "functional",
+  "maturity": "established",
   "family": "Operations",
   "parent": "ARMOR-SERVER",
   "native_version": "0.5.9",

@@ -21,8 +21,8 @@
   <img src="https://img.shields.io/badge/License-GPL%203.0-blue.svg" alt="GPL 3.0">
   <img src="https://img.shields.io/badge/Deploy-Docker%20Compose-2496ed.svg" alt="Deploy">
   <img src="https://img.shields.io/badge/Bench-systemd-FFB020.svg" alt="Bench">
-  <img src="https://img.shields.io/badge/Version-0.5.7-0f6cbd.svg" alt="Version">
-  <img src="https://img.shields.io/badge/Maturity-functional-00E5FF.svg" alt="Maturity">
+  <img src="https://img.shields.io/badge/Version-0.5.9-0f6cbd.svg" alt="Version">
+  <img src="https://img.shields.io/badge/Maturity-established-2EA44F.svg" alt="Maturity">
 </p>
 
 ---
@@ -35,8 +35,8 @@
 
 | | |
 |---|---|
-| Versión | `0.5.7` |
-| Madurez | Funcional |
+| Versión | `0.5.9` |
+| Madurez | Establecido |
 | Tecnología | Docker Compose / Bash / YAML |
 | En hardware real | Gobierna el banco de pruebas de la CM5 en uso diario, en una CM5 real que aloja otro software; aún no en la Jetson |
 
@@ -51,7 +51,7 @@
 * **Un cortafuegos de host para la máquina central** (`scripts/firewall_core.sh`): el puerto del broker solo desde la red de campo, los del servidor y Studio solo desde la red de los clientes (cuando se da), en una tabla propia que no menciona nada más.
 * **Secretos:** `scripts/generate_secrets.sh` crea secretos aleatorios y no imprime ninguno; `scripts/check-required-env.sh` rechaza valores ausentes, de ejemplo, cortos o repetidos.
 * **Copia de seguridad y restauración:** `scripts/backup_data.sh` hace un archivo cifrado con AES-256, verificado y con suma de comprobación de los datos del servidor (sin evidencias salvo que se pidan); `scripts/restore_data.sh` lo lista o lo restaura sin sobrescribir nunca datos existentes.
-* **Una VPN y un nombre para la casa, configurados desde Studio:** `armor_wireguard.sh` monta una VPN WireGuard con unos pocos comandos (claves en la máquina, una configuración por móvil con código QR, enrutado a los nodos si se quiere) y `armor_ddns.sh` mantiene un nombre de DuckDNS, Cloudflare u otro apuntando a la casa cuando el operador cambia la dirección; el agente de mantenimiento ofrece ambos a Studio y al móvil, así que nadie tiene que escribir un comando, y una guía paso a paso en ocho idiomas cubre el router.
+* **Una VPN y un nombre para la casa, configurados desde Studio:** `armor_wireguard.sh` monta una VPN WireGuard con unos pocos comandos (claves en la máquina, una configuración por móvil con código QR, enrutado a los nodos si se quiere) y `armor_ddns.sh` mantiene un nombre de DuckDNS, Cloudflare u otro apuntando a la casa cuando el operador cambia la dirección; el agente de mantenimiento ofrece ambos a Studio y al móvil, así que nadie tiene que escribir un comando, y una guía paso a paso en ocho idiomas cubre el router.**Paquetes firmados:** el asistente de mantenimiento solo instala un paquete del servidor, de Studio o de cualquier otro programa si lleva una firma Ed25519 válida de la clave de releases del proyecto (verificada en Python puro, sin software adicional); una firma ausente, incorrecta o manipulada deja la máquina como estaba. Existe una excepción de emergencia, solo como ajuste en el fichero de la propia máquina.
 
 ## 🧩 Papel en A.R.M.O.R.
 

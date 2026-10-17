@@ -21,8 +21,8 @@
   <img src="https://img.shields.io/badge/License-GPL%203.0-blue.svg" alt="GPL 3.0">
   <img src="https://img.shields.io/badge/Deploy-Docker%20Compose-2496ed.svg" alt="Deploy">
   <img src="https://img.shields.io/badge/Bench-systemd-FFB020.svg" alt="Bench">
-  <img src="https://img.shields.io/badge/Version-0.5.7-0f6cbd.svg" alt="Version">
-  <img src="https://img.shields.io/badge/Maturity-functional-00E5FF.svg" alt="Maturity">
+  <img src="https://img.shields.io/badge/Version-0.5.9-0f6cbd.svg" alt="Version">
+  <img src="https://img.shields.io/badge/Maturity-established-2EA44F.svg" alt="Maturity">
 </p>
 
 ---
@@ -35,8 +35,8 @@
 
 | | |
 |---|---|
-| 版本 | `0.5.7` |
-| 成熟度 | 可用 |
+| 版本 | `0.5.9` |
+| 成熟度 | 成熟 |
 | 技术栈 | Docker Compose / Bash / YAML |
 | 真实硬件 | 日常运行 CM5 测试台，在托管其他软件的真实 CM5 上；尚未在 Jetson 上 |
 
@@ -51,7 +51,7 @@
 * **核心机器的主机防火墙**（`scripts/firewall_core.sh`）：代理端口只对现场网络开放，服务器和 Studio 端口只对客户端网络开放（如果给出），放在不提及其他任何内容的独立表中。
 * **密钥：**`scripts/generate_secrets.sh` 创建随机密钥且不打印任何一个；`scripts/check-required-env.sh` 拒绝缺失、占位、过短或重复的值。
 * **备份与恢复：**`scripts/backup_data.sh` 生成服务器数据的 AES-256 加密、经验证并带校验和的归档（除非要求否则不含证据）；`scripts/restore_data.sh` 列出或恢复它，且从不覆盖已有数据。
-* **可在 Studio 中设置的 VPN 和家的域名：** `armor_wireguard.sh` 用几条命令建立 WireGuard VPN（密钥保存在本机，每部手机一份带二维码的配置，需要时可路由到节点），`armor_ddns.sh` 在运营商更换地址时让 DuckDNS、Cloudflare 或其他域名始终指向您家；维护代理把两者提供给 Studio 和手机，无需任何人输入命令，并有八种语言的分步指南说明路由器设置。
+* **可在 Studio 中设置的 VPN 和家的域名：** `armor_wireguard.sh` 用几条命令建立 WireGuard VPN（密钥保存在本机，每部手机一份带二维码的配置，需要时可路由到节点），`armor_ddns.sh` 在运营商更换地址时让 DuckDNS、Cloudflare 或其他域名始终指向您家；维护代理把两者提供给 Studio 和手机，无需任何人输入命令，并有八种语言的分步指南说明路由器设置。**签名软件包：** 维护助手只有在软件包带有项目发布密钥的有效 Ed25519 签名时，才会安装服务器、Studio 或其他程序的软件包（用纯 Python 验证，无需额外软件）；签名缺失、错误或被篡改时机器保持不变。紧急例外仅作为机器自身文件中的设置存在。
 
 ## 🧩 在 A.R.M.O.R. 中的角色
 

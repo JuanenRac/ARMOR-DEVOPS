@@ -21,8 +21,8 @@
   <img src="https://img.shields.io/badge/License-GPL%203.0-blue.svg" alt="GPL 3.0">
   <img src="https://img.shields.io/badge/Deploy-Docker%20Compose-2496ed.svg" alt="Deploy">
   <img src="https://img.shields.io/badge/Bench-systemd-FFB020.svg" alt="Bench">
-  <img src="https://img.shields.io/badge/Version-0.5.7-0f6cbd.svg" alt="Version">
-  <img src="https://img.shields.io/badge/Maturity-functional-00E5FF.svg" alt="Maturity">
+  <img src="https://img.shields.io/badge/Version-0.5.9-0f6cbd.svg" alt="Version">
+  <img src="https://img.shields.io/badge/Maturity-established-2EA44F.svg" alt="Maturity">
 </p>
 
 ---
@@ -35,8 +35,8 @@
 
 | | |
 |---|---|
-| Versione | `0.5.7` |
-| Maturità | Funzionale |
+| Versione | `0.5.9` |
+| Maturità | Consolidato |
 | Tecnologia | Docker Compose / Bash / YAML |
 | Su hardware reale | Governa il banco di prova CM5 in uso quotidiano, su una vera CM5 che ospita altro software; non ancora sul Jetson |
 
@@ -51,7 +51,7 @@
 * **Un firewall di host per la macchina centrale** (`scripts/firewall_core.sh`): la porta del broker solo dalla rete di campo, quelle del server e di Studio solo dalla rete dei client (quando data), in una tabella propria che non menziona nient'altro.
 * **Segreti:** `scripts/generate_secrets.sh` crea segreti casuali e non ne stampa nessuno; `scripts/check-required-env.sh` rifiuta valori mancanti, di esempio, corti o ripetuti.
 * **Backup e ripristino:** `scripts/backup_data.sh` produce un archivio cifrato AES-256, verificato e con checksum dei dati del server (prove escluse salvo richiesta); `scripts/restore_data.sh` lo elenca o lo ripristina senza mai sovrascrivere dati esistenti.
-* **Una VPN e un nome per la casa, configurati da Studio:** `armor_wireguard.sh` crea una VPN WireGuard con pochi comandi (chiavi sulla macchina, una configurazione per telefono con codice QR, instradamento verso i nodi se serve) e `armor_ddns.sh` mantiene un nome DuckDNS, Cloudflare o altro puntato alla casa quando l'operatore cambia l'indirizzo; l'agente di manutenzione offre entrambi a Studio e al telefono, quindi nessuno deve digitare un comando, e una guida passo passo in otto lingue copre il router.
+* **Una VPN e un nome per la casa, configurati da Studio:** `armor_wireguard.sh` crea una VPN WireGuard con pochi comandi (chiavi sulla macchina, una configurazione per telefono con codice QR, instradamento verso i nodi se serve) e `armor_ddns.sh` mantiene un nome DuckDNS, Cloudflare o altro puntato alla casa quando l'operatore cambia l'indirizzo; l'agente di manutenzione offre entrambi a Studio e al telefono, quindi nessuno deve digitare un comando, e una guida passo passo in otto lingue copre il router.**Pacchetti firmati:** l'assistente di manutenzione installa un pacchetto del server, di Studio o di un altro programma solo se porta una firma Ed25519 valida della chiave di rilascio del progetto (verificata in puro Python, senza software aggiuntivo); una firma assente, errata o manomessa lascia la macchina invariata. Una deroga d'emergenza esiste solo come impostazione nel file della macchina stessa.
 
 ## 🧩 Ruolo in A.R.M.O.R.
 
