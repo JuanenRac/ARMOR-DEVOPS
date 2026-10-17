@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented here.
 
+## [0.5.6] - A real certificate for a name on the Internet, and a step-by-step guide to using the server from outside the house
+
+- **The TLS profile can ask for a real certificate:** with `ARMOR_TLS_ISSUER` set to an e-mail address Caddy asks Let's Encrypt for the certificate of `ARMOR_TLS_HOST` and renews it by itself (the local authority stays the default); the port of the console is `ARMOR_TLS_PORT` (443 for the Internet) and port 80 for the authority's check is `ARMOR_TLS_HTTP_PORT`.
+- **A guide, `docs/REMOTE_ACCESS.md`, in the eight languages** (also `_spa`, `_deu`, `_fra`, `_ita`, `_jpn`, `_zho`, `_por`): one door only and a name instead of an address, a VPN or HTTPS, a fixed or a changing public address, what to forward in the router and what never, the settings of the server, Studio and the phone, and how to check it from mobile data.
+
 ## [0.5.5] - The settings for using the server from outside the house reach the container
 
 - The Compose file passes `ARMOR_LOCAL_NETWORKS`, `ARMOR_VPN_NETWORKS`, `ARMOR_TOTP_REQUIRED`, `ARMOR_REMOTE_POLICY`, `ARMOR_REMOTE_SESSION_TTL_MS`, `ARMOR_REMOTE_IDLE_MS` and `ARMOR_ELEVATION_MS` from `.env` (empty is the server's own default), and `.env.example` explains them.

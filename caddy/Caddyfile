@@ -11,8 +11,10 @@
 	default_sni {$ARMOR_TLS_HOST:localhost}
 }
 
-https://{$ARMOR_TLS_HOST:localhost}:8443 {
-	tls internal
+# ARMOR_TLS_ISSUER: "internal" (the default) is the local authority above. For a name on the Internet (see docs/REMOTE_ACCESS.md) put your e-mail address there: Caddy then asks Let's
+# Encrypt for a real certificate by itself and renews it; that needs this host's ports 80 and 443 reachable from the Internet (ARMOR_TLS_PORT=443, ARMOR_TLS_HTTP_PORT=80).
+https://{$ARMOR_TLS_HOST:localhost}:{$ARMOR_TLS_PORT:8443} {
+	tls {$ARMOR_TLS_ISSUER:internal}
 	encode gzip
 	header {
 		# HSTS belongs to a host name, not to a port: with the default name "localhost" a long value would make the browser refuse plain http://localhost:<any port> (Studio of

@@ -110,12 +110,15 @@ services:
     environment:
       ARMOR_TLS_HOST: ${ARMOR_TLS_HOST:-localhost}
       ARMOR_TLS_HSTS: ${ARMOR_TLS_HSTS:-300}
+      ARMOR_TLS_ISSUER: ${ARMOR_TLS_ISSUER:-internal}
+      ARMOR_TLS_PORT: ${ARMOR_TLS_PORT:-8443}
     tmpfs: ["/tmp"]
     volumes:
       - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - proxy-data:/data
       - proxy-config:/config
-    ports: ["${ARMOR_TLS_BIND:-127.0.0.1}:8443:8443"]
+    # The port the console and the API are reached by (443 for a name on the Internet), and port 80 for the certificate authority's check, which only a public certificate needs.
+    ports: ["${ARMOR_TLS_BIND:-127.0.0.1}:${ARMOR_TLS_PORT:-8443}:${ARMOR_TLS_PORT:-8443}", "${ARMOR_TLS_BIND:-127.0.0.1}:${ARMOR_TLS_HTTP_PORT:-8081}:80"]
     depends_on:
       studio: { condition: service_started }
     networks: [armor_edge, armor_core]
