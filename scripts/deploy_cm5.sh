@@ -67,7 +67,7 @@ cp -r "$WORK/build/ARMOR-SERVER/dist" "$WORK/release/server/dist"
 cp "$WORK/build/ARMOR-SERVER/package.json" "$WORK/build/ARMOR-SERVER/package-lock.json" "$WORK/release/server/"
 cp -r "$WORK/build/ARMOR-STUDIO/dist" "$WORK/release/studio/dist"
 cp "$WORK/build/ARMOR-STUDIO/tools/serve.mjs" "$WORK/release/studio/tools/"
-cp "$ROOT/ARMOR-DEVOPS/scripts/install_cm5.sh" "$ROOT/ARMOR-DEVOPS/scripts/mqtt_identity.sh" "$ROOT/ARMOR-DEVOPS/scripts/armor_admin_agent.py" "$ROOT/ARMOR-DEVOPS/scripts/armor_maintenance_agent.py" "$ROOT/ARMOR-DEVOPS/scripts/firewall_core.sh" "$ROOT/ARMOR-DEVOPS/scripts/backup_data.sh" "$ROOT/ARMOR-DEVOPS/scripts/restore_data.sh" "$ROOT/ARMOR-DEVOPS/scripts/armor_wireguard.sh" "$ROOT/ARMOR-DEVOPS/scripts/armor_ddns.sh" "$WORK/release/scripts/"
+cp "$ROOT/ARMOR-DEVOPS/scripts/install_cm5.sh" "$ROOT/ARMOR-DEVOPS/scripts/mqtt_identity.sh" "$ROOT/ARMOR-DEVOPS/scripts/armor_admin_agent.py" "$ROOT/ARMOR-DEVOPS/scripts/armor_maintenance_agent.py" "$ROOT/ARMOR-DEVOPS/scripts/firewall_core.sh" "$ROOT/ARMOR-DEVOPS/scripts/backup_data.sh" "$ROOT/ARMOR-DEVOPS/scripts/restore_data.sh" "$ROOT/ARMOR-DEVOPS/scripts/armor_wireguard.sh" "$ROOT/ARMOR-DEVOPS/scripts/armor_ddns.sh" "$ROOT/ARMOR-DEVOPS/scripts/armor_mqtt_tls.sh" "$WORK/release/scripts/"
 # The installer reads the version of this repository from here (it is what the maintenance helper shows for "devops").
 cp "$ROOT/ARMOR-DEVOPS/armor.project.json" "$WORK/release/"
 # The voice gateway is plain Python with nothing to build: its package goes as it is (without caches), and is installed only with --with-voice.

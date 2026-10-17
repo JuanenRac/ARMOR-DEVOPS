@@ -21,7 +21,7 @@
   <img src="https://img.shields.io/badge/License-GPL%203.0-blue.svg" alt="GPL 3.0">
   <img src="https://img.shields.io/badge/Deploy-Docker%20Compose-2496ed.svg" alt="Deploy">
   <img src="https://img.shields.io/badge/Bench-systemd-FFB020.svg" alt="Bench">
-  <img src="https://img.shields.io/badge/Version-0.5.9-0f6cbd.svg" alt="Version">
+  <img src="https://img.shields.io/badge/Version-0.6.0-0f6cbd.svg" alt="Version">
   <img src="https://img.shields.io/badge/Maturity-established-2EA44F.svg" alt="Maturity">
 </p>
 
@@ -35,7 +35,7 @@
 
 | | |
 |---|---|
-| 版本 | `0.5.9` |
+| 版本 | `0.6.0` |
 | 成熟度 | 成熟 |
 | 技术栈 | Docker Compose / Bash / YAML |
 | 真实硬件 | 日常运行 CM5 测试台，在托管其他软件的真实 CM5 上；尚未在 Jetson 上 |
@@ -52,6 +52,7 @@
 * **密钥：**`scripts/generate_secrets.sh` 创建随机密钥且不打印任何一个；`scripts/check-required-env.sh` 拒绝缺失、占位、过短或重复的值。
 * **备份与恢复：**`scripts/backup_data.sh` 生成服务器数据的 AES-256 加密、经验证并带校验和的归档（除非要求否则不含证据）；`scripts/restore_data.sh` 列出或恢复它，且从不覆盖已有数据。
 * **可在 Studio 中设置的 VPN 和家的域名：** `armor_wireguard.sh` 用几条命令建立 WireGuard VPN（密钥保存在本机，每部手机一份带二维码的配置，需要时可路由到节点），`armor_ddns.sh` 在运营商更换地址时让 DuckDNS、Cloudflare 或其他域名始终指向您家；维护代理把两者提供给 Studio 和手机，无需任何人输入命令，并有八种语言的分步指南说明路由器设置。**签名软件包：** 维护助手只有在软件包带有项目发布密钥的有效 Ed25519 签名时，才会安装服务器、Studio 或其他程序的软件包（用纯 Python 验证，无需额外软件）；签名缺失、错误或被篡改时机器保持不变。紧急例外仅作为机器自身文件中的设置存在。
+* **可选的通往代理的加密入口(基于 TLS 的 MQTT):** `scripts/armor_mqtt_tls.sh` 为本安装创建证书颁发机构(密钥留在本机,权限 `0600`)、为本机名称和地址签发代理证书,并在普通监听器旁增加 8883 的第二个 Mosquitto 监听器(绝不改动普通监听器);它是幂等的,提供 `status`、`export-ca`、`server-tls` 和 `remove`(文件被放到一边,绝不删除)。已用 OpenSSL(含真实握手)和真实的 Mosquitto 2.0 测试([指南](docs/MQTT_TLS_zho.md))。
 
 ## 🧩 在 A.R.M.O.R. 中的角色
 
@@ -63,9 +64,9 @@ ARMOR-DEVOPS 是其他一切到达机器并保持最新的途径。它在 CM5 �
 ARMOR-DEVOPS/
 ├── docker-compose.yml, docker-compose.tls.yml, .env.example, mosquitto/ (broker, TLS profile, ACL example)
 ├── caddy/     Caddyfile (TLS)
-├── scripts/   deploy_cm5, install_cm5, package_component, armor_admin_agent, armor_maintenance_agent, generate_secrets, check-required-env, backup_data, restore_data, firewall_core, mqtt_identity, tests of the agents, the backup, the firewall and the Compose topology
+├── scripts/   deploy_cm5, install_cm5, package_component, armor_admin_agent, armor_maintenance_agent, generate_secrets, check-required-env, backup_data, restore_data, firewall_core, mqtt_identity, armor_mqtt_tls (the optional encrypted door of the broker), tests of the agents, the backup, the firewall and the Compose topology
 │   └── (package_component.py packs a program the way the maintenance helper installs it; the packages are assets of the GitHub releases, not files of this repository)
-└── docs/      DEPLOYMENT_BOUNDARY, CM5_TEST_BENCH, BACKUP_AND_TLS
+└── docs/      DEPLOYMENT_BOUNDARY, CM5_TEST_BENCH, BACKUP_AND_TLS, MQTT_TLS
 ```
 
 ## 🛠️ 开发环境

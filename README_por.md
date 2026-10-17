@@ -21,7 +21,7 @@
   <img src="https://img.shields.io/badge/License-GPL%203.0-blue.svg" alt="GPL 3.0">
   <img src="https://img.shields.io/badge/Deploy-Docker%20Compose-2496ed.svg" alt="Deploy">
   <img src="https://img.shields.io/badge/Bench-systemd-FFB020.svg" alt="Bench">
-  <img src="https://img.shields.io/badge/Version-0.5.9-0f6cbd.svg" alt="Version">
+  <img src="https://img.shields.io/badge/Version-0.6.0-0f6cbd.svg" alt="Version">
   <img src="https://img.shields.io/badge/Maturity-established-2EA44F.svg" alt="Maturity">
 </p>
 
@@ -35,7 +35,7 @@
 
 | | |
 |---|---|
-| Versão | `0.5.9` |
+| Versão | `0.6.0` |
 | Maturidade | Estabelecido |
 | Tecnologia | Docker Compose / Bash / YAML |
 | Em hardware real | Faz correr a bancada de testes do CM5 em uso diário, num CM5 real que aloja outro software; ainda não no Jetson |
@@ -52,6 +52,7 @@
 * **Segredos:** `scripts/generate_secrets.sh` cria segredos aleatórios e não imprime nenhum; `scripts/check-required-env.sh` recusa valores em falta, de exemplo, curtos ou repetidos.
 * **Cópia de segurança e restauro:** `scripts/backup_data.sh` faz um arquivo cifrado com AES-256, verificado e com soma de verificação dos dados do servidor (sem provas salvo se pedidas); `scripts/restore_data.sh` lista-o ou restaura-o sem nunca sobrescrever dados existentes.
 * **Uma VPN e um nome para a casa, configurados a partir do Studio:** `armor_wireguard.sh` monta uma VPN WireGuard com poucos comandos (chaves na máquina, uma configuração por telemóvel com código QR, encaminhamento para os nós se quiser) e `armor_ddns.sh` mantém um nome DuckDNS, Cloudflare ou outro a apontar para a casa quando o operador muda o endereço; o agente de manutenção oferece ambos ao Studio e ao telemóvel, por isso ninguém tem de escrever um comando, e um guia passo a passo em oito idiomas cobre o router.**Pacotes assinados:** o assistente de manutenção só instala um pacote do servidor, do Studio ou de qualquer outro programa se levar uma assinatura Ed25519 válida da chave de releases do projeto (verificada em Python puro, sem software adicional); uma assinatura em falta, errada ou adulterada deixa a máquina como estava. Existe uma exceção de emergência apenas como definição no ficheiro da própria máquina.
+* **Uma porta cifrada opcional para o broker (MQTT sobre TLS):** `scripts/armor_mqtt_tls.sh` cria uma autoridade de certificação para a instalação (a chave fica na máquina, modo `0600`), um certificado do broker para os nomes e endereços da máquina e um segundo listener do Mosquitto na 8883 ao lado do normal, que nunca toca; é idempotente e tem `status`, `export-ca`, `server-tls` e `remove` (os ficheiros são postos de parte, nunca apagados). Testado com OpenSSL, com handshakes reais, e num Mosquitto 2.0 real ([guia](docs/MQTT_TLS_por.md)).
 
 ## 🧩 Papel no A.R.M.O.R.
 
@@ -63,9 +64,9 @@ O ARMOR-DEVOPS é como tudo o resto chega a uma máquina e se mantém atualizado
 ARMOR-DEVOPS/
 ├── docker-compose.yml, docker-compose.tls.yml, .env.example, mosquitto/ (broker, TLS profile, ACL example)
 ├── caddy/     Caddyfile (TLS)
-├── scripts/   deploy_cm5, install_cm5, package_component, armor_admin_agent, armor_maintenance_agent, generate_secrets, check-required-env, backup_data, restore_data, firewall_core, mqtt_identity, tests of the agents, the backup, the firewall and the Compose topology
+├── scripts/   deploy_cm5, install_cm5, package_component, armor_admin_agent, armor_maintenance_agent, generate_secrets, check-required-env, backup_data, restore_data, firewall_core, mqtt_identity, armor_mqtt_tls (the optional encrypted door of the broker), tests of the agents, the backup, the firewall and the Compose topology
 │   └── (package_component.py packs a program the way the maintenance helper installs it; the packages are assets of the GitHub releases, not files of this repository)
-└── docs/      DEPLOYMENT_BOUNDARY, CM5_TEST_BENCH, BACKUP_AND_TLS
+└── docs/      DEPLOYMENT_BOUNDARY, CM5_TEST_BENCH, BACKUP_AND_TLS, MQTT_TLS
 ```
 
 ## 🛠️ Ambiente de desenvolvimento

@@ -47,7 +47,8 @@ LAYOUT: dict[str, tuple[str, list[tuple[str, str]], list[str]]] = {
     "voice": ("ARMOR-VOICE-AI", [("src/armor_voice_ai", "src/armor_voice_ai")], ["src/armor_voice_ai/__init__.py"]),
     "devops": ("ARMOR-DEVOPS", [("scripts/armor_admin_agent.py", "scripts/armor_admin_agent.py"), ("scripts/armor_maintenance_agent.py", "scripts/armor_maintenance_agent.py"),
                                   ("scripts/mqtt_identity.sh", "scripts/mqtt_identity.sh"), ("scripts/backup_data.sh", "scripts/backup_data.sh"),
-                                  ("scripts/armor_wireguard.sh", "scripts/armor_wireguard.sh"), ("scripts/armor_ddns.sh", "scripts/armor_ddns.sh")], ["scripts/armor_maintenance_agent.py"]),
+                                  ("scripts/armor_wireguard.sh", "scripts/armor_wireguard.sh"), ("scripts/armor_ddns.sh", "scripts/armor_ddns.sh"),
+                                  ("scripts/armor_mqtt_tls.sh", "scripts/armor_mqtt_tls.sh")], ["scripts/armor_maintenance_agent.py"]),
 }
 
 

@@ -297,7 +297,8 @@ if [[ "$WITH_MAINT" -eq 1 ]]; then
   install -d -m 0755 -o root -g root "$PREFIX/bin"
   install -m 0755 -o root -g root "$RELEASE_DIR/scripts/armor_maintenance_agent.py" "$PREFIX/bin/armor_maintenance_agent.py"
   # The way in from outside the house (Studio asks the helper to set up the VPN and the dynamic DNS name with these two; they do nothing until it does).
-  for helper in armor_wireguard.sh armor_ddns.sh; do [[ -f "$RELEASE_DIR/scripts/$helper" ]] && install -m 0755 -o root -g root "$RELEASE_DIR/scripts/$helper" "$PREFIX/bin/$helper"; done
+  # (armor_mqtt_tls.sh is the optional encrypted door of the broker, port 8883; it does nothing until it is run.)
+  for helper in armor_wireguard.sh armor_ddns.sh armor_mqtt_tls.sh; do [[ -f "$RELEASE_DIR/scripts/$helper" ]] && install -m 0755 -o root -g root "$RELEASE_DIR/scripts/$helper" "$PREFIX/bin/$helper"; done
   if [[ -f "$RELEASE_DIR/armor.project.json" ]]; then
     sed -n 's/^[[:space:]]*"version"[[:space:]]*:[[:space:]]*"\([0-9.]*\)".*/\1/p' "$RELEASE_DIR/armor.project.json" | head -1 >"$PREFIX/bin/VERSION" || true
     chmod 0644 "$PREFIX/bin/VERSION"
@@ -397,6 +398,8 @@ if [[ "$WITH_MQTT" -eq 1 ]]; then
   say "configuring A.R.M.O.R.'s own MQTT broker on port $MQTT_PORT"
   MQ="$PREFIX/etc/mosquitto"
   install -d -o "$SERVICE_USER" -g "$SERVICE_USER" -m 0750 "$MQ" "$PREFIX/data/mqtt"
+  # More listeners the owner turns on later (scripts/armor_mqtt_tls.sh writes conf.d/armor-tls.conf); an empty folder changes nothing.
+  install -d -o root -g "$SERVICE_USER" -m 0750 "$MQ/conf.d"
   if [[ ! -f "$PREFIX/etc/armor.mqtt.env" ]]; then
     SERVER_MQTT_PASSWORD="$(random 48 32)"
     ( umask 0177; : >"$MQ/passwd"; )
@@ -420,7 +423,8 @@ ACL
     chown "root:$SERVICE_USER" "$PREFIX/etc/armor.mqtt.env"; chmod 0640 "$PREFIX/etc/armor.mqtt.env"
   fi
   # The address and port in the server's URL follow the broker's (--bind and --mqtt-port may have changed since the first install).
-  sed -i "s#^ARMOR_MQTT_URL=.*#ARMOR_MQTT_URL=mqtt://$LOCAL_HOST:$MQTT_PORT#" "$PREFIX/etc/armor.mqtt.env"
+  # A server the owner moved to the encrypted door (mqtts://, see armor_mqtt_tls.sh server-tls) is left there.
+  sed -i "s#^ARMOR_MQTT_URL=mqtt://.*#ARMOR_MQTT_URL=mqtt://$LOCAL_HOST:$MQTT_PORT#" "$PREFIX/etc/armor.mqtt.env"
   # An install made before devices existed: let the server listen on, and command, the devices' topics too.
   # An install made before the nodes said where their panel is, or before solar gateways or electrical nodes existed: let the server read those topics too (each line added once).
   for ACL_LINE in 'topic read armor/node/+/info' 'topic read armor/solar/#' 'topic read armor/electrical/#' 'topic read armor/alarm/#' 'topic read armor/network/#' 'topic write armor/alarm/+/zigbee'; do
@@ -437,6 +441,7 @@ persistence true
 persistence_location $PREFIX/data/mqtt/
 log_dest stderr
 connection_messages true
+include_dir $MQ/conf.d
 EOF
   chown "$SERVICE_USER:$SERVICE_USER" "$MQ/mosquitto.conf"; chmod 0640 "$MQ/mosquitto.conf"
   MQTT_ENV_LINE="EnvironmentFile=$PREFIX/etc/armor.mqtt.env"

@@ -56,9 +56,10 @@ class PackageTest(unittest.TestCase):
         self.assertEqual(self.names(package), {"src/armor_voice_ai/__init__.py", "src/armor_voice_ai/cli.py"})
 
     def test_the_helper_scripts_carry_their_version(self) -> None:
-        repo = make(self.root, "ARMOR-DEVOPS", "0.4.8", {"scripts/armor_admin_agent.py": "a", "scripts/armor_maintenance_agent.py": "m", "scripts/mqtt_identity.sh": "i", "scripts/backup_data.sh": "b", "scripts/armor_wireguard.sh": "w", "scripts/armor_ddns.sh": "d"})
+        repo = make(self.root, "ARMOR-DEVOPS", "0.4.8", {"scripts/armor_admin_agent.py": "a", "scripts/armor_maintenance_agent.py": "m", "scripts/mqtt_identity.sh": "i", "scripts/backup_data.sh": "b", "scripts/armor_wireguard.sh": "w", "scripts/armor_ddns.sh": "d", "scripts/armor_mqtt_tls.sh": "t"})
         package, _version, _digest = module.build("devops", repo, self.root / "out")
         self.assertIn("scripts/VERSION", self.names(package))
+        self.assertIn("scripts/armor_mqtt_tls.sh", self.names(package))   # the optional encrypted door of the broker travels with the other helpers
         with tarfile.open(package) as tar:
             self.assertEqual(tar.extractfile("scripts/VERSION").read().decode().strip(), "0.4.8")  # type: ignore[union-attr]
 

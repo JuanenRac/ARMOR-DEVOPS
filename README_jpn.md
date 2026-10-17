@@ -21,7 +21,7 @@
   <img src="https://img.shields.io/badge/License-GPL%203.0-blue.svg" alt="GPL 3.0">
   <img src="https://img.shields.io/badge/Deploy-Docker%20Compose-2496ed.svg" alt="Deploy">
   <img src="https://img.shields.io/badge/Bench-systemd-FFB020.svg" alt="Bench">
-  <img src="https://img.shields.io/badge/Version-0.5.9-0f6cbd.svg" alt="Version">
+  <img src="https://img.shields.io/badge/Version-0.6.0-0f6cbd.svg" alt="Version">
   <img src="https://img.shields.io/badge/Maturity-established-2EA44F.svg" alt="Maturity">
 </p>
 
@@ -35,7 +35,7 @@
 
 | | |
 |---|---|
-| バージョン | `0.5.9` |
+| バージョン | `0.6.0` |
 | 成熟度 | 確立 |
 | 技術 | Docker Compose / Bash / YAML |
 | 実機での確認 | 他のソフトウェアも載る実際の CM5 で CM5 テストベンチを日常的に運用。Jetson ではまだ |
@@ -52,6 +52,7 @@
 * **秘密：**`scripts/generate_secrets.sh` はランダムな秘密を作って何も表示しません。`scripts/check-required-env.sh` は未設定、プレースホルダー、短すぎる、重複した値を拒否します。
 * **バックアップと復元：**`scripts/backup_data.sh` はサーバーデータの AES-256 暗号化・検証済み・チェックサム付きアーカイブを作り（求めない限り証拠は除外）、`scripts/restore_data.sh` はそれを一覧するか、既存データを上書きせずに復元します。
 * **Studio から設定できる VPN と家の名前：** `armor_wireguard.sh` は数コマンドで WireGuard VPN を作り（鍵はマシン上、スマホごとに QR コード付きの設定、必要ならノードへのルーティング）、`armor_ddns.sh` はプロバイダーがアドレスを変えても DuckDNS・Cloudflare などの名前が家を指し続けるようにします。メンテナンスエージェントが両方を Studio とスマホに提供するので、コマンドを打つ必要はなく、ルーターの設定も 8 言語の手順書で説明しています。**署名付きパッケージ：** メンテナンスヘルパーは、サーバー、Studio などのパッケージを、プロジェクトのリリース鍵による有効な Ed25519 署名がある場合にのみインストールします（追加ソフトなしの純粋な Python で検証）。署名がない、誤っている、改ざんされている場合、マシンは変更されません。緊急用の例外は、マシン自身のファイルの設定としてのみ存在します。
+* **ブローカーへの任意の暗号化された入口(TLS 上の MQTT):** `scripts/armor_mqtt_tls.sh` は設備用の認証局(鍵はマシン上に留まり、モード `0600`)、マシンの名前とアドレス向けのブローカー証明書、通常のリスナーの隣の 8883 番の 2 つ目の Mosquitto リスナーを作ります(通常のリスナーには触れません)。冪等で、`status`、`export-ca`、`server-tls`、`remove` があります(ファイルは退避され、削除されません)。実際のハンドシェイクを含む OpenSSL での検証と、実際の Mosquitto 2.0 での検証済みです([ガイド](docs/MQTT_TLS_jpn.md))。
 
 ## 🧩 A.R.M.O.R. での役割
 
@@ -63,9 +64,9 @@ ARMOR-DEVOPS は、他のすべてがマシンに載り、最新に保たれる�
 ARMOR-DEVOPS/
 ├── docker-compose.yml, docker-compose.tls.yml, .env.example, mosquitto/ (broker, TLS profile, ACL example)
 ├── caddy/     Caddyfile (TLS)
-├── scripts/   deploy_cm5, install_cm5, package_component, armor_admin_agent, armor_maintenance_agent, generate_secrets, check-required-env, backup_data, restore_data, firewall_core, mqtt_identity, tests of the agents, the backup, the firewall and the Compose topology
+├── scripts/   deploy_cm5, install_cm5, package_component, armor_admin_agent, armor_maintenance_agent, generate_secrets, check-required-env, backup_data, restore_data, firewall_core, mqtt_identity, armor_mqtt_tls (the optional encrypted door of the broker), tests of the agents, the backup, the firewall and the Compose topology
 │   └── (package_component.py packs a program the way the maintenance helper installs it; the packages are assets of the GitHub releases, not files of this repository)
-└── docs/      DEPLOYMENT_BOUNDARY, CM5_TEST_BENCH, BACKUP_AND_TLS
+└── docs/      DEPLOYMENT_BOUNDARY, CM5_TEST_BENCH, BACKUP_AND_TLS, MQTT_TLS
 ```
 
 ## 🛠️ 開発環境

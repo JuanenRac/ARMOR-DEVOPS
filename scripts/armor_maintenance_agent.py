@@ -613,7 +613,7 @@ def replace_tree(job: Job, component: str, staged: Path) -> dict[str, object]:
         scripts = staged / "scripts"
         if not scripts.is_dir():
             raise Refused(422, "bad_archive")
-        for name in ("armor_admin_agent.py", "armor_maintenance_agent.py", "mqtt_identity.sh", "backup_data.sh", "armor_wireguard.sh", "armor_ddns.sh", "VERSION"):
+        for name in ("armor_admin_agent.py", "armor_maintenance_agent.py", "mqtt_identity.sh", "backup_data.sh", "armor_wireguard.sh", "armor_ddns.sh", "armor_mqtt_tls.sh", "VERSION"):
             source = scripts / name
             if not source.exists():
                 continue

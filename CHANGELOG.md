@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented here.
 
+## [0.6.0] - An optional encrypted door to the broker (MQTT over TLS)
+
+- armor_mqtt_tls.sh makes the installation's own certificate authority (its key stays on the machine, mode 0600, never in a repository), a broker certificate for the machine's names and addresses and a second Mosquitto listener on 8883 with TLS next to the plain one, which it does not touch. It is idempotent and has plan, setup, status, export-ca, server-tls on and off (the server of the machine) and remove (files are put aside, never deleted).
+- install_cm5.sh makes the broker read a conf.d folder, so the extra listener survives an install, and leaves alone a server that was moved to mqtts. The script travels in the devops package and the maintenance helper updates it with the others.
+- New guide docs/MQTT_TLS.md in the eight languages. 101 tests with real OpenSSL, including TLS handshakes; also run against a real Mosquitto 2.0 on a computer. Not run on the CM5.
+
 ## [0.5.9] - The maintenance helper installs only packages signed with the key of the releases
 
 - **Maintenance helper 0.1.4:** every package must come with a .sig, the Ed25519 signature of armor-pkg/1|component|version|sha256 made with the key of the releases, and the helper verifies it before it unpacks anything. A missing or invalid signature is refused (missing_signature, bad_signature) and nothing on the machine changes. The prefix differs from the firmware one, so a firmware signature can never pass as a package signature.

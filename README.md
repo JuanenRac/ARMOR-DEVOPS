@@ -21,7 +21,7 @@
   <img src="https://img.shields.io/badge/License-GPL%203.0-blue.svg" alt="GPL 3.0">
   <img src="https://img.shields.io/badge/Deploy-Docker%20Compose-2496ed.svg" alt="Deploy">
   <img src="https://img.shields.io/badge/Bench-systemd-FFB020.svg" alt="Bench">
-  <img src="https://img.shields.io/badge/Version-0.5.9-0f6cbd.svg" alt="Version">
+  <img src="https://img.shields.io/badge/Version-0.6.0-0f6cbd.svg" alt="Version">
   <img src="https://img.shields.io/badge/Maturity-established-2EA44F.svg" alt="Maturity">
 </p>
 
@@ -35,7 +35,7 @@
 
 | | |
 |---|---|
-| Version | `0.5.9` |
+| Version | `0.6.0` |
 | Maturity | Established |
 | Stack | Docker Compose / Bash / YAML |
 | On real hardware | Runs the CM5 test bench in daily use, on a real CM5 that hosts other software; not yet on the Jetson |
@@ -52,6 +52,7 @@
 * **Secrets:** `scripts/generate_secrets.sh` creates random secrets and prints none; `scripts/check-required-env.sh` refuses missing, placeholder, short or repeated values.
 * **Backup and restore:** `scripts/backup_data.sh` makes an AES-256 encrypted, verified and checksummed archive of the server data (evidence excluded unless asked); `scripts/restore_data.sh` lists it or restores it without ever overwriting existing data.
 * **A VPN and a name for the house, set up from Studio:** `armor_wireguard.sh` makes a WireGuard VPN in a few commands (keys on the machine, one device configuration per phone with a QR code, routing to the nodes if wanted) and `armor_ddns.sh` keeps a DuckDNS, Cloudflare or other name pointing at the house when the provider changes the address; the maintenance agent offers both to Studio and the phone, so nobody has to type a command, and a step-by-step guide in eight languages covers the router.**Signed packages:** the maintenance helper installs a package of the server, Studio or any other program only if it carries a valid Ed25519 signature of the project's release key (verified in pure Python, no extra software); a missing, wrong or tampered signature leaves the machine unchanged. An emergency override exists only as a setting in the machine's own file.
+* **An optional encrypted door to the broker (MQTT over TLS):** `scripts/armor_mqtt_tls.sh` makes a certificate authority for the installation (its key stays on the machine, mode `0600`), a broker certificate for the machine's names and addresses and a second Mosquitto listener on 8883 next to the plain one, which it never touches; it is idempotent and has `status`, `export-ca`, `server-tls` and `remove` (files are put aside, never deleted). Tested with OpenSSL, including real handshakes, and on a real Mosquitto 2.0 ([guide](docs/MQTT_TLS.md)).
 
 ## 🧩 Role in A.R.M.O.R.
 
@@ -63,9 +64,9 @@ ARMOR-DEVOPS is how everything else gets onto a machine and stays up to date. It
 ARMOR-DEVOPS/
 ├── docker-compose.yml, docker-compose.tls.yml, .env.example, mosquitto/ (broker, TLS profile, ACL example)
 ├── caddy/     Caddyfile (TLS)
-├── scripts/   deploy_cm5, install_cm5, package_component, armor_admin_agent, armor_maintenance_agent, generate_secrets, check-required-env, backup_data, restore_data, firewall_core, mqtt_identity, tests of the agents, the backup, the firewall and the Compose topology
+├── scripts/   deploy_cm5, install_cm5, package_component, armor_admin_agent, armor_maintenance_agent, generate_secrets, check-required-env, backup_data, restore_data, firewall_core, mqtt_identity, armor_mqtt_tls (the optional encrypted door of the broker), tests of the agents, the backup, the firewall and the Compose topology
 │   └── (package_component.py packs a program the way the maintenance helper installs it; the packages are assets of the GitHub releases, not files of this repository)
-└── docs/      DEPLOYMENT_BOUNDARY, CM5_TEST_BENCH, BACKUP_AND_TLS
+└── docs/      DEPLOYMENT_BOUNDARY, CM5_TEST_BENCH, BACKUP_AND_TLS, MQTT_TLS
 ```
 
 ## 🛠️ Development Environment
