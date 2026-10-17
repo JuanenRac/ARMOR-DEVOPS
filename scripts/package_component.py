@@ -9,6 +9,14 @@
 #
 # The package is armor-<component>-<version>.tgz and its hash is armor-<component>-<version>.tgz.sha256 (the helper looks for that name); the version is the one of the
 # repository's armor.project.json. Standard library only; --publish needs the GitHub CLI (`gh`) signed in.
+#
+# SIGNING. The helper of the machine installs nothing without armor-<component>-<version>.tgz.sig: the Ed25519 signature, by the key of the releases, of the text
+# `armor-pkg/1|<component>|<version>|<sha256>`. The key is never read here: the signer (default ~/.armor/sign.mjs, or --signer / ARMOR_PACKAGE_SIGNER) reads it from ARMOR_FIRMWARE_KEY
+# or ~/.armor/firmware_ed25519.pem. When the signer and a key are there the .sig is written; --sign makes that mandatory (it fails without them). A signature made with a key
+# other than the one the helper trusts is never written.
+#
+#   python package_component.py server --repo ../../ARMOR-SERVER --sign --publish
+#   python package_component.py --sign-existing armor-server-0.5.7.tgz --upload       # sign a package that is already published (downloaded next to it) and add the .sig to its release
 # Copyright (C) 2026 JuanenRac (Electro Hobby 3D)
 # GPL-3.0-or-later - see LICENSE
 # =============================================================================
@@ -16,8 +24,12 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import json
+import os
 import re
+import shlex
+import shutil
 import subprocess
 import sys
 import tarfile
@@ -37,6 +49,53 @@ LAYOUT: dict[str, tuple[str, list[tuple[str, str]], list[str]]] = {
                                   ("scripts/mqtt_identity.sh", "scripts/mqtt_identity.sh"), ("scripts/backup_data.sh", "scripts/backup_data.sh"),
                                   ("scripts/armor_wireguard.sh", "scripts/armor_wireguard.sh"), ("scripts/armor_ddns.sh", "scripts/armor_ddns.sh")], ["scripts/armor_maintenance_agent.py"]),
 }
+
+
+def trusted_key() -> str:
+    """The public key the helper of the machine trusts (read from the helper itself, so the two cannot differ)."""
+    text = (Path(__file__).resolve().parent / "armor_maintenance_agent.py").read_text(encoding="utf-8")
+    match = re.search(r'^PACKAGE_PUBLIC_KEY = "([0-9a-f]{64})"', text, re.M)
+    if not match:
+        raise SystemExit("the helper does not say which key it trusts")
+    return match.group(1)
+
+
+def find_signer(command: str | None) -> list[str] | None:
+    """The command that signs (as a list), or None when there is none: --signer, ARMOR_PACKAGE_SIGNER, or ~/.armor/sign.mjs."""
+    text = command or os.environ.get("ARMOR_PACKAGE_SIGNER")
+    if text:
+        return shlex.split(text)
+    default = Path.home() / ".armor" / "sign.mjs"
+    return ["node", str(default)] if default.is_file() and shutil.which("node") else None
+
+
+def run_signer(signer: list[str], arguments: list[str]) -> str:
+    result = subprocess.run([*signer, *arguments], capture_output=True, text=True, check=False)
+    if result.returncode != 0:
+        raise SystemExit("the signer failed: " + (result.stderr.strip() or result.stdout.strip())[:300])
+    return result.stdout.strip()
+
+
+def sign_package(package: Path, component: str, version: str, digest: str, signer: list[str] | None, required: bool) -> Path | None:
+    """Writes <package>.sig. Without a signer and a key: None, or a failure when `required`."""
+    if signer is None:
+        if required:
+            raise SystemExit("--sign needs the signer (~/.armor/sign.mjs, --signer or ARMOR_PACKAGE_SIGNER) and the key (ARMOR_FIRMWARE_KEY or ~/.armor/firmware_ed25519.pem)")
+        return None
+    try:
+        public = run_signer(signer, ["--public"]).lower()
+    except SystemExit:
+        if required:
+            raise
+        return None
+    if public != trusted_key():
+        raise SystemExit("the key that would sign is not the one the helper of the machine trusts: it would refuse the package")
+    signature = run_signer(signer, ["--message", f"armor-pkg/1|{component}|{version}|{digest}"]).lower()
+    if not re.fullmatch(r"[0-9a-f]{128}", signature):
+        raise SystemExit("the signer did not give a signature")
+    target = package.parent / (package.name + ".sig")
+    target.write_text(signature + "\n", encoding="ascii", newline="\n")
+    return target
 
 
 def version_of(repo: Path) -> str:
@@ -96,7 +155,7 @@ def changelog_section(repo: Path, version: str) -> tuple[str, str]:
     return match.group(1).strip(), match.group(2).strip()
 
 
-def publish(component: str, repo: Path, package: Path, version: str) -> None:
+def publish(component: str, repo: Path, package: Path, version: str, extra: list[Path] | None = None) -> None:
     name = LAYOUT[component][0]
     title, notes = changelog_section(repo, version)
     if re.search(r"audit|round|claude", title, re.I):
@@ -104,7 +163,7 @@ def publish(component: str, repo: Path, package: Path, version: str) -> None:
     notes_file = package.parent / "NOTES.md"
     notes_file.write_text((notes or title) + "\n", encoding="utf-8")
     repo_name = f"{OWNER}/{name}"
-    assets = [str(package), str(package) + ".sha256"]
+    assets = [str(package), str(package) + ".sha256", *[str(item) for item in (extra or [])]]
     exists = subprocess.run(["gh", "release", "view", f"v{version}", "-R", repo_name], capture_output=True, text=True, check=False).returncode == 0
     if exists:
         subprocess.run(["gh", "release", "upload", f"v{version}", *assets, "--clobber", "-R", repo_name], check=True)
@@ -114,18 +173,49 @@ def publish(component: str, repo: Path, package: Path, version: str) -> None:
     print(f"published {name} v{version}")
 
 
+def sign_existing(file: Path, signer: list[str] | None, upload: bool) -> int:
+    match = re.fullmatch(r"armor-([a-z]+)-(\d+\.\d+\.\d+(?:\.\d+)?)\.tgz", file.name)
+    if not match or match.group(1) not in LAYOUT:
+        raise SystemExit(f"{file.name} is not a package named armor-<component>-<version>.tgz")
+    component, version = match.groups()
+    digest = hashlib.sha256(file.read_bytes()).hexdigest()
+    sha_file = file.parent / (file.name + ".sha256")
+    if sha_file.is_file() and not sha_file.read_text(encoding="utf-8").lower().startswith(digest):
+        raise SystemExit("the .sha256 next to the package is not the hash of this file")
+    signature = sign_package(file, component, version, digest, signer, True)
+    print(f"{signature.name}  ({component} {version}, {digest})")            # type: ignore[union-attr]
+    if upload:
+        subprocess.run(["gh", "release", "upload", f"v{version}", str(signature), "--clobber", "-R", f"{OWNER}/{LAYOUT[component][0]}"], check=True)
+        print(f"uploaded to {OWNER}/{LAYOUT[component][0]} v{version}")
+    return 0
+
+
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Pack a program of the A.R.M.O.R. family for the maintenance helper, and publish it")
-    parser.add_argument("component", choices=sorted(LAYOUT))
-    parser.add_argument("--repo", required=True, help="the folder of the repository")
+    parser = argparse.ArgumentParser(description="Pack a program of the A.R.M.O.R. family for the maintenance helper, sign it and publish it")
+    parser.add_argument("component", nargs="?", choices=sorted(LAYOUT))
+    parser.add_argument("--repo", help="the folder of the repository")
     parser.add_argument("--out", default="dist-packages", help="where the package is written")
     parser.add_argument("--publish", action="store_true", help="create the release on GitHub (or add the package to the one that exists)")
+    parser.add_argument("--sign", action="store_true", help="the package MUST be signed: fail when there is no signer or key (without it, it is signed when they are there)")
+    parser.add_argument("--signer", help="the command that signs (default: node ~/.armor/sign.mjs); it is given --public or --message <text>")
+    parser.add_argument("--sign-existing", metavar="PACKAGE", help="only sign a package that already exists (armor-<component>-<version>.tgz); its .sig is written next to it")
+    parser.add_argument("--upload", action="store_true", help="with --sign-existing: add the .sig to the release of that version")
     arguments = parser.parse_args()
+    signer = find_signer(arguments.signer)
+    if arguments.sign_existing:
+        return sign_existing(Path(arguments.sign_existing).resolve(), signer, arguments.upload)
+    if not arguments.component or not arguments.repo:
+        parser.error("a component and --repo are needed")
     repo = Path(arguments.repo).resolve()
     package, version, digest = build(arguments.component, repo, Path(arguments.out).resolve())
     print(f"{package.name}  {digest}")
+    signature = sign_package(package, arguments.component, version, digest, signer, arguments.sign)
+    if signature:
+        print(f"{signature.name}  signed")
+    elif arguments.publish:
+        raise SystemExit("not publishing an unsigned package: the helper of the machine would refuse it (give the signer and the key)")
     if arguments.publish:
-        publish(arguments.component, repo, package, version)
+        publish(arguments.component, repo, package, version, [signature] if signature else None)
     return 0
 
 

@@ -82,6 +82,51 @@ class PackageTest(unittest.TestCase):
         self.assertEqual(module.changelog_section(repo, "0.5.6"), ("Something useful", "- one\n- two"))
         self.assertEqual(module.changelog_section(repo, "9.9.9"), ("9.9.9", ""))
 
+    # ---- signing ----
+    def stub_signer(self, public: str) -> list[str]:
+        """A stand-in signer that answers like sign.mjs (--public, --message) and records what it was asked to sign."""
+        script = self.root / "signer.py"
+        lines = ["import sys", "if sys.argv[1] == '--public':", f"    print({public!r})", "else:", "    open(sys.argv[0] + '.asked', 'w').write(' '.join(sys.argv[2:]))", "    print('ab' * 64)"]
+        script.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        return [sys.executable, str(script)]
+
+    def built(self):
+        repo = make(self.root, "ARMOR-VOICE-AI", "0.2.6", {"src/armor_voice_ai/__init__.py": "v"})
+        return module.build("voice", repo, self.root / "out")
+
+    def test_the_signature_is_written_next_to_the_package_with_its_own_prefix(self) -> None:
+        package, version, digest = self.built()
+        written = module.sign_package(package, "voice", version, digest, self.stub_signer(module.trusted_key()), True)
+        self.assertEqual(written, self.root / "out" / "armor-voice-0.2.6.tgz.sig")
+        self.assertEqual(written.read_text(encoding="ascii"), ("ab" * 64) + chr(10))
+        self.assertEqual((self.root / "signer.py.asked").read_text(encoding="utf-8"), f"armor-pkg/1|voice|0.2.6|{digest}")
+
+    def test_asking_to_sign_without_a_signer_fails_but_the_default_just_skips(self) -> None:
+        package, version, digest = self.built()
+        with self.assertRaises(SystemExit):
+            module.sign_package(package, "voice", version, digest, None, True)
+        self.assertIsNone(module.sign_package(package, "voice", version, digest, None, False))
+        self.assertFalse((self.root / "out" / "armor-voice-0.2.6.tgz.sig").exists())
+
+    def test_a_key_the_machine_does_not_trust_is_never_used(self) -> None:
+        package, version, digest = self.built()
+        with self.assertRaises(SystemExit):
+            module.sign_package(package, "voice", version, digest, self.stub_signer("00" * 32), False)
+        self.assertFalse((self.root / "out" / "armor-voice-0.2.6.tgz.sig").exists())
+
+    def test_an_existing_package_is_signed_only_when_its_name_and_hash_agree(self) -> None:
+        package, _version, _digest = self.built()
+        signer = self.stub_signer(module.trusted_key())
+        self.assertEqual(module.sign_existing(package, signer, False), 0)
+        self.assertTrue((self.root / "out" / "armor-voice-0.2.6.tgz.sig").exists())
+        (self.root / "out" / (package.name + ".sha256")).write_text("0" * 64 + "  x", encoding="utf-8")
+        with self.assertRaises(SystemExit):
+            module.sign_existing(package, signer, False)
+        other = self.root / "other.tgz"
+        other.write_bytes(b"x")
+        with self.assertRaises(SystemExit):
+            module.sign_existing(other, signer, False)
+
 
 if __name__ == "__main__":
     unittest.main()

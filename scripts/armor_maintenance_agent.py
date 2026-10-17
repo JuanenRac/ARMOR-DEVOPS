@@ -11,6 +11,7 @@
 #   * UPDATES   - what is installed (server, Studio, the Python services, the helper scripts) against the newest release of each repository on GitHub; an update downloads
 #                 the release asset, checks its SHA-256 with the hash the release publishes, keeps a copy of what it replaces, puts the new one in, restarts the service,
 #                 asks it whether it is well and, if it is not, puts the old one back. One at a time, with steps, a percentage and a log that can be followed.
+#                 It also demands the Ed25519 signature of the release (see "signed packages" below) before it unpacks anything.
 #   * SYSTEM    - the operating system's own updates (apt): what can be upgraded, the upgrade with its progress, whether it needs a reboot, and the reboot.
 #   * CONSOLE   - OFF unless ARMOR_MAINT_CONSOLE=1 is set on purpose in its environment file: one command at a time as root, with a time limit, its output kept for
 #                 whoever asked, and nothing hidden - the server writes every command in the audit trail and asks an administrator for the password again before the first.
@@ -40,7 +41,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-AGENT_VERSION = "0.1.3"
+AGENT_VERSION = "0.1.4"
 PREFIX = Path(os.environ.get("ARMOR_PREFIX", "/opt/armor"))
 SYSTEMCTL = os.environ.get("ARMOR_SYSTEMCTL", "systemctl")
 APT_GET = os.environ.get("ARMOR_APT_GET", "apt-get")
@@ -57,6 +58,7 @@ MAX_DOWNLOAD = 300 * 1024 * 1024
 MAX_LOG_LINES = 2000
 MAX_CONSOLE_BYTES = 256 * 1024
 KEEP_OLD = 6
+MAINT_ENV = Path(os.environ.get("ARMOR_MAINT_ENV", str(PREFIX / "etc" / "armor.maint.env")))
 
 # id -> what it is. `kind` says how it is put in; `service` is restarted afterwards (None: nothing to restart).
 COMPONENTS: dict[str, dict[str, object]] = {
@@ -306,6 +308,98 @@ def expected_hash(release: dict[str, object], asset: str) -> str:
         raise Refused(422, "no_checksum")
     return match.group(1).lower()
 
+# ---- signed packages ----------------------------------------------------------------------------------------------------------------------------
+# Every package a release carries has a `<package>.sig` next to it: the Ed25519 signature (64 bytes as 128 hexadecimal digits) of the text
+#   armor-pkg/1|<component>|<version>|<sha256 of the package>
+# made with the private key of the releases, which is never on GitHub. The helper verifies it with the public key below BEFORE it unpacks anything, so somebody who can only change what
+# a release holds on GitHub cannot make this machine install his code. The prefix `armor-pkg/1` is not the one the firmware signs (`armor-fw/1`), so a firmware signature can never pass
+# as a package signature. The public key is the same one the firmware trusts (core/fw_trust.hpp). The check is pure Python (RFC 8032), because the standard library has no Ed25519.
+# The only way round it is ARMOR_MAINT_ALLOW_UNSIGNED=1 written in the machine's environment file (armor.maint.env): never an API call, and never the process environment.
+PACKAGE_PUBLIC_KEY = "664478b12a8799ab18970f58e974f14a6d0bf5623f0a22c65c3aaa32997054d2"
+_P = 2 ** 255 - 19
+_Q = 2 ** 252 + 27742317777372353535851937790883648493
+_D = -121665 * pow(121666, _P - 2, _P) % _P
+_I = pow(2, (_P - 1) // 4, _P)
+
+
+def _recover_x(y: int, sign: int) -> int | None:
+    if y >= _P:
+        return None
+    x2 = (y * y - 1) * pow(_D * y * y + 1, _P - 2, _P) % _P
+    if x2 == 0:
+        return None if sign else 0
+    x = pow(x2, (_P + 3) // 8, _P)
+    if (x * x - x2) % _P:
+        x = x * _I % _P
+    if (x * x - x2) % _P:
+        return None
+    return _P - x if (x & 1) != sign else x
+
+
+_BASE_Y = 4 * pow(5, _P - 2, _P) % _P
+_BASE_X = _recover_x(_BASE_Y, 0) or 0
+_BASE = (_BASE_X, _BASE_Y, 1, _BASE_X * _BASE_Y % _P)
+
+
+def _add(a: tuple[int, int, int, int], b: tuple[int, int, int, int]) -> tuple[int, int, int, int]:
+    A, B = (a[1] - a[0]) * (b[1] - b[0]) % _P, (a[1] + a[0]) * (b[1] + b[0]) % _P
+    C, D = 2 * a[3] * b[3] * _D % _P, 2 * a[2] * b[2] % _P
+    E, F, G, H = B - A, D - C, D + C, B + A
+    return E * F % _P, G * H % _P, F * G % _P, E * H % _P
+
+
+def _multiply(scalar: int, point: tuple[int, int, int, int]) -> tuple[int, int, int, int]:
+    result = (0, 1, 1, 0)
+    while scalar:
+        if scalar & 1:
+            result = _add(result, point)
+        point = _add(point, point)
+        scalar >>= 1
+    return result
+
+
+def _encode(point: tuple[int, int, int, int]) -> bytes:
+    zinv = pow(point[2], _P - 2, _P)
+    x, y = point[0] * zinv % _P, point[1] * zinv % _P
+    return (y | ((x & 1) << 255)).to_bytes(32, "little")
+
+
+def _decode(data: bytes) -> tuple[int, int, int, int] | None:
+    number = int.from_bytes(data, "little")
+    y, sign = number & ((1 << 255) - 1), number >> 255
+    x = _recover_x(y, sign)
+    return None if x is None else (x, y, 1, x * y % _P)
+
+
+def ed25519_verify(public_key: bytes, message: bytes, signature: bytes) -> bool:
+    """True only for a valid Ed25519 signature (RFC 8032) of `message` by `public_key`."""
+    if len(public_key) != 32 or len(signature) != 64:
+        return False
+    point_a, point_r = _decode(public_key), _decode(signature[:32])
+    scalar = int.from_bytes(signature[32:], "little")
+    if point_a is None or point_r is None or scalar >= _Q:
+        return False
+    k = int.from_bytes(hashlib.sha512(signature[:32] + public_key + message).digest(), "little") % _Q
+    return _encode(_multiply(scalar, _BASE)) == _encode(_add(point_r, _multiply(k, point_a)))
+
+
+def package_message(component: str, version: str, sha256_hex: str) -> bytes:
+    return f"armor-pkg/1|{component}|{version}|{sha256_hex}".encode("utf-8")
+
+
+def package_signature_ok(component: str, version: str, sha256_hex: str, signature_text: str, public_key_hex: str | None = None) -> bool:
+    text = signature_text.strip()
+    if not re.fullmatch(r"[0-9a-fA-F]{128}", text) or not re.fullmatch(r"[0-9a-f]{64}", sha256_hex):
+        return False
+    if any(re.search(r"[|\s]", part) or not part for part in (component, version)):
+        return False
+    return ed25519_verify(bytes.fromhex(public_key_hex or PACKAGE_PUBLIC_KEY), package_message(component, version, sha256_hex), bytes.fromhex(text))
+
+
+def unsigned_allowed() -> bool:
+    """The emergency override: read from the machine's environment file at the moment of use, so it cannot be set through the API or the process environment."""
+    return read_settings(MAINT_ENV).get("ARMOR_MAINT_ALLOW_UNSIGNED") == "1"
+
 
 def safe_extract(archive: Path, destination: Path) -> None:
     """Unpack a tarball only if nothing in it can land outside the folder: no absolute names, no .., no links and no devices."""
@@ -315,6 +409,31 @@ def safe_extract(archive: Path, destination: Path) -> None:
             if name.startswith("/") or ".." in Path(name).parts or not (member.isfile() or member.isdir()):
                 raise Refused(422, "unsafe_archive")
         tar.extractall(destination)                                           # noqa: S202 - every member was checked above
+
+
+def check_signature(job: Job, component: str, version: str, assets: dict[str, str], asset: str, digest: str) -> None:
+    """Refuses (nothing is unpacked) unless the release carries a valid signature of this package, or the override is written in the environment file."""
+    override = unsigned_allowed()
+    url = assets.get(asset + ".sig")
+    failure = ""
+    if not url:
+        failure = "missing_signature"
+    else:
+        try:
+            text = http_get(url, accept="application/octet-stream").decode("ascii", "replace")
+        except (urllib.error.URLError, TimeoutError, OSError, ValueError):
+            text = ""
+        if not package_signature_ok(component, version, digest, text):
+            failure = "bad_signature"
+    if not failure:
+        job.say("signature of the release verified")
+        return
+    if override:
+        job.say(f"WARNING: {failure} for {asset} - installing anyway because ARMOR_MAINT_ALLOW_UNSIGNED=1 is set in {MAINT_ENV}; remove it as soon as possible")
+        print(f"WARNING: unsigned install of {asset} ({failure}) allowed by ARMOR_MAINT_ALLOW_UNSIGNED=1", file=sys.stderr, flush=True)
+        return
+    job.say(f"{asset}: {failure}; nothing was unpacked")
+    raise Refused(422, failure)
 
 
 def fetch_asset(job: Job, component: str, release: dict[str, object], workdir: Path) -> Path:
@@ -333,6 +452,7 @@ def fetch_asset(job: Job, component: str, release: dict[str, object], workdir: P
     if digest != wanted:
         raise Refused(422, "checksum_mismatch")
     job.say(f"SHA-256 matches the one the release publishes ({digest[:12]}...)")
+    check_signature(job, component, version, assets, asset, digest)       # type: ignore[arg-type]
     job.step("verify", "done")
     staged = workdir / "staged"
     staged.mkdir()
@@ -952,7 +1072,7 @@ def console_run(command: str, cwd: str, timeout: float) -> dict[str, object]:
 
 def overview(force: bool) -> dict[str, object]:
     running = [job.view(0) for job in JOBS.values() if job.state == "running"]
-    return {"agent": AGENT_VERSION, "components": [component_state(key, force) for key in ORDER], "os": os_state(), "console": CONSOLE_ENABLED, "running": [item["id"] for item in running],
+    return {"agent": AGENT_VERSION, "components": [component_state(key, force) for key in ORDER], "os": os_state(), "console": CONSOLE_ENABLED, "unsigned_allowed": unsigned_allowed(), "running": [item["id"] for item in running],
             "history": history()}
 
 

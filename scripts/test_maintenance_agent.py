@@ -11,8 +11,10 @@ import importlib.util
 import io
 import json
 import os
+import re
 import socket
 import stat
+import subprocess
 import sys
 import tarfile
 import tempfile
@@ -33,6 +35,21 @@ def tarball(files: dict[str, bytes]) -> bytes:
             info.size = len(content)
             tar.addfile(info, io.BytesIO(content))
     return buffer.getvalue()
+
+
+class TestKey:
+    """A throwaway Ed25519 key made with the openssl of the machine for one test run: the real key of the releases is never used here."""
+
+    def __init__(self, folder: Path, name: str) -> None:
+        self.pem = folder / (name + ".pem")
+        subprocess.run(["openssl", "genpkey", "-algorithm", "ed25519", "-out", str(self.pem)], check=True, capture_output=True)
+        der = subprocess.run(["openssl", "pkey", "-in", str(self.pem), "-pubout", "-outform", "DER"], check=True, capture_output=True).stdout
+        self.public = der[-32:].hex()
+
+    def sign(self, message: bytes) -> str:
+        source = self.pem.with_suffix(".msg")
+        source.write_bytes(message)
+        return subprocess.run(["openssl", "pkeyutl", "-sign", "-rawin", "-inkey", str(self.pem), "-in", str(source)], check=True, capture_output=True).stdout.hex()
 
 
 class FakeGitHub(http.server.BaseHTTPRequestHandler):
@@ -93,12 +110,17 @@ class MaintenanceTest(unittest.TestCase):
         base = f"http://127.0.0.1:{cls.httpd.server_address[1]}"
         cls.base = base
         os.environ.update({"ARMOR_PREFIX": str(cls.prefix), "ARMOR_SYSTEMCTL": str(fake), "ARMOR_GITHUB_API": base, "ARMOR_HEALTH_URL": base + "/health",
-                           "ARMOR_MAINT_DATA": str(root / "data"), "ARMOR_MAINT_CONSOLE": "1"})
+                           "ARMOR_MAINT_DATA": str(root / "data"), "ARMOR_MAINT_CONSOLE": "1", "ARMOR_MAINT_ENV": str(root / "armor.maint.env")})
+        cls.maint_env = root / "armor.maint.env"
+        cls.key = TestKey(root, "releases")
+        cls.other_key = TestKey(root, "other")
         spec = importlib.util.spec_from_file_location("armor_maintenance_agent", HERE / "armor_maintenance_agent.py")
         assert spec and spec.loader
         cls.agent = importlib.util.module_from_spec(spec)
         sys.modules["armor_maintenance_agent"] = cls.agent
         spec.loader.exec_module(cls.agent)
+        cls.real_key = cls.agent.PACKAGE_PUBLIC_KEY
+        cls.agent.PACKAGE_PUBLIC_KEY = cls.key.public            # the tests trust their own throwaway key
 
     def setUp(self) -> None:
         import shutil
@@ -111,6 +133,7 @@ class MaintenanceTest(unittest.TestCase):
         FakeGitHub.releases.clear()
         FakeGitHub.assets.clear()
         FakeGitHub.healthy = True
+        cls.maint_env.unlink(missing_ok=True)
         self.agent._cache.clear()
         (cls.prefix / "releases" / "20260101-000000" / "server" / "dist").mkdir(parents=True)
         (cls.prefix / "releases" / "20260101-000000" / "server" / "package.json").write_text('{"version": "0.5.4"}', encoding="utf-8")
@@ -132,7 +155,8 @@ class MaintenanceTest(unittest.TestCase):
         cls.httpd.shutdown()
         cls.tmp.cleanup()
 
-    def publish(self, repo: str, version: str, files: dict[str, bytes] | None, component: str, good_hash: bool = True) -> None:
+    def publish(self, repo: str, version: str, files: dict[str, bytes] | None, component: str, good_hash: bool = True, signature: str | None = "valid") -> None:
+        """signature: "valid" (made with the key the agent trusts), "other" (another key), "garbage", or "none" (no .sig in the release)."""
         assets = []
         if files is not None:
             name = f"armor-{component}-{version}.tgz"
@@ -141,6 +165,11 @@ class MaintenanceTest(unittest.TestCase):
             digest = hashlib.sha256(content).hexdigest() if good_hash else "0" * 64
             FakeGitHub.assets[name + ".sha256"] = f"{digest}  {name}\n".encode()
             assets = [{"name": name, "browser_download_url": f"{self.base}/assets/{name}"}, {"name": name + ".sha256", "browser_download_url": f"{self.base}/assets/{name}.sha256"}]
+            message = f"armor-pkg/1|{component}|{version}|{hashlib.sha256(content).hexdigest()}".encode()
+            text = {"valid": lambda: self.key.sign(message), "other": lambda: self.other_key.sign(message), "garbage": lambda: "zz", "none": lambda: None}[signature or "none"]()
+            if text is not None:
+                FakeGitHub.assets[name + ".sig"] = (text + "\n").encode()
+                assets.append({"name": name + ".sig", "browser_download_url": f"{self.base}/assets/{name}.sig"})
         FakeGitHub.releases[repo] = {"tag_name": f"v{version}", "published_at": "2026-10-15T10:00:00Z", "body": "notes", "assets": assets}
         self.agent._cache.clear()
 
@@ -196,6 +225,89 @@ class MaintenanceTest(unittest.TestCase):
         self.assertEqual(back["state"], "done", back["log"])
         self.assertEqual(self.agent.installed_version("network"), "0.0.6")
         self.assertFalse((self.prefix / "apps/ARMOR-NETWORK/src/armor_network/new.py").exists())
+
+    # ---- signatures ----
+    def test_the_key_the_agent_trusts_is_the_one_the_firmware_trusts(self) -> None:
+        header = HERE.parent.parent / "ARMOR-COMMON" / "firmware_base" / "core" / "fw_trust.hpp"
+        if not header.is_file():
+            self.skipTest("the firmware sources are not next to this repository")
+        block = re.search(r"kPublicKey\[32\] = \{([^}]*)\}", header.read_text(encoding="utf-8"))
+        assert block
+        self.assertEqual("".join(f"{int(item, 16):02x}" for item in block.group(1).split(",")), self.real_key)
+
+    def test_ed25519_matches_the_published_test_vector(self) -> None:
+        public = bytes.fromhex("d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a")
+        signature = bytes.fromhex("e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e065224901555fb8821590a33bacc61e39701cf9b46bd25bf5f0595bbe24655141438e7a100b")
+        self.assertTrue(self.agent.ed25519_verify(public, b"", signature))
+        self.assertFalse(self.agent.ed25519_verify(public, b"x", signature))
+        self.assertFalse(self.agent.ed25519_verify(public, b"", signature[:-1] + bytes([signature[-1] ^ 1])))
+
+    def test_a_signature_binds_the_component_the_version_and_the_hash(self) -> None:
+        digest = "a" * 64
+        good = self.key.sign(f"armor-pkg/1|ai|0.2.5|{digest}".encode())
+        self.assertTrue(self.agent.package_signature_ok("ai", "0.2.5", digest, good))
+        self.assertFalse(self.agent.package_signature_ok("voice", "0.2.5", digest, good))
+        self.assertFalse(self.agent.package_signature_ok("ai", "0.2.6", digest, good))
+        self.assertFalse(self.agent.package_signature_ok("ai", "0.2.5", "b" * 64, good))
+        # what the firmware signs (another prefix, or the bare hash) can never pass as a package signature
+        self.assertFalse(self.agent.package_signature_ok("ai", "0.2.5", digest, self.key.sign(f"armor-fw/1|ai|x|0.2.5|{digest}".encode())))
+        self.assertFalse(self.agent.package_signature_ok("ai", "0.2.5", digest, self.key.sign(bytes.fromhex(digest))))
+
+    def test_a_valid_signature_installs(self) -> None:
+        self.publish("ARMOR-SERVER-AI", "0.2.5", {"src/armor_server_ai/__init__.py": b'__version__ = "0.2.5"\n'}, "ai")
+        view = self.wait(self.agent.update_job(["ai"], False))
+        self.assertEqual(view["state"], "done", view["log"])
+        self.assertEqual(self.agent.installed_version("ai"), "0.2.5")
+        self.assertIn("signature of the release verified", str(view["log"]))
+
+    def test_a_tampered_package_is_refused(self) -> None:
+        self.publish("ARMOR-SERVER-AI", "0.2.5", {"src/armor_server_ai/__init__.py": b'__version__ = "0.2.5"\n'}, "ai")
+        # somebody swaps the package and its published hash, but cannot make a signature for them
+        evil = tarball({"src/armor_server_ai/__init__.py": b'__version__ = "0.2.5"\n', "src/armor_server_ai/evil.py": b"x = 1\n"})
+        FakeGitHub.assets["armor-ai-0.2.5.tgz"] = evil
+        FakeGitHub.assets["armor-ai-0.2.5.tgz.sha256"] = f"{hashlib.sha256(evil).hexdigest()}  armor-ai-0.2.5.tgz\n".encode()
+        view = self.wait(self.agent.update_job(["ai"], False))
+        self.assertEqual(view["state"], "failed")
+        self.assertIn("bad_signature", view["error"])
+        self.assertEqual(self.agent.installed_version("ai"), "0.2.4")
+        self.assertFalse((self.prefix / "ai" / "armor_server_ai" / "evil.py").exists())
+
+    def test_a_release_without_a_signature_is_refused(self) -> None:
+        self.publish("ARMOR-SERVER-AI", "0.2.5", {"src/armor_server_ai/__init__.py": b'__version__ = "0.2.5"\n'}, "ai", signature="none")
+        view = self.wait(self.agent.update_job(["ai"], False))
+        self.assertEqual(view["state"], "failed")
+        self.assertIn("missing_signature", view["error"])
+        self.assertEqual(self.agent.installed_version("ai"), "0.2.4")
+        self.assertFalse(list((self.prefix / "releases-old").glob("maint-ai-*")) if (self.prefix / "releases-old").exists() else False)
+
+    def test_a_signature_by_another_key_or_garbage_is_refused(self) -> None:
+        for kind in ("other", "garbage"):
+            self.publish("ARMOR-SERVER-AI", "0.2.5", {"src/armor_server_ai/__init__.py": b'__version__ = "0.2.5"\n'}, "ai", signature=kind)
+            view = self.wait(self.agent.update_job(["ai"], False))
+            self.assertEqual(view["state"], "failed", kind)
+            self.assertIn("bad_signature", view["error"])
+            self.assertEqual(self.agent.installed_version("ai"), "0.2.4")
+
+    def test_the_override_works_only_from_the_environment_file(self) -> None:
+        self.publish("ARMOR-SERVER-AI", "0.2.5", {"src/armor_server_ai/__init__.py": b'__version__ = "0.2.5"\n'}, "ai", signature="none")
+        # the process environment is not the file
+        os.environ["ARMOR_MAINT_ALLOW_UNSIGNED"] = "1"
+        try:
+            self.assertFalse(self.agent.unsigned_allowed())
+            self.assertEqual(self.wait(self.agent.update_job(["ai"], False))["state"], "failed")
+        finally:
+            del os.environ["ARMOR_MAINT_ALLOW_UNSIGNED"]
+        self.assertFalse(self.agent.overview(False)["unsigned_allowed"])
+        # any other value in the file is not the override
+        self.maint_env.write_text("ARMOR_MAINT_ALLOW_UNSIGNED=0\n", encoding="utf-8")
+        self.assertFalse(self.agent.unsigned_allowed())
+        # the file with the setting is, and the log says so loudly
+        self.maint_env.write_text("ARMOR_MAINT_TOKEN=x\nARMOR_MAINT_ALLOW_UNSIGNED=1\n", encoding="utf-8")
+        self.assertTrue(self.agent.overview(False)["unsigned_allowed"])
+        view = self.wait(self.agent.update_job(["ai"], False))
+        self.assertEqual(view["state"], "done", view["log"])
+        self.assertIn("WARNING", str(view["log"]))
+        self.assertEqual(self.agent.installed_version("ai"), "0.2.5")
 
     def test_a_wrong_hash_changes_nothing(self) -> None:
         self.publish("ARMOR-SERVER-AI", "0.2.5", {"src/armor_server_ai/__init__.py": b'__version__ = "0.2.5"\n'}, "ai", good_hash=False)

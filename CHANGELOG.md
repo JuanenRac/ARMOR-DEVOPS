@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented here.
 
+## [0.5.9] - The maintenance helper installs only packages signed with the key of the releases
+
+**Maintenance helper 0.1.4:** every package must come with a .sig, the Ed25519 signature of armor-pkg/1|component|version|sha256 made with the key of the releases, and the helper verifies it before it unpacks anything. A missing or invalid signature is refused (missing_signature, bad_signature) and nothing on the machine changes. The prefix differs from the firmware one, so a firmware signature can never pass as a package signature.
+The check is pure Python (RFC 8032), so the machine needs neither OpenSSL nor an extra module. The public key is a constant in the helper, and a test compares it with the one the firmware trusts.
+The only way round it is ARMOR_MAINT_ALLOW_UNSIGNED=1 in the machine armor.maint.env, read from that file at every install and never from the HTTP API or the process environment; each use writes a WARNING and the overview reports unsigned_allowed.
+**package_component.py** writes the .sig next to the .tgz and the .sha256 when the signer and the key are there (--sign makes it mandatory and fails without them), refuses a key the helper does not trust, refuses to publish an unsigned package, and --sign-existing (with --upload) signs a package that is already published.
+New guide docs/SIGNED_PACKAGES.md in the eight languages. 9 more tests: valid signature, tampered package, missing signature, wrong key, garbage, override only from the file, RFC 8032 vector, key equal to the firmware one, and the signing plumbing.
+
 ## [0.5.8] - An update can no longer remove the release it has just made
 
 - **Maintenance helper 0.1.3:** when it cleaned up old releases it ordered them by modification time, but a new release folder is a copy of the previous one and keeps its old time, so with seven folders the one just made looked the oldest and was deleted, leaving the `current` link pointing to nothing (Studio stopped answering). Releases are now ordered by name, and the one in use and the one just made are never removed.
