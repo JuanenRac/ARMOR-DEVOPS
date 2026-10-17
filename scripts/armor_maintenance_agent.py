@@ -40,7 +40,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-AGENT_VERSION = "0.1.2"
+AGENT_VERSION = "0.1.3"
 PREFIX = Path(os.environ.get("ARMOR_PREFIX", "/opt/armor"))
 SYSTEMCTL = os.environ.get("ARMOR_SYSTEMCTL", "systemctl")
 APT_GET = os.environ.get("ARMOR_APT_GET", "apt-get")
@@ -386,12 +386,16 @@ def own(path: Path, owner: str) -> None:
     subprocess.run(["chown", "-R", f"{owner}:{owner}", str(path)], capture_output=True, check=False)
 
 
-def prune_old(folder: Path, prefix: str = "") -> None:
-    """Keep the newest KEEP_OLD folders that start with `prefix` (by time of modification); anything else in the folder - what the installer set aside - is never touched."""
+def prune_old(folder: Path, prefix: str = "", protect: tuple[Path, ...] = ()) -> None:
+    """Keep the newest KEEP_OLD folders that start with `prefix`; anything else in the folder - what the installer set aside - is never touched.
+    The newest is the one with the latest NAME (they are named by the time they were made): the time of modification cannot be trusted, because a release folder is a copy of
+    the one before and a copy keeps the old time, so the folder just made looked the oldest of all and was the one removed. A folder in `protect` (the one `current` points to) is never removed."""
     try:
-        entries = sorted((entry for entry in folder.iterdir() if entry.is_dir() and entry.name.startswith(prefix)), key=lambda entry: entry.stat().st_mtime)
+        keep = {path.resolve() for path in protect}
+        entries = sorted((entry for entry in folder.iterdir() if entry.is_dir() and entry.name.startswith(prefix)), key=lambda entry: entry.name)
         for entry in entries[:-KEEP_OLD]:
-            shutil.rmtree(entry, ignore_errors=True)
+            if entry.resolve() not in keep:
+                shutil.rmtree(entry, ignore_errors=True)
     except OSError:
         pass
 
@@ -449,7 +453,7 @@ def install_release_dir(job: Job, component: str, staged: Path, version: str) ->
         systemctl("restart", unit)
         raise Refused(500, "unhealthy_rolled_back")
     job.step("check", "done")
-    prune_old(PREFIX / "releases")
+    prune_old(PREFIX / "releases", protect=(target, PREFIX / "current"))
     return {"previous": previous, "release": target.name}
 
 

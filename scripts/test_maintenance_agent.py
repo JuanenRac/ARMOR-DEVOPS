@@ -269,6 +269,32 @@ class MaintenanceTest(unittest.TestCase):
         self.assertTrue((old / "maint-ai-1").exists())
         self.assertTrue((old / "20261016-000000").exists())
 
+    def test_the_release_just_made_is_never_the_one_pruned(self) -> None:
+        releases = self.prefix / "releases"
+        releases.mkdir(exist_ok=True)
+        long_ago = time.time() - 86400
+        for index in range(self.agent.KEEP_OLD):
+            folder = releases / f"2026101{index}-000000"
+            folder.mkdir()
+            os.utime(folder, (long_ago, long_ago))
+        newest = releases / "20261017-201003"          # a copy keeps the old time of the folder it was copied from
+        newest.mkdir()
+        os.utime(newest, (long_ago - 1000, long_ago - 1000))
+        self.agent.prune_old(releases, protect=(newest,))
+        names = sorted(entry.name for entry in releases.iterdir())
+        self.assertIn("20261017-201003", names)
+        self.assertEqual(len(names), self.agent.KEEP_OLD)
+        self.assertNotIn("20261010-000000", names)
+
+    def test_the_release_current_points_to_is_never_pruned(self) -> None:
+        releases = self.prefix / "releases"
+        releases.mkdir(exist_ok=True)
+        for index in range(self.agent.KEEP_OLD + 2):
+            (releases / f"2026101{index}-000000").mkdir()
+        active = releases / "20261010-000000"
+        self.agent.prune_old(releases, protect=(active,))
+        self.assertTrue(active.exists())
+
     def test_the_machine_is_not_restarted_while_something_is_being_installed(self) -> None:
         busy = self.agent.Job("system", [("upgrade", "Upgrade")])
         self.agent.JOBS[busy.id] = busy

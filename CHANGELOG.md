@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented here.
 
+## [0.5.8] - An update can no longer remove the release it has just made
+
+- **Maintenance helper 0.1.3:** when it cleaned up old releases it ordered them by modification time, but a new release folder is a copy of the previous one and keeps its old time, so with seven folders the one just made looked the oldest and was deleted, leaving the `current` link pointing to nothing (Studio stopped answering). Releases are now ordered by name, and the one in use and the one just made are never removed.
+
 ## [0.5.7] - A VPN and a dynamic DNS name that Studio can set up, and a maintenance agent that does it
 
 - **`armor_wireguard.sh`:** a WireGuard VPN into the house in a few commands (`setup`, `add-peer`, `show`, `remove-peer`, `list`, `status`, `remove`): keys made on the machine and kept under `etc/wireguard` (0700), the server file written for the peers that exist, a device configuration (with a QR code when `qrencode` is installed), a preshared key per device, the VPN network written to `ARMOR_VPN_NETWORKS` so the server counts the phone as at home, optional routing to the nodes of the house, and `plan` to see everything before anything is written. 39 tests with a stand-in for `wg`.
