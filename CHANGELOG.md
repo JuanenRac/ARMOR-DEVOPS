@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented here.
 
+## [0.5.5] - The settings for using the server from outside the house reach the container
+
+- The Compose file passes `ARMOR_LOCAL_NETWORKS`, `ARMOR_VPN_NETWORKS`, `ARMOR_TOTP_REQUIRED`, `ARMOR_REMOTE_POLICY`, `ARMOR_REMOTE_SESSION_TTL_MS`, `ARMOR_REMOTE_IDLE_MS` and `ARMOR_ELEVATION_MS` from `.env` (empty is the server's own default), and `.env.example` explains them.
+
 ## [0.5.4] - The network watcher and the voice gateway get installed, and the broker rules fit what the programs do
 
 - **`--with-network` installs the network watcher** (`armor-network`, with `--network-node-id`, default `house-1`): its own unit with a short list of capabilities, its own folder, and its own token derived from the ingest token the way the server does, in a file that holds nothing else. The unit used to be written by hand and the update of "network" from Studio rolled back every time because the unit did not exist.

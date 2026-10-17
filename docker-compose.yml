@@ -70,6 +70,14 @@ services:
       # Studio's proxy puts the address of the client in X-Forwarded-For: the server believes it only from the private ranges of the containers' network, so the limits of the login
       # and the audit log see each client and not the proxy.
       ARMOR_TRUST_PROXY: ${ARMOR_TRUST_PROXY:-uniquelocal}
+      # Using the server from outside the house (see ARMOR-SERVER docs/REMOTE_ACCESS.md); empty is the server's own default.
+      ARMOR_LOCAL_NETWORKS: ${ARMOR_LOCAL_NETWORKS:-}
+      ARMOR_VPN_NETWORKS: ${ARMOR_VPN_NETWORKS:-}
+      ARMOR_TOTP_REQUIRED: ${ARMOR_TOTP_REQUIRED:-}
+      ARMOR_REMOTE_POLICY: ${ARMOR_REMOTE_POLICY:-}
+      ARMOR_REMOTE_SESSION_TTL_MS: ${ARMOR_REMOTE_SESSION_TTL_MS:-}
+      ARMOR_REMOTE_IDLE_MS: ${ARMOR_REMOTE_IDLE_MS:-}
+      ARMOR_ELEVATION_MS: ${ARMOR_ELEVATION_MS:-}
     depends_on:
       broker: { condition: service_started }
     # The server reaches out: the alarms to Telegram and the webhook, the cameras of the LAN, the releases of GitHub for the nodes' updates and the inspection of the router. No port of
