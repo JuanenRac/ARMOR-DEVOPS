@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented here.
 
+## [0.5.7] - A VPN and a dynamic DNS name that Studio can set up, and a maintenance agent that does it
+
+- **`armor_wireguard.sh`:** a WireGuard VPN into the house in a few commands (`setup`, `add-peer`, `show`, `remove-peer`, `list`, `status`, `remove`): keys made on the machine and kept under `etc/wireguard` (0700), the server file written for the peers that exist, a device configuration (with a QR code when `qrencode` is installed), a preshared key per device, the VPN network written to `ARMOR_VPN_NETWORKS` so the server counts the phone as at home, optional routing to the nodes of the house, and `plan` to see everything before anything is written. 39 tests with a stand-in for `wg`.
+- **`armor_ddns.sh`:** keeps a name pointing at the house when the provider changes the public address - DuckDNS, Cloudflare (the record is found and updated, the token only needs `DNS: Edit` on one zone) or any https address to call - checks every five minutes with a timer, calls the provider only when the address changed, refuses an address no name can reach (private, loopback or shared by the provider between many houses) saying why, and never puts a token on a command line. 41 tests with a stand-in for `curl`.
+- **The maintenance agent (0.1.2) offers both to Studio and the phone:** `/v1/remote` and the routes under it report the state (never a key or a token), set up the VPN, add and show and remove devices, and set up, update and stop the dynamic DNS name; every value is checked again and handed over as a list of arguments, never through a shell. 1 more test file, `test_remote_access.py`.
+- The two scripts travel in the `devops` package and the installer puts them in `bin/` with `--with-maintenance`; the maintenance agent updates them with the rest.
+
 ## [0.5.6] - A real certificate for a name on the Internet, and a step-by-step guide to using the server from outside the house
 
 - **The TLS profile can ask for a real certificate:** with `ARMOR_TLS_ISSUER` set to an e-mail address Caddy asks Let's Encrypt for the certificate of `ARMOR_TLS_HOST` and renews it by itself (the local authority stays the default); the port of the console is `ARMOR_TLS_PORT` (443 for the Internet) and port 80 for the authority's check is `ARMOR_TLS_HTTP_PORT`.

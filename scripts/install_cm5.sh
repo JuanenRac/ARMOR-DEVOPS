@@ -296,6 +296,8 @@ if [[ "$WITH_MAINT" -eq 1 ]]; then
   say "installing the maintenance helper"
   install -d -m 0755 -o root -g root "$PREFIX/bin"
   install -m 0755 -o root -g root "$RELEASE_DIR/scripts/armor_maintenance_agent.py" "$PREFIX/bin/armor_maintenance_agent.py"
+  # The way in from outside the house (Studio asks the helper to set up the VPN and the dynamic DNS name with these two; they do nothing until it does).
+  for helper in armor_wireguard.sh armor_ddns.sh; do [[ -f "$RELEASE_DIR/scripts/$helper" ]] && install -m 0755 -o root -g root "$RELEASE_DIR/scripts/$helper" "$PREFIX/bin/$helper"; done
   if [[ -f "$RELEASE_DIR/armor.project.json" ]]; then
     sed -n 's/^[[:space:]]*"version"[[:space:]]*:[[:space:]]*"\([0-9.]*\)".*/\1/p' "$RELEASE_DIR/armor.project.json" | head -1 >"$PREFIX/bin/VERSION" || true
     chmod 0644 "$PREFIX/bin/VERSION"

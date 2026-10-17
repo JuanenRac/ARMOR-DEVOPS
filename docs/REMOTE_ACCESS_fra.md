@@ -37,11 +37,23 @@ puis `docker compose --profile tls up -d`. Sur le banc CM5, les mêmes réglages
 
 Configuration > Sécurité : activez le second facteur (application d'authentification) pour chaque compte, gardez les codes de récupération et regardez les sessions ouvertes. En administrateur, indiquez le proxy de confiance, les réseaux qui comptent comme la maison, la politique et la durée des sessions depuis l'extérieur.
 
-## 6. Sur le téléphone
+## 6. Le VPN, le nom et les panneaux des nœuds, depuis Studio (sans commande)
+
+Avec l'agent de maintenance installé (`install_cm5.sh --with-maintenance`) et WireGuard sur la machine (`sudo apt install wireguard-tools qrencode`), un administrateur fait tout dans Studio > Configuration > Sécurité > Accès depuis l'extérieur :
+
+1. **VPN :** saisissez le nom ou l'adresse que le téléphone utilisera (par exemple `casa.duckdns.org`), gardez le port et le réseau de la maison et appuyez sur *Configurer le VPN*. Il indique quel port UDP rediriger sur le routeur vers la machine.
+2. **Un téléphone ou un portable :** sous *Ajouter un appareil*, donnez-lui un nom (`tel-ana`), appuyez sur *Créer* et scannez le code QR avec l'application WireGuard. Le code contient une clé privée : fermez-le ensuite et ne le donnez à personne. Vous pourrez le réafficher ou retirer l'appareil plus tard.
+3. **Un nom qui suit votre maison :** choisissez DuckDNS, Cloudflare ou une adresse à appeler, saisissez ses données et appuyez sur *Enregistrer et vérifier maintenant*. La machine vérifie toutes les cinq minutes et n'appelle le fournisseur que si l'adresse a changé.
+4. **Le panneau d'un nœud depuis l'extérieur :** enregistrez le nœud (son identifiant et son adresse dans la maison). Pour un nœud en HTTPS, appuyez sur *Voir son certificat*, comparez l'empreinte avec celle du panneau du nœud (À propos) puis appuyez sur *Faire confiance à ce certificat*. *Ouvrir le panneau* fonctionne ensuite depuis l'extérieur, via le serveur, et le nœud n'est jamais publié.
+
+On peut faire la même chose dans un terminal avec `armor_wireguard.sh` et `armor_ddns.sh` (l'en-tête de chacun liste ses commandes ; `plan` montre ce qui serait écrit avant d'écrire quoi que ce soit).
+
+
+## 7. Sur le téléphone
 
 A.R.M.O.R. Control : saisissez le nom comme serveur (`https://casa.duckdns.org`), connectez-vous (le code de l'application est demandé en seconde étape) et vérifiez Plus > Sécurité.
 
-## 7. Vérifier
+## 8. Vérifier
 
 Depuis le téléphone **en données mobiles**, dans Studio ou l'application, appuyez sur « Vérifier comment le serveur me voit » : il doit dire **depuis l'extérieur** et montrer votre vraie adresse. S'il dit « depuis la maison », le proxy ne transmet pas l'adresse : corrigez `ARMOR_TRUST_PROXY` avant de vous fier à quoi que ce soit.
 

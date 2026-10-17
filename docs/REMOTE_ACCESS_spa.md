@@ -37,11 +37,23 @@ y `docker compose --profile tls up -d`. En el banco CM5 los mismos ajustes está
 
 Configuración > Seguridad: activa el segundo factor (aplicación autenticadora) en cada cuenta, guarda los códigos de recuperación y mira las sesiones abiertas. Como administrador, indica el proxy de confianza, las redes que cuentan como la casa, la política y la duración de las sesiones desde fuera.
 
-## 6. En el móvil
+## 6. La VPN, el nombre y los paneles de los nodos, desde Studio (sin comandos)
+
+Con el agente de mantenimiento instalado (`install_cm5.sh --with-maintenance`) y WireGuard en la máquina (`sudo apt install wireguard-tools qrencode`), un administrador lo hace todo en Studio > Configuración > Seguridad > Acceso desde fuera de casa:
+
+1. **VPN:** escribe el nombre o dirección que usará el móvil (por ejemplo `casa.duckdns.org`), deja el puerto y la red de la casa y pulsa *Configurar la VPN*. Te dice qué puerto UDP redirigir en el router a la máquina.
+2. **Un móvil o un portátil:** en *Añadir un dispositivo* ponle un nombre (`movil-ana`), pulsa *Crear* y escanea el código QR con la app WireGuard. El código lleva una clave privada: ciérralo después y no se lo des a nadie. Puedes mostrarlo otra vez o quitar el dispositivo más adelante.
+3. **Un nombre que sigue a tu casa:** elige DuckDNS, Cloudflare o una dirección a la que llamar, escribe sus datos y pulsa *Guardar y comprobar ahora*. La máquina lo comprueba cada cinco minutos y llama al proveedor solo cuando la dirección cambió.
+4. **El panel de un nodo desde fuera:** registra el nodo (su id y su dirección dentro de casa). Si el nodo usa HTTPS pulsa *Ver su certificado*, compara la huella con la del propio panel del nodo (Acerca de) y pulsa *Confiar en este certificado*. Después *Abrir panel* funciona desde fuera, a través del servidor, y el nodo nunca se publica.
+
+Lo mismo se puede hacer desde un terminal con `armor_wireguard.sh` y `armor_ddns.sh` (la cabecera de cada uno lista sus órdenes; `plan` muestra lo que se escribiría antes de escribir nada).
+
+
+## 7. En el móvil
 
 A.R.M.O.R. Control: escribe el nombre como servidor (`https://casa.duckdns.org`), entra (el código de la aplicación se pide como segundo paso) y revisa Más > Seguridad.
 
-## 7. Compruébalo
+## 8. Compruébalo
 
 Desde el móvil **con datos móviles**, en Studio o en la app, pulsa «Comprobar cómo me ve el servidor»: debe decir **desde fuera** y mostrar tu dirección real. Si dice «desde casa», el proxy no pasa la dirección: arregla `ARMOR_TRUST_PROXY` antes de fiarte de nada.
 

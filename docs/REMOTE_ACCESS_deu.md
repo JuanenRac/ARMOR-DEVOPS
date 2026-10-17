@@ -37,11 +37,23 @@ dann `docker compose --profile tls up -d`. Am CM5-Prüfstand stehen dieselben Ei
 
 Konfiguration > Sicherheit: Schalten Sie den zweiten Faktor (Authenticator-App) für jedes Konto ein, speichern Sie die Wiederherstellungscodes und sehen Sie die offenen Sitzungen an. Als Administrator legen Sie den vertrauenswürdigen Proxy, die als Haus geltenden Netze, die Richtlinie und die Dauer der Sitzungen von außen fest.
 
-## 6. Auf dem Handy
+## 6. Das VPN, der Name und die Knoten-Panels aus Studio (ohne Befehle)
+
+Mit installiertem Wartungsagenten (`install_cm5.sh --with-maintenance`) und WireGuard auf der Maschine (`sudo apt install wireguard-tools qrencode`) erledigt ein Administrator alles in Studio > Konfiguration > Sicherheit > Zugriff von außerhalb des Hauses:
+
+1. **VPN:** Geben Sie den Namen oder die Adresse ein, die das Handy verwendet (z. B. `casa.duckdns.org`), behalten Sie Port und Netz des Hauses bei und drücken Sie *VPN einrichten*. Es nennt den UDP-Port, den Sie am Router an die Maschine weiterleiten.
+2. **Ein Handy oder Laptop:** Geben Sie unter *Gerät hinzufügen* einen Namen ein (`handy-ana`), drücken Sie *Erstellen* und scannen Sie den QR-Code mit der WireGuard-App. Der Code enthält einen privaten Schlüssel: Schließen Sie ihn danach und geben Sie ihn niemandem. Sie können ihn später erneut anzeigen oder das Gerät entfernen.
+3. **Ein Name, der Ihrem Haus folgt:** Wählen Sie DuckDNS, Cloudflare oder eine aufzurufende Adresse, geben Sie die Daten ein und drücken Sie *Speichern und jetzt prüfen*. Die Maschine prüft alle fünf Minuten und ruft den Anbieter nur auf, wenn sich die Adresse geändert hat.
+4. **Das Panel eines Knotens von außen:** Tragen Sie den Knoten ein (seine ID und seine Adresse im Haus). Bei einem Knoten mit HTTPS drücken Sie *Zertifikat ansehen*, vergleichen den Fingerabdruck mit dem im Panel des Knotens (Info) und drücken *Diesem Zertifikat vertrauen*. *Panel öffnen* funktioniert dann von außen über den Server, und der Knoten wird nie veröffentlicht.
+
+Dasselbe geht im Terminal mit `armor_wireguard.sh` und `armor_ddns.sh` (der Kopf jedes Skripts listet seine Befehle; `plan` zeigt vorab, was geschrieben würde).
+
+
+## 7. Auf dem Handy
 
 A.R.M.O.R. Control: Geben Sie den Namen als Server ein (`https://casa.duckdns.org`), melden Sie sich an (der Code der App wird als zweiter Schritt verlangt) und prüfen Sie Mehr > Sicherheit.
 
-## 7. Prüfen
+## 8. Prüfen
 
 Drücken Sie vom Handy **mit Mobilfunk** in Studio oder der App „Prüfen, wie der Server mich sieht“: Es muss **von außerhalb** sagen und Ihre echte Adresse zeigen. Sagt es „aus dem Haus“, gibt der Proxy die Adresse nicht weiter: Korrigieren Sie `ARMOR_TRUST_PROXY`, bevor Sie irgendetwas vertrauen.
 

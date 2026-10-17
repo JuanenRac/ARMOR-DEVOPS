@@ -3,4 +3,4 @@
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$HERE"
-python3 -W ignore -m unittest test_maintenance_agent test_package_component "$@"
+python3 -W ignore -m unittest test_maintenance_agent test_package_component test_remote_access "$@"

@@ -21,7 +21,7 @@
   <img src="https://img.shields.io/badge/License-GPL%203.0-blue.svg" alt="GPL 3.0">
   <img src="https://img.shields.io/badge/Deploy-Docker%20Compose-2496ed.svg" alt="Deploy">
   <img src="https://img.shields.io/badge/Bench-systemd-FFB020.svg" alt="Bench">
-  <img src="https://img.shields.io/badge/Version-0.5.6-0f6cbd.svg" alt="Version">
+  <img src="https://img.shields.io/badge/Version-0.5.7-0f6cbd.svg" alt="Version">
   <img src="https://img.shields.io/badge/Maturity-functional-00E5FF.svg" alt="Maturity">
 </p>
 
@@ -35,7 +35,7 @@
 
 | | |
 |---|---|
-| Version | `0.5.6` |
+| Version | `0.5.7` |
 | Maturité | Fonctionnel |
 | Technologie | Docker Compose / Bash / YAML |
 | Sur matériel réel | Fait tourner le banc de test CM5 en usage quotidien, sur un vrai CM5 qui héberge d'autres logiciels ; pas encore sur le Jetson |
@@ -51,6 +51,7 @@
 * **Un pare-feu d'hôte pour la machine centrale** (`scripts/firewall_core.sh`) : le port du broker seulement depuis le réseau de terrain, ceux du serveur et de Studio seulement depuis le réseau des clients (quand il est donné), dans une table à part qui ne mentionne rien d'autre.
 * **Secrets :** `scripts/generate_secrets.sh` crée des secrets aléatoires et n'en imprime aucun ; `scripts/check-required-env.sh` refuse les valeurs absentes, d'exemple, courtes ou répétées.
 * **Sauvegarde et restauration :** `scripts/backup_data.sh` produit une archive chiffrée AES-256, vérifiée et avec somme de contrôle des données du serveur (preuves exclues sauf demande) ; `scripts/restore_data.sh` la liste ou la restaure sans jamais écraser de données existantes.
+* **Un VPN et un nom pour la maison, configurés depuis Studio :** `armor_wireguard.sh` monte un VPN WireGuard en quelques commandes (clés sur la machine, une configuration par téléphone avec code QR, routage vers les nœuds si voulu) et `armor_ddns.sh` garde un nom DuckDNS, Cloudflare ou autre pointé sur la maison quand le fournisseur change l'adresse ; l'agent de maintenance propose les deux à Studio et au téléphone, personne n'a donc à taper une commande, et un guide pas à pas en huit langues couvre le routeur.
 
 ## 🧩 Rôle dans A.R.M.O.R.
 

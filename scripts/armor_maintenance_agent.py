@@ -40,7 +40,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-AGENT_VERSION = "0.1.1"
+AGENT_VERSION = "0.1.2"
 PREFIX = Path(os.environ.get("ARMOR_PREFIX", "/opt/armor"))
 SYSTEMCTL = os.environ.get("ARMOR_SYSTEMCTL", "systemctl")
 APT_GET = os.environ.get("ARMOR_APT_GET", "apt-get")
@@ -489,7 +489,7 @@ def replace_tree(job: Job, component: str, staged: Path) -> dict[str, object]:
         scripts = staged / "scripts"
         if not scripts.is_dir():
             raise Refused(422, "bad_archive")
-        for name in ("armor_admin_agent.py", "armor_maintenance_agent.py", "mqtt_identity.sh", "backup_data.sh", "VERSION"):
+        for name in ("armor_admin_agent.py", "armor_maintenance_agent.py", "mqtt_identity.sh", "backup_data.sh", "armor_wireguard.sh", "armor_ddns.sh", "VERSION"):
             source = scripts / name
             if not source.exists():
                 continue
@@ -952,6 +952,127 @@ def overview(force: bool) -> dict[str, object]:
             "history": history()}
 
 
+# ---- the way in from outside the house: the VPN and the dynamic DNS name ---------------------------------------------------------------------------------
+# The two helper scripts do the work (armor_wireguard.sh, armor_ddns.sh); this is the closed door through which Studio and the phone ask for it: every value is checked here
+# once more and handed over as a list of arguments, never through a shell.
+WIREGUARD = PREFIX / "bin" / "armor_wireguard.sh"
+DDNS = PREFIX / "bin" / "armor_ddns.sh"
+PEER_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$")
+HOST_NAME = re.compile(r"^[A-Za-z0-9]([A-Za-z0-9.-]{0,251}[A-Za-z0-9])?(:[0-9]{1,5})?$")
+CIDR = re.compile(r"^[0-9]{1,3}(\.[0-9]{1,3}){3}/[0-9]{1,2}$")
+IFACE_NAME = re.compile(r"^[A-Za-z0-9_.-]{1,15}$")
+
+
+def read_settings(path: Path) -> dict[str, str]:
+    values: dict[str, str] = {}
+    try:
+        for line in path.read_text(encoding="utf-8").splitlines():
+            key, separator, value = line.partition("=")
+            if separator and re.fullmatch(r"[A-Z_]+", key):
+                values[key] = value.strip().strip("'")
+    except OSError:
+        pass
+    return values
+
+
+def run_helper(script: Path, arguments: list[str], timeout: float = 90.0) -> subprocess.CompletedProcess[str]:
+    if not script.is_file():
+        raise Refused(501, "helper_missing")
+    return subprocess.run(["bash", str(script), *arguments, "--prefix", str(PREFIX)], capture_output=True, text=True, timeout=timeout, check=False)
+
+
+def helper_failed(result: subprocess.CompletedProcess[str]) -> Refused:
+    # the scripts say what was wrong in one line of English; nothing else (never a key or a token) is passed on
+    line = next((item for item in reversed((result.stderr or "").strip().splitlines()) if item.strip()), "")
+    reason = re.sub(r"^armor_(wireguard|ddns): ", "", line)[:300]
+    return Refused(422 if result.returncode == 2 else 502, reason or "failed")
+
+
+def remote_state() -> dict[str, object]:
+    state_dir = PREFIX / "etc" / "wireguard"
+    settings = read_settings(state_dir / "settings")
+    peers: list[dict[str, str]] = []
+    folder = state_dir / "peers"
+    if folder.is_dir():
+        for item in sorted(folder.glob("*.env")):
+            values = read_settings(item)
+            if values.get("NAME") and values.get("ADDRESS"):
+                peers.append({"name": values["NAME"], "address": values["ADDRESS"], "full_tunnel": "yes" if values.get("FULL_TUNNEL") == "1" else "no"})
+    running = False
+    if settings:
+        running = systemctl("is-active", "wg-quick@armor-wg0", timeout=10).stdout.strip() == "active"
+    ddns = read_settings(Path(os.environ.get("ARMOR_DDNS_ENV", str(PREFIX / "etc" / "armor.ddns.env"))))
+    last = ""
+    try:
+        last = (PREFIX / "data" / "ddns.last").read_text(encoding="utf-8").strip()
+    except OSError:
+        pass
+    wireguard: dict[str, object] = {"tool": shutil.which("wg") is not None, "script": WIREGUARD.is_file(), "configured": bool(settings), "running": running, "qr": shutil.which("qrencode") is not None, "peers": peers}
+    if settings:
+        wireguard.update({"endpoint": f"{settings.get('ENDPOINT_HOST', '')}:{settings.get('PORT_PUBLIC', '')}", "subnet": settings.get("SUBNET", ""), "port": settings.get("PORT", ""), "lan": settings.get("LAN", ""), "route_lan": settings.get("ROUTE_LAN", "")})
+    dynamic: dict[str, object] = {"script": DDNS.is_file(), "configured": bool(ddns.get("PROVIDER"))}
+    if ddns.get("PROVIDER"):
+        dynamic.update({"provider": ddns.get("PROVIDER", ""), "name": ddns.get("DOMAIN") or ddns.get("RECORD") or "", "last_address": last})
+    return {"wireguard": wireguard, "ddns": dynamic}
+
+
+def wireguard_setup(data: dict[str, object]) -> dict[str, object]:
+    endpoint = data.get("endpoint")
+    if not isinstance(endpoint, str) or not HOST_NAME.fullmatch(endpoint):
+        raise Refused(422, "bad_endpoint")
+    arguments = ["setup", "--endpoint", endpoint]
+    for key, flag, pattern in (("lan", "--lan", CIDR), ("subnet", "--subnet", CIDR), ("route_lan", "--route-lan", IFACE_NAME)):
+        value = data.get(key)
+        if value in (None, ""):
+            continue
+        if not isinstance(value, str) or not pattern.fullmatch(value):
+            raise Refused(422, f"bad_{key}")
+        arguments += [flag, value]
+    port = data.get("port")
+    if port not in (None, ""):
+        if not isinstance(port, int) or isinstance(port, bool) or not 1 <= port <= 65535:
+            raise Refused(422, "bad_port")
+        arguments += ["--port", str(port)]
+    result = run_helper(WIREGUARD, arguments)
+    if result.returncode != 0:
+        raise helper_failed(result)
+    return {"ok": True, **remote_state()}
+
+
+def peer_config(name: str) -> dict[str, object]:
+    result = run_helper(WIREGUARD, ["show", name])
+    if result.returncode != 0:
+        raise helper_failed(result)
+    match = re.search(r"^----[^\n]*----\n(.*?)\n----\n", result.stdout, re.S | re.M)
+    if not match:
+        raise Refused(502, "no_configuration")
+    config = match.group(1)
+    svg = ""
+    if shutil.which("qrencode"):
+        picture = subprocess.run(["qrencode", "-t", "SVG", "-o", "-"], input=config, capture_output=True, text=True, timeout=15, check=False)
+        if picture.returncode == 0 and ("<svg" in picture.stdout[:400]):
+            svg = picture.stdout
+    return {"name": name, "config": config, "qr_svg": svg or None}
+
+
+def ddns_setup(data: dict[str, object]) -> dict[str, object]:
+    provider = data.get("provider")
+    if provider not in ("duckdns", "cloudflare", "url"):
+        raise Refused(422, "bad_provider")
+    arguments = ["setup", "--provider", str(provider)]
+    for key, flag in (("domain", "--domain"), ("token", "--token"), ("zone", "--zone"), ("record_name", "--record-name"), ("url", "--url")):
+        value = data.get(key)
+        if value in (None, ""):
+            continue
+        if not isinstance(value, str) or len(value) > 1000 or any(character in value for character in "\r\n\0"):
+            raise Refused(422, f"bad_{key}")
+        arguments += [flag, value]
+    result = run_helper(DDNS, arguments, timeout=60)
+    if result.returncode != 0:
+        raise helper_failed(result)
+    return {"ok": True, **remote_state()}
+
+
 class Handler(http.server.BaseHTTPRequestHandler):
     server_version = "armor-maint"
     token = ""
@@ -1050,6 +1171,42 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     raise Refused(404, "no_such_job")
                 job.cancel()
                 self.reply(200, {"ok": True})
+            elif method == "GET" and parts == ["remote"]:
+                self.reply(200, remote_state())
+            elif method == "POST" and parts == ["remote", "wireguard", "setup"]:
+                self.reply(200, wireguard_setup(self.body()))
+            elif method == "POST" and parts == ["remote", "wireguard", "peers"]:
+                data = self.body()
+                name = data.get("name")
+                if not isinstance(name, str) or not PEER_NAME.fullmatch(name):
+                    raise Refused(422, "bad_name")
+                result = run_helper(WIREGUARD, ["add-peer", name] + (["--full-tunnel"] if data.get("full_tunnel") is True else []))
+                if result.returncode != 0:
+                    raise helper_failed(result)
+                self.reply(201, peer_config(name))
+            elif method == "GET" and len(parts) == 4 and parts[:3] == ["remote", "wireguard", "peers"]:
+                if not PEER_NAME.fullmatch(parts[3]):
+                    raise Refused(422, "bad_name")
+                self.reply(200, peer_config(parts[3]))
+            elif method == "POST" and len(parts) == 5 and parts[:3] == ["remote", "wireguard", "peers"] and parts[4] == "remove":
+                if not PEER_NAME.fullmatch(parts[3]):
+                    raise Refused(422, "bad_name")
+                result = run_helper(WIREGUARD, ["remove-peer", parts[3]])
+                if result.returncode != 0:
+                    raise helper_failed(result)
+                self.reply(200, {"ok": True})
+            elif method == "POST" and parts == ["remote", "ddns", "setup"]:
+                self.reply(200, ddns_setup(self.body()))
+            elif method == "POST" and parts == ["remote", "ddns", "update"]:
+                result = run_helper(DDNS, ["update", "--force"], timeout=60)
+                if result.returncode != 0:
+                    raise helper_failed(result)
+                self.reply(200, {"ok": True, **remote_state()})
+            elif method == "POST" and parts == ["remote", "ddns", "remove"]:
+                result = run_helper(DDNS, ["remove"], timeout=60)
+                if result.returncode != 0:
+                    raise helper_failed(result)
+                self.reply(200, {"ok": True, **remote_state()})
             elif method == "GET" and parts == ["console"]:
                 self.reply(200, {"enabled": CONSOLE_ENABLED})
             else:

@@ -21,7 +21,7 @@
   <img src="https://img.shields.io/badge/License-GPL%203.0-blue.svg" alt="GPL 3.0">
   <img src="https://img.shields.io/badge/Deploy-Docker%20Compose-2496ed.svg" alt="Deploy">
   <img src="https://img.shields.io/badge/Bench-systemd-FFB020.svg" alt="Bench">
-  <img src="https://img.shields.io/badge/Version-0.5.6-0f6cbd.svg" alt="Version">
+  <img src="https://img.shields.io/badge/Version-0.5.7-0f6cbd.svg" alt="Version">
   <img src="https://img.shields.io/badge/Maturity-functional-00E5FF.svg" alt="Maturity">
 </p>
 
@@ -35,7 +35,7 @@
 
 | | |
 |---|---|
-| Version | `0.5.6` |
+| Version | `0.5.7` |
 | Maturity | Functional |
 | Stack | Docker Compose / Bash / YAML |
 | On real hardware | Runs the CM5 test bench in daily use, on a real CM5 that hosts other software; not yet on the Jetson |
@@ -51,6 +51,7 @@
 * **A host firewall for the core machine** (`scripts/firewall_core.sh`): the broker's port only from the field network, the server's and Studio's ports only from the clients' network (when it is given), in a table of its own that mentions nothing else.
 * **Secrets:** `scripts/generate_secrets.sh` creates random secrets and prints none; `scripts/check-required-env.sh` refuses missing, placeholder, short or repeated values.
 * **Backup and restore:** `scripts/backup_data.sh` makes an AES-256 encrypted, verified and checksummed archive of the server data (evidence excluded unless asked); `scripts/restore_data.sh` lists it or restores it without ever overwriting existing data.
+* **A VPN and a name for the house, set up from Studio:** `armor_wireguard.sh` makes a WireGuard VPN in a few commands (keys on the machine, one device configuration per phone with a QR code, routing to the nodes if wanted) and `armor_ddns.sh` keeps a DuckDNS, Cloudflare or other name pointing at the house when the provider changes the address; the maintenance agent offers both to Studio and the phone, so nobody has to type a command, and a step-by-step guide in eight languages covers the router.
 
 ## 🧩 Role in A.R.M.O.R.
 

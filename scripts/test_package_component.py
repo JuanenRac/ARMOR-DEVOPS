@@ -56,7 +56,7 @@ class PackageTest(unittest.TestCase):
         self.assertEqual(self.names(package), {"src/armor_voice_ai/__init__.py", "src/armor_voice_ai/cli.py"})
 
     def test_the_helper_scripts_carry_their_version(self) -> None:
-        repo = make(self.root, "ARMOR-DEVOPS", "0.4.8", {"scripts/armor_admin_agent.py": "a", "scripts/armor_maintenance_agent.py": "m", "scripts/mqtt_identity.sh": "i", "scripts/backup_data.sh": "b"})
+        repo = make(self.root, "ARMOR-DEVOPS", "0.4.8", {"scripts/armor_admin_agent.py": "a", "scripts/armor_maintenance_agent.py": "m", "scripts/mqtt_identity.sh": "i", "scripts/backup_data.sh": "b", "scripts/armor_wireguard.sh": "w", "scripts/armor_ddns.sh": "d"})
         package, _version, _digest = module.build("devops", repo, self.root / "out")
         self.assertIn("scripts/VERSION", self.names(package))
         with tarfile.open(package) as tar:
