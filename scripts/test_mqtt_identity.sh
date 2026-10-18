@@ -53,6 +53,23 @@ run electrical-switching electrical-1 on >/dev/null
 [[ "$(cat "$ACL")" == "$BEFORE" ]] || fail "a second on changed the ACL"
 run add electrical-node electrical-2 >/dev/null
 if grep -q 'armor/electrical/electrical-2/command' "$ACL"; then fail "another node became reachable"; fi
+# Every kind of node that has a health report may write its own, and only its own; the network node has none.
+for ROLE_AND_NAME in "node:field-node-n1" "hmi-node:hmi-node-h1" "solar-node:solar-node-s1" "electrical-node:electrical-node-e9" "alarm-node:alarm-node-a1"; do
+  ROLE="${ROLE_AND_NAME%%:*}"; USER_NAME="${ROLE_AND_NAME#*:}"; NODE_ID="${USER_NAME#*-node-}"; NODE_ID="${NODE_ID#field-node-}"
+  run add "$ROLE" "$NODE_ID" >/dev/null
+  grep -qx "topic write armor/health/$NODE_ID" <<<"$(block "$USER_NAME")" || fail "the $ROLE $NODE_ID cannot write its health report"
+done
+# An identity made before the report existed gets the one line, once, and the previous ACL is kept.
+sed -i '/^topic write armor\/health\/a1$/d' "$ACL"
+grep -qx 'topic write armor/health/a1' <<<"$(block alarm-node-a1)" && fail "the test could not take the line away"
+run health-report alarm-node a1 >/dev/null
+grep -qx 'topic write armor/health/a1' <<<"$(block alarm-node-a1)" || fail "health-report did not add the line"
+[[ -f "$WORK/prefix/etc/mosquitto/acl.before-health" ]] || fail "the previous ACL was not kept"
+BEFORE="$(cat "$ACL")"
+run health-report alarm-node a1 >/dev/null
+[[ "$(cat "$ACL")" == "$BEFORE" ]] || fail "a second health-report changed the ACL"
+if run health-report alarm-node nobody >/dev/null 2>&1; then fail "an unknown node was accepted"; fi
+if run health-report network-node a1 >/dev/null 2>&1; then fail "a node without a report was accepted"; fi
 # A network node writes its state and reads nothing, and nothing reaches it from the broker.
 run add network-node network-1 >/dev/null
 NET="$(block network-node-network-1)"

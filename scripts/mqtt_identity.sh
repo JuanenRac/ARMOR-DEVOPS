@@ -24,7 +24,7 @@ MQ="$PREFIX/etc/mosquitto"
 [[ "$(id -u)" -eq 0 ]] || { echo "run as root" >&2; exit 1; }
 [[ -f "$MQ/passwd" && -f "$MQ/acl" ]] || { echo "the A.R.M.O.R. broker is not installed (install_cm5.sh --with-mqtt)" >&2; exit 1; }
 
-usage() { echo "Usage: mqtt_identity.sh add node ID | add solar-node ID | add electrical-node ID | add network-node ID | add alarm-node ID | add hmi-node ID | add consumer NAME | add device NAME | add bridge NAME | upgrade-node NODE_ID | electrical-switching NODE_ID on|off | alarm-commands NODE_ID on|off | electrical-relays NODE_ID on|off | alarm-relays NODE_ID on|off | ha-discovery on|off [PREFIX] | remove USER" >&2; exit 2; }
+usage() { echo "Usage: mqtt_identity.sh add node ID | add solar-node ID | add electrical-node ID | add network-node ID | add alarm-node ID | add hmi-node ID | add consumer NAME | add device NAME | add bridge NAME | upgrade-node NODE_ID | health-report ROLE NODE_ID | electrical-switching NODE_ID on|off | alarm-commands NODE_ID on|off | electrical-relays NODE_ID on|off | alarm-relays NODE_ID on|off | ha-discovery on|off [PREFIX] | remove USER" >&2; exit 2; }
 ACTION="${1:-}"
 # Removes one line from the block of ONE identity ("user NAME" up to the next blank line), never from the others: the same line (topic readwrite armor/device/garage/#) can be in the
 # blocks of a device and of a node with the same name.
@@ -57,6 +57,7 @@ case "$ACTION" in
         echo "topic write armor/node/$NAME/telemetry"
         echo "topic write armor/node/$NAME/health"
         echo "topic write armor/node/$NAME/info"   # the address of its own web panel, for a console to link to
+        echo "topic write armor/health/$NAME"      # how the node is doing (uptime, memory, link ...), the same report for every kind of node
         echo "topic read armor/node/$NAME/command"
         # The pins mapped in the node's own panel are devices named after the node: armor/device/<node>/<pin>/state and /set.
         echo "topic readwrite armor/device/$NAME/#"
@@ -66,19 +67,23 @@ case "$ACTION" in
         # ARMOR-HMI, the touch panel: it only says that it is alive (health) and where its web page is (info). It sends no telemetry, so it cannot make up radar tracks.
         echo "topic write armor/node/$NAME/health"
         echo "topic write armor/node/$NAME/info"
+        echo "topic write armor/health/$NAME"
       elif [[ "$ROLE" == "solar-node" ]]; then
         # ARMOR-SOLAR: the readings of the inverters and batteries on its serial ports, armor/solar/<node>/<device>/state; it reads nothing.
         echo "topic write armor/solar/$NAME/#"
+        echo "topic write armor/health/$NAME"
       elif [[ "$ROLE" == "electrical-node" ]]; then
         # ARMOR-ELECTRICAL: what it measures on the house's network (armor/electrical/<node>/state) and its answers to a command (.../result); it reads nothing, so no command
         # reaches it from the broker until `electrical-switching <node> on` is run for it, on purpose.
         echo "topic write armor/electrical/$NAME/state"
         echo "topic write armor/electrical/$NAME/result"
+        echo "topic write armor/health/$NAME"
       elif [[ "$ROLE" == "alarm-node" ]]; then
         # ARMOR-ALARM: its state (armor/alarm/<node>/state) and its answers to a command (.../result). The only thing it reads is the state of the Zigbee zones the server tells it
         # (armor/alarm/<node>/zigbee: information, never a command); no command reaches it from the broker until `alarm-commands <node> on` is run for it, on purpose.
         echo "topic write armor/alarm/$NAME/state"
         echo "topic write armor/alarm/$NAME/result"
+        echo "topic write armor/health/$NAME"
         echo "topic read armor/alarm/$NAME/zigbee"
       elif [[ "$ROLE" == "network-node" ]]; then
         # ARMOR-NETWORK: what it sees on the local network (armor/network/<node>/state); it reads nothing, so nothing can be sent to it from the broker.
@@ -139,6 +144,30 @@ case "$ACTION" in
       chown root:armor "$MQ/acl"; chmod 0640 "$MQ/acl"
       reload_broker
       echo "the previous ACL is kept as acl.before-upgrade"
+    fi
+    ;;
+  health-report)
+    # A node installed before the health report existed may not write armor/health/<node>: this adds that one line to its block (idempotent; the previous ACL is kept). The server's own
+    # right to read it (armor/health/#) is added by install_cm5.sh.
+    ROLE="${2:-}"; NAME="${3:-}"
+    [[ "$NAME" =~ ^[a-z0-9][a-z0-9_-]{0,63}$ ]] || { echo "the node id must match ^[a-z0-9][a-z0-9_-]{0,63}\$" >&2; exit 2; }
+    case "$ROLE" in
+      node) USER_NAME="field-node-$NAME" ;;
+      solar-node) USER_NAME="solar-node-$NAME" ;;
+      electrical-node) USER_NAME="electrical-node-$NAME" ;;
+      alarm-node) USER_NAME="alarm-node-$NAME" ;;
+      hmi-node) USER_NAME="hmi-node-$NAME" ;;
+      *) usage ;;
+    esac
+    grep -qx "user $USER_NAME" "$MQ/acl" || { echo "$USER_NAME does not exist" >&2; exit 1; }
+    LINE="topic write armor/health/$NAME"
+    if awk -v u="user $USER_NAME" -v l="$LINE" 'BEGIN{inb=0; found=0} $0==u{inb=1; next} inb && /^$/{inb=0} inb && $0==l{found=1} END{exit found?0:1}' "$MQ/acl"; then
+      echo "$USER_NAME already has: $LINE"
+    else
+      cp -p "$MQ/acl" "$MQ/acl.before-health"
+      sed -i "/^user $USER_NAME\$/a $LINE" "$MQ/acl"
+      chown root:armor "$MQ/acl"; chmod 0640 "$MQ/acl"; reload_broker
+      echo "$USER_NAME now has: $LINE (the previous ACL is kept as acl.before-health)"
     fi
     ;;
   electrical-relays|alarm-relays)

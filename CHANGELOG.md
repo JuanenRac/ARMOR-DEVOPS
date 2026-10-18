@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented here.
 
+## [0.6.1] - Health reports in the broker's rules
+
+- The broker's rules let every kind of node write its own armor/health/<node> and the server read armor/health/#: mqtt_identity.sh add writes the line, install_cm5.sh adds the read line once to an existing server, and acl.example shows both.
+- mqtt_identity.sh health-report <role> <node> adds the line to a node installed earlier (idempotent; the previous rules are kept as acl.before-health). test_mqtt_identity.sh checks every kind of node, the upgrade and its refusals.
+
 ## [0.6.0] - An optional encrypted door to the broker (MQTT over TLS)
 
 - armor_mqtt_tls.sh makes the installation's own certificate authority (its key stays on the machine, mode 0600, never in a repository), a broker certificate for the machine's names and addresses and a second Mosquitto listener on 8883 with TLS next to the plain one, which it does not touch. It is idempotent and has plan, setup, status, export-ca, server-tls on and off (the server of the machine) and remove (files are put aside, never deleted).

@@ -41,3 +41,7 @@ The broker (18883) accepts only the **field** network and this machine; the serv
 they were, protected by the login). Nothing else is mentioned and the policy is *accept*, so SSH, another project's ports and DNS are untouched. It acts on the machine's input: services installed natively are covered,
 a port published by Docker is not (keep those on loopback behind Caddy). A remote way in through a router's port forwarding arrives from the router's or the Internet's address: give `--clients` only if that address is
 in it, or leave `--clients` out. **Never forward the broker's port.** The rules have been tested as text only (`scripts/test_firewall.sh`); they have not been loaded on a machine.
+
+## Health reports
+
+Every kind of node writes its own `armor/health/<node>` (the same report for a radar, a solar, an electrical, an alarm node and a wall panel), and the server reads `armor/health/#`. `scripts/mqtt_identity.sh add <role> <id>` writes the line for new nodes; for a node installed before, run `scripts/mqtt_identity.sh health-report <role> <id>` (idempotent, the previous rules are kept as `acl.before-health`). On an existing server `install_cm5.sh` adds the read line once.

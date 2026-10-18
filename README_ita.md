@@ -21,7 +21,7 @@
   <img src="https://img.shields.io/badge/License-GPL%203.0-blue.svg" alt="GPL 3.0">
   <img src="https://img.shields.io/badge/Deploy-Docker%20Compose-2496ed.svg" alt="Deploy">
   <img src="https://img.shields.io/badge/Bench-systemd-FFB020.svg" alt="Bench">
-  <img src="https://img.shields.io/badge/Version-0.6.0-0f6cbd.svg" alt="Version">
+  <img src="https://img.shields.io/badge/Version-0.6.1-0f6cbd.svg" alt="Version">
   <img src="https://img.shields.io/badge/Maturity-established-2EA44F.svg" alt="Maturity">
 </p>
 
@@ -35,7 +35,7 @@
 
 | | |
 |---|---|
-| Versione | `0.6.0` |
+| Versione | `0.6.1` |
 | Maturità | Consolidato |
 | Tecnologia | Docker Compose / Bash / YAML |
 | Su hardware reale | Governa il banco di prova CM5 in uso quotidiano, su una vera CM5 che ospita altro software; non ancora sul Jetson |
@@ -53,6 +53,7 @@
 * **Backup e ripristino:** `scripts/backup_data.sh` produce un archivio cifrato AES-256, verificato e con checksum dei dati del server (prove escluse salvo richiesta); `scripts/restore_data.sh` lo elenca o lo ripristina senza mai sovrascrivere dati esistenti.
 * **Una VPN e un nome per la casa, configurati da Studio:** `armor_wireguard.sh` crea una VPN WireGuard con pochi comandi (chiavi sulla macchina, una configurazione per telefono con codice QR, instradamento verso i nodi se serve) e `armor_ddns.sh` mantiene un nome DuckDNS, Cloudflare o altro puntato alla casa quando l'operatore cambia l'indirizzo; l'agente di manutenzione offre entrambi a Studio e al telefono, quindi nessuno deve digitare un comando, e una guida passo passo in otto lingue copre il router.**Pacchetti firmati:** l'assistente di manutenzione installa un pacchetto del server, di Studio o di un altro programma solo se porta una firma Ed25519 valida della chiave di rilascio del progetto (verificata in puro Python, senza software aggiuntivo); una firma assente, errata o manomessa lascia la macchina invariata. Una deroga d'emergenza esiste solo come impostazione nel file della macchina stessa.
 * **Una porta cifrata facoltativa verso il broker (MQTT su TLS):** `scripts/armor_mqtt_tls.sh` crea un'autorità di certificazione per l'installazione (la sua chiave resta sulla macchina, modo `0600`), un certificato del broker per i nomi e gli indirizzi della macchina e un secondo listener Mosquitto sull'8883 accanto a quello normale, che non tocca mai; è idempotente e ha `status`, `export-ca`, `server-tls` e `remove` (i file vengono messi da parte, mai cancellati). Provato con OpenSSL, con veri handshake, e su un vero Mosquitto 2.0 ([guida](docs/MQTT_TLS_ita.md)).
+* **Rapporti di salute consentiti:** le regole del broker lasciano a ogni nodo scrivere il proprio `armor/health/<nodo>` e al server leggere `armor/health/#`; `mqtt_identity.sh add` scrive la riga per ogni tipo di nodo e `mqtt_identity.sh health-report <ruolo> <nodo>` la aggiunge a un nodo installato prima (idempotente, le regole precedenti vengono conservate).
 
 ## 🧩 Ruolo in A.R.M.O.R.
 
