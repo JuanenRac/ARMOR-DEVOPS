@@ -64,7 +64,9 @@ refused
 
 # the syntax is checked by nft itself when the machine has it
 CHECK="$("$FW" check --field 192.168.0.0/24 --clients 192.168.10.0/24 2>&1)"
-if grep -q "FIREWALL_CHECK=SKIP" <<<"$CHECK"; then echo "note: nft is not installed here; the rules were not checked by it"; else expect_in "$CHECK" "FIREWALL_CHECK=PASS"; fi
+if grep -q "FIREWALL_CHECK=SKIP" <<<"$CHECK"; then echo "note: nft is not installed here; the rules were not checked by it"
+elif grep -qiE "operation not permitted|permission denied|must be root|netlink" <<<"$CHECK"; then echo "note: nft is installed but this user may not use it (no root); the rules were not checked by it"
+else expect_in "$CHECK" "FIREWALL_CHECK=PASS"; fi
 
 echo "$PASSED checks, $FAILED failures"
 [[ $FAILED -eq 0 ]] && echo "ARMOR_DEVOPS_FIREWALL=PASS"
