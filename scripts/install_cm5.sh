@@ -111,7 +111,7 @@ fi
 [[ -f "$PREFIX/etc/armor.voice.env" ]] && WITH_VOICE=1
 [[ -f "$PREFIX/etc/armor.network-node.env" ]] && WITH_NETWORK=1
 if [[ -z "$NETWORK_NODE_ID" ]]; then   # an upgrade keeps the name the watcher was installed with
-  NETWORK_NODE_ID="$(sed -n 's/^ARMOR_NETWORK_NODE_ID=//p' "$PREFIX/etc/armor.network-node.env" 2>/dev/null | head -1)"
+  NETWORK_NODE_ID="$(sed -n 's/^ARMOR_NETWORK_NODE_ID=//p' "$PREFIX/etc/armor.network-node.env" 2>/dev/null | head -1 || true)"   # a first install has no such file: that is not a failure under pipefail
   NETWORK_NODE_ID="${NETWORK_NODE_ID:-house-1}"
 fi
 [[ -f "$PREFIX/etc/armor.ai.env" ]] && WITH_AI=1

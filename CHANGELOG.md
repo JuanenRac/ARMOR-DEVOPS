@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented here.
 
+## [0.6.3] - The installer no longer stops silently on a first install
+
+- `install_cm5.sh` ended with exit code 2 and no message on a machine that had no `armor.network-node.env` yet (a first install without `--network-node-id`): the missing file made a pipeline fail under `pipefail`. It is now a first install like any other.
+- New tests: the installer's checks and plan (`test_install_plan.sh`), the settings check, the refusals of `generate_secrets.sh`, the edges of the backup and restore, the packager's signing and publishing, the admin agent's request checks and the maintenance agent's rollbacks and the helper-scripts update.
+- `build-test` now runs the Python tests of the helpers and every shell test on Linux, macOS and WSL (it says so when it cannot, on Windows).
+
 ## [0.6.2] - The maintenance helper updates the server dependencies again
 
 - Installing the dependencies of a server update failed when they had changed, because the unit hides the home of root and npm had nowhere to write; npm now gets its own home and cache inside the helper's data folder.

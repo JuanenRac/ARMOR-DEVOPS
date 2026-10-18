@@ -4,8 +4,10 @@
 # Nothing real is touched: a temporary prefix, a stand-in systemctl and a stand-in identity script. Needs a system with Unix sockets (Linux, macOS, WSL).
 from __future__ import annotations
 
+import contextlib
 import http.client
 import importlib.util
+import io
 import json
 import os
 import socket
@@ -15,6 +17,7 @@ import tempfile
 import threading
 import unittest
 from pathlib import Path
+from unittest import mock
 
 HERE = Path(__file__).resolve().parent
 TOKEN = "t" * 32
@@ -166,6 +169,124 @@ class AgentTest(unittest.TestCase):
         self.assertIn("add node south-2", log)
         self.assertIn("remove field-node-south-2", log)
         self.assertNotIn("armor-server", log)
+
+    def raw(self, method: str, path: str, headers: dict[str, str], body: bytes = b"") -> tuple[int, dict]:
+        connection = UnixConnection(self.sock)
+        connection.putrequest(method, path)
+        for key, value in headers.items():
+            connection.putheader(key, value)
+        connection.endheaders(body)
+        response = connection.getresponse()
+        data = json.loads(response.read().decode("utf-8"))
+        connection.close()
+        return response.status, data
+
+    def test_the_request_body_is_checked_before_anything_is_done(self) -> None:
+        token = {"X-Armor-Admin-Token": TOKEN}
+        self.assertEqual(self.raw("PUT", "/v1/files/server.env", {**token, "Content-Length": "-5"}), (400, {"error": "bad_length"}))
+        self.assertEqual(self.raw("PUT", "/v1/files/server.env", {**token, "Content-Length": "abc"}), (400, {"error": "bad_length"}))
+        self.assertEqual(self.raw("PUT", "/v1/files/server.env", {**token, "Content-Length": str(10 * 1024 * 1024)}), (413, {"error": "body_too_large"}))
+        self.assertEqual(self.raw("PUT", "/v1/files/server.env", {**token, "Content-Length": "5"}, b"{nope"), (400, {"error": "invalid_json"}))
+        self.assertEqual(self.raw("PUT", "/v1/files/server.env", {**token, "Content-Length": "2"}, b"[]"), (400, {"error": "invalid_json"}))
+        self.assertEqual(self.call("PUT", "/v1/files/server.env", {"content": 5})[1], {"error": "invalid_content"})
+        self.assertEqual(self.call("PUT", "/v1/files/server.env", {})[1], {"error": "invalid_content"})
+
+    def test_a_token_that_is_nearly_right_or_in_another_case_is_refused(self) -> None:
+        for token in (TOKEN[:-1], TOKEN + "t", TOKEN.upper(), ""):
+            self.assertEqual(self.call("GET", "/v1/services", token=token)[0], 401, repr(token))
+
+    def test_unknown_routes_and_methods_are_not_found_only_with_the_token(self) -> None:
+        self.assertEqual(self.call("GET", "/v2/services", token=None)[0], 401)          # nothing is learned without the token
+        for method, path in (("GET", "/v2/services"), ("GET", "/services"), ("GET", "/v1/nothing"), ("DELETE", "/v1/services"), ("POST", "/v1/files/server.env"), ("GET", "/v1/mqtt/accounts/x")):
+            self.assertEqual(self.call(method, path)[1], {"error": "not_found"}, (method, path))
+
+    def test_the_list_of_files_never_carries_their_contents(self) -> None:
+        status, data = self.call("GET", "/v1/files")
+        self.assertEqual(status, 200)
+        self.assertEqual([item["id"] for item in data["files"]], ["server.env", "mqtt.env", "network.env", "reach.txt", "mosquitto.conf", "mosquitto.acl"])
+        self.assertTrue(all("content" not in item for item in data["files"]))
+        self.assertNotIn("secret-one", json.dumps(data))
+
+    def test_only_the_newest_copies_of_a_file_are_kept_and_they_are_private(self) -> None:
+        path = self.prefix / "etc/armor.reach"
+        path.write_text("http://a.example:1=http://a.example:2\n", encoding="utf-8")
+        for index in range(8):
+            for old in path.parent.glob("armor.reach.bak-*"):
+                os.rename(old, old.with_name(old.name.replace("bak-", f"bak-0000{index}-")))   # distinct names without waiting a second
+            self.agent.write_file("reach.txt", f"http://b.example:{index + 10}=http://b.example:{index + 20}\n", None)
+        copies = sorted(path.parent.glob("armor.reach.bak-*"))
+        self.assertEqual(len(copies), self.agent.KEEP_BACKUPS)
+        self.assertTrue(all(stat.S_IMODE(copy.stat().st_mode) == 0o600 for copy in copies))
+        self.assertFalse(list(path.parent.glob(".armor.reach.*")))                       # no temporary file is left behind
+
+    def test_every_format_refuses_what_it_does_not_understand(self) -> None:
+        check = self.agent.check_content
+        for fmt, good, bad in (("env", "A_B=1\n# c\n\n", "1A=2"), ("acl", "user x\ntopic read a/b\npattern read a/%u\n", "allow all"),
+                               ("reach", "http://a.example:1=https://b.example:2\n", "http://a.example:1"), ("conf", "listener 1883\nallow_anonymous false\n", "=1")):
+            check(fmt, good)
+            with self.assertRaises(self.agent.Refused) as caught:
+                check(fmt, bad)
+            self.assertEqual(caught.exception.status, 422)
+        with self.assertRaises(self.agent.Refused) as caught:
+            check("env", "A=" + "x" * 1100)
+        self.assertEqual(caught.exception.code, "line_too_long:1")
+        with self.assertRaises(self.agent.Refused) as caught:
+            check("env", "A=1\nB=2\nbad line\n")
+        self.assertEqual(caught.exception.code, "invalid_line:3")
+
+    def test_a_failing_systemctl_is_a_bad_gateway_not_a_success(self) -> None:
+        failing = Path(self.tmp.name) / "systemctl-fails"
+        failing.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
+        failing.chmod(0o755)
+        original = self.agent.SYSTEMCTL
+        self.agent.SYSTEMCTL = str(failing)
+        try:
+            with self.assertRaises(self.agent.Refused) as caught:
+                self.agent.service_action("mosquitto", "restart")
+        finally:
+            self.agent.SYSTEMCTL = original
+        self.assertEqual((caught.exception.status, caught.exception.code), (502, "systemctl_failed"))
+
+    def test_a_process_is_paused_only_when_its_state_says_stopped(self) -> None:
+        self.assertFalse(self.agent.is_stopped_by_signal(0))
+        self.assertFalse(self.agent.is_stopped_by_signal(-4))
+        self.assertFalse(self.agent.is_stopped_by_signal(os.getpid()))            # this process is running
+        self.assertFalse(self.agent.is_stopped_by_signal(4194000))                # a process that does not exist
+
+    def test_accounts_of_unknown_shape_are_listed_but_not_manageable(self) -> None:
+        accounts = self.agent.parse_accounts("user armor-server\ntopic read a\n\nuser bridge-cnc\npattern read x/%u\n\nuser alarm-front-door\n# comment\ntopic write y\n")
+        by_user = {item["user"]: item for item in accounts}
+        self.assertEqual((by_user["armor-server"]["manageable"], by_user["armor-server"]["role"]), (False, "other"))
+        self.assertEqual((by_user["bridge-cnc"]["role"], by_user["bridge-cnc"]["name"], by_user["bridge-cnc"]["topics"]), ("bridge", "cnc", ["pattern read x/%u"]))
+        self.assertEqual((by_user["alarm-front-door"]["role"], by_user["alarm-front-door"]["name"]), ("alarm", "front-door"))
+        self.assertEqual(self.agent.parse_accounts(""), [])
+
+    def test_an_identity_script_that_fails_is_not_reported_as_success(self) -> None:
+        broken = Path(self.tmp.name) / "identity-broken.sh"
+        broken.write_text("#!/bin/bash\necho 'boom' >&2\nexit 3\n", encoding="utf-8")
+        original = self.agent.IDENTITY_SCRIPT
+        self.agent.IDENTITY_SCRIPT = broken
+        try:
+            with self.assertRaises(self.agent.Refused) as caught:
+                self.agent.add_account("node", "north-9")
+            self.assertEqual((caught.exception.status, caught.exception.code), (502, "identity_failed"))
+            with self.assertRaises(self.agent.Refused) as caught:
+                self.agent.remove_account("field-node-north-9")
+            self.assertEqual((caught.exception.status, caught.exception.code), (502, "identity_failed"))
+        finally:
+            self.agent.IDENTITY_SCRIPT = original
+
+    def test_the_agent_does_not_start_without_a_long_enough_token(self) -> None:
+        for token in ("", "short", "x" * 23):
+            with mock.patch.dict(os.environ, {"ARMOR_ADMIN_TOKEN": token}), mock.patch.object(sys, "argv", ["armor_admin_agent.py", "--socket", str(Path(self.tmp.name) / "never.sock")]):
+                with contextlib.redirect_stderr(io.StringIO()) as err:
+                    self.assertEqual(self.agent.main(), 2, token)
+            self.assertIn("ARMOR_ADMIN_TOKEN", err.getvalue())
+            self.assertFalse((Path(self.tmp.name) / "never.sock").exists())
+
+    def test_the_socket_is_not_open_to_everybody(self) -> None:
+        mode = stat.S_IMODE(os.stat(self.sock).st_mode)
+        self.assertEqual(mode & 0o007, 0, oct(mode))                                # nothing for "others"
 
 
 if __name__ == "__main__":

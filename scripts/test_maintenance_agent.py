@@ -370,6 +370,134 @@ class MaintenanceTest(unittest.TestCase):
         self.assertIn("unhealthy_rolled_back", view["error"])
         self.assertEqual(os.readlink(self.prefix / "current"), before)
 
+    def unhealthy_update(self, component: str):
+        """Runs an update after which the health check says no: the server's address answers not-ok, and for the others systemctl reports the unit failed (three seconds of waiting, not forty)."""
+        failing = self.prefix.parent / "systemctl-failed"
+        failing.write_text(f'#!/bin/sh\necho "$@" >> "{self.calls}"\nif [ "$1" = "is-active" ]; then echo failed; fi\nexit 0\n', encoding="utf-8")
+        failing.chmod(0o755)
+        FakeGitHub.healthy = False
+        original, original_systemctl = self.agent.healthy, self.agent.SYSTEMCTL
+        self.agent.healthy = lambda name, unit, wait=40.0: original(name, unit, wait=3.0)
+        self.agent.SYSTEMCTL = str(failing)
+        try:
+            return self.wait(self.agent.update_job([component], False))
+        finally:
+            self.agent.healthy, self.agent.SYSTEMCTL = original, original_systemctl
+            FakeGitHub.healthy = True
+
+    def test_a_python_package_that_does_not_answer_is_put_back(self) -> None:
+        self.publish("ARMOR-SERVER-AI", "0.2.5", {"src/armor_server_ai/__init__.py": b'__version__ = "0.2.5"\n', "src/armor_server_ai/new.py": b"x = 1\n"}, "ai")
+        view = self.unhealthy_update("ai")
+        self.assertEqual(view["state"], "failed")
+        self.assertIn("unhealthy_rolled_back", view["error"])
+        self.assertEqual(self.agent.installed_version("ai"), "0.2.4")
+        self.assertFalse((self.prefix / "ai" / "armor_server_ai" / "new.py").exists())
+        self.assertGreaterEqual(self.calls.read_text(encoding="utf-8").count("restart armor-server-ai"), 2)   # restarted with the new code, and again with the old
+
+    def test_a_python_program_that_does_not_answer_gets_its_files_back(self) -> None:
+        self.publish("ARMOR-NETWORK", "0.0.7", {"armor.project.json": b'{"version": "0.0.7"}', "src/armor_network/__init__.py": b'__version__ = "0.0.7"\n', "src/armor_network/new.py": b"x = 1\n"}, "network")
+        view = self.unhealthy_update("network")
+        self.assertEqual(view["state"], "failed")
+        self.assertIn("unhealthy_rolled_back", view["error"])
+        self.assertEqual(self.agent.installed_version("network"), "0.0.6")
+        self.assertFalse((self.prefix / "apps/ARMOR-NETWORK/src/armor_network/new.py").exists())
+        self.assertEqual(json.loads((self.prefix / "apps/ARMOR-NETWORK/armor.project.json").read_text(encoding="utf-8"))["version"], "0.0.6")
+
+    def test_a_package_that_lacks_its_package_folder_is_refused_and_changes_nothing(self) -> None:
+        self.publish("ARMOR-SERVER-AI", "0.2.5", {"readme.txt": b"nothing useful"}, "ai")
+        view = self.wait(self.agent.update_job(["ai"], False))
+        self.assertEqual(view["state"], "failed")
+        self.assertIn("bad_archive", view["error"])
+        self.assertEqual(self.agent.installed_version("ai"), "0.2.4")
+        self.assertEqual(self.calls.read_text(encoding="utf-8").count("restart"), 0)
+
+    def test_the_helper_scripts_are_replaced_with_the_right_modes_and_the_old_ones_kept(self) -> None:
+        bin_folder = self.prefix / "bin"
+        (bin_folder / "backup_data.sh").write_text("old backup\n", encoding="utf-8")
+        (bin_folder / "VERSION").write_text("0.4.7\n", encoding="utf-8")
+        (bin_folder / "unrelated.sh").write_text("not ours\n", encoding="utf-8")
+        files = {"scripts/backup_data.sh": b"new backup\n", "scripts/armor_admin_agent.py": b"print('admin')\n", "scripts/VERSION": b"0.4.8\n", "scripts/evil.sh": b"rm -rf /\n"}
+        self.publish("ARMOR-DEVOPS", "0.4.8", files, "devops")
+        calls = self.prefix.parent / "systemd-run.log"
+        stand_in = self.prefix.parent / "stand-in-bin"
+        stand_in.mkdir(exist_ok=True)
+        (stand_in / "systemd-run").write_text(f'#!/bin/sh\necho "$@" >> "{calls}"\n', encoding="utf-8")
+        (stand_in / "systemd-run").chmod(0o755)
+        saved = os.environ["PATH"]
+        os.environ["PATH"] = str(stand_in) + os.pathsep + saved
+        try:
+            view = self.wait(self.agent.update_job(["devops"], False))
+        finally:
+            os.environ["PATH"] = saved
+        self.assertEqual(view["state"], "done", view["log"])
+        self.assertEqual((bin_folder / "backup_data.sh").read_text(encoding="utf-8"), "new backup\n")
+        self.assertEqual((bin_folder / "VERSION").read_text(encoding="utf-8"), "0.4.8\n")
+        self.assertTrue(os.access(bin_folder / "backup_data.sh", os.X_OK))
+        self.assertTrue(os.access(bin_folder / "armor_admin_agent.py", os.X_OK))
+        self.assertFalse(os.access(bin_folder / "VERSION", os.X_OK))
+        self.assertFalse((bin_folder / "evil.sh").exists())                                  # only the closed list of names is copied
+        self.assertEqual((bin_folder / "unrelated.sh").read_text(encoding="utf-8"), "not ours\n")
+        (kept,) = (self.prefix / "releases-old").glob("maint-devops-*")
+        self.assertEqual((kept / "backup_data.sh").read_text(encoding="utf-8"), "old backup\n")
+        self.assertIn("armor-admin armor-maintenance", calls.read_text(encoding="utf-8"))   # the services that run them restart later, from outside
+        self.assertEqual(self.calls.read_text(encoding="utf-8").count("restart"), 0)      # the helper does not restart itself while it works
+        self.assertEqual(view["result"]["components"]["devops"]["backup"], kept.name)
+
+    def test_the_helper_scripts_package_without_a_scripts_folder_is_refused(self) -> None:
+        self.publish("ARMOR-DEVOPS", "0.4.8", {"src/other.py": b"x"}, "devops")
+        view = self.wait(self.agent.update_job(["devops"], False))
+        self.assertEqual(view["state"], "failed")
+        self.assertIn("bad_archive", view["error"])
+
+    def test_going_back_when_there_is_nothing_to_go_back_to_says_so(self) -> None:
+        view = self.wait(self.agent.rollback_job("ai"))
+        self.assertEqual(view["state"], "failed")
+        self.assertIn("nothing_to_go_back_to", view["error"])
+        view = self.wait(self.agent.rollback_job("server"))                   # the only release folder is the current one
+        self.assertEqual(view["state"], "failed")
+        self.assertIn("nothing_to_go_back_to", view["error"])
+
+    def test_going_back_restores_the_newest_copy_of_a_python_package(self) -> None:
+        self.publish("ARMOR-SERVER-AI", "0.2.5", {"src/armor_server_ai/__init__.py": b'__version__ = "0.2.5"\n'}, "ai")
+        self.assertEqual(self.wait(self.agent.update_job(["ai"], False))["state"], "done")
+        self.assertEqual(self.agent.installed_version("ai"), "0.2.5")
+        back = self.wait(self.agent.rollback_job("ai"))
+        self.assertEqual(back["state"], "done", back["log"])
+        self.assertEqual(self.agent.installed_version("ai"), "0.2.4")
+
+    def test_archives_with_links_devices_or_parent_references_are_never_unpacked(self) -> None:
+        folder = self.prefix.parent / "archives"
+        folder.mkdir(exist_ok=True)
+
+        def archive(name: str, member: tarfile.TarInfo, content: bytes = b"") -> Path:
+            path = folder / name
+            with tarfile.open(path, "w:gz") as tar:
+                tar.addfile(member, io.BytesIO(content))
+            return path
+
+        link = tarfile.TarInfo("src/link")
+        link.type = tarfile.SYMTYPE
+        link.linkname = "/etc/passwd"
+        fifo = tarfile.TarInfo("src/pipe")
+        fifo.type = tarfile.FIFOTYPE
+        absolute = tarfile.TarInfo("/tmp/armor-escape")
+        absolute.size = 1
+        parent = tarfile.TarInfo("src/../../escape")
+        parent.size = 1
+        for name, member in (("link.tgz", link), ("fifo.tgz", fifo), ("absolute.tgz", absolute), ("parent.tgz", parent)):
+            destination = folder / (name + ".out")
+            destination.mkdir(exist_ok=True)
+            with self.assertRaises(self.agent.Refused, msg=name) as caught:
+                self.agent.safe_extract(archive(name, member, b"x" if member.size else b""), destination)
+            self.assertEqual(caught.exception.code, "unsafe_archive")
+            self.assertEqual(list(destination.iterdir()), [], name)
+
+    def test_the_settings_file_is_read_as_plain_pairs(self) -> None:
+        path = self.prefix.parent / "settings.env"
+        path.write_text("# comment\nA=1\n\nB = two words \nlower=case\nbroken line\nC=a=b\n", encoding="utf-8")
+        self.assertEqual(self.agent.read_settings(path), {"A": "1", "C": "a=b"})
+        self.assertEqual(self.agent.read_settings(self.prefix.parent / "missing.env"), {})
+
     def test_old_copies_are_pruned_per_component_and_the_installers_are_left_alone(self) -> None:
         old = self.prefix / "releases-old"
         old.mkdir(exist_ok=True)
