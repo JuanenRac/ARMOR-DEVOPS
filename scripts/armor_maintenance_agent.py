@@ -41,7 +41,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-AGENT_VERSION = "0.1.4"
+AGENT_VERSION = "0.1.5"
 PREFIX = Path(os.environ.get("ARMOR_PREFIX", "/opt/armor"))
 SYSTEMCTL = os.environ.get("ARMOR_SYSTEMCTL", "systemctl")
 APT_GET = os.environ.get("ARMOR_APT_GET", "apt-get")
@@ -543,8 +543,15 @@ def install_release_dir(job: Job, component: str, staged: Path, version: str) ->
         old_lock = (current / "server" / "package-lock.json")
         if (source / "package-lock.json").exists() and old_lock.exists() and hashlib.sha256(old_lock.read_bytes()).digest() != hashlib.sha256((source / "package-lock.json").read_bytes()).digest():
             job.say("the dependencies changed: npm ci --omit=dev")
-            done = subprocess.run(["npm", "ci", "--omit=dev"], cwd=target / "server", capture_output=True, text=True, timeout=900, check=False)
+            npm_home = DATA_DIR / "npm-home"
+            npm_home.mkdir(parents=True, exist_ok=True)
+            # The unit runs with ProtectHome=true, so the home of root cannot be used: npm gets its own writable home and cache.
+            npm_env = {**os.environ, "HOME": str(npm_home), "npm_config_cache": str(npm_home / "cache"), "npm_config_update_notifier": "false", "npm_config_fund": "false", "npm_config_audit": "false"}
+            done = subprocess.run(["npm", "ci", "--omit=dev"], cwd=target / "server", capture_output=True, text=True, timeout=900, check=False, env=npm_env)
             if done.returncode != 0:
+                tail = [line for line in (done.stderr or done.stdout or "").splitlines() if line.strip()][-3:]
+                for line in tail:
+                    job.say("npm: " + line[:200])
                 raise Refused(500, "npm_failed")
     else:
         shutil.rmtree(target / "studio" / "dist", ignore_errors=True)

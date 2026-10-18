@@ -182,6 +182,13 @@ class MaintenanceTest(unittest.TestCase):
             time.sleep(0.1)
         self.fail("the job did not finish")
 
+    # ---- npm ----
+    def test_npm_gets_its_own_home_because_the_unit_hides_the_home_of_root(self) -> None:
+        source = Path(self.agent.__file__).read_text(encoding="utf-8")
+        self.assertIn('"HOME": str(npm_home)', source)
+        self.assertIn('"npm_config_cache"', source)
+        self.assertIn('job.say("npm: " + line[:200])', source)
+
     # ---- versions ----
     def test_versions_compare_with_three_and_four_components(self) -> None:
         key = self.agent.version_key

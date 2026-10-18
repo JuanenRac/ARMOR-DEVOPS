@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented here.
 
+## [0.6.2] - The maintenance helper updates the server dependencies again
+
+- Installing the dependencies of a server update failed when they had changed, because the unit hides the home of root and npm had nowhere to write; npm now gets its own home and cache inside the helper's data folder.
+- When npm fails, the last lines of its error now appear in the update log instead of only 'npm_failed'.
+- The helper reports version 0.1.5.
+- A test guards the home and cache given to npm.
+
 ## [0.6.1] - Health reports in the broker's rules
 
 - The broker's rules let every kind of node write its own armor/health/<node> and the server read armor/health/#: mqtt_identity.sh add writes the line, install_cm5.sh adds the read line once to an existing server, and acl.example shows both.
