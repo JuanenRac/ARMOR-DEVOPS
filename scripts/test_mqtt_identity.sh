@@ -37,7 +37,7 @@ run add electrical-node electrical-1 >/dev/null
 NODE="$(block electrical-node-electrical-1)"
 grep -qx 'topic write armor/electrical/electrical-1/state' <<<"$NODE" || fail "the node cannot write its state"
 grep -qx 'topic write armor/electrical/electrical-1/result' <<<"$NODE" || fail "the node cannot write its results"
-if grep -q 'topic read\|readwrite\|/#$' <<<"$NODE"; then fail "the node has more than it needs: $NODE"; fi
+if grep -v 'armor/control/' <<<"$NODE" | grep -q 'topic read\|readwrite\|/#$'; then fail "the node has more than it needs: $NODE"; fi
 # Nothing lets the server send a command yet: the broker would refuse it.
 if grep -q 'armor/electrical/electrical-1/command' "$ACL"; then fail "a command is reachable before it was turned on"; fi
 if grep -q 'topic write armor/electrical/' <<<"$(block armor-server)"; then fail "the server can write to an electrical node by default"; fi
@@ -125,7 +125,7 @@ AL="$(block alarm-node-alarm-1)"
 grep -qx 'topic write armor/alarm/alarm-1/state' <<<"$AL" || fail "the alarm node cannot write its state"
 grep -qx 'topic write armor/alarm/alarm-1/result' <<<"$AL" || fail "the alarm node cannot write its results"
 grep -qx 'topic read armor/alarm/alarm-1/zigbee' <<<"$AL" || fail "the alarm node cannot read the Zigbee zones the server tells it"
-if grep -v '^user ' <<<"$AL" | grep -v 'topic read armor/alarm/alarm-1/zigbee' | grep -q 'topic read\|readwrite\|/#$'; then fail "the alarm node has more than it needs: $AL"; fi
+if grep -v '^user ' <<<"$AL" | grep -v 'topic read armor/alarm/alarm-1/zigbee' | grep -v 'armor/control/' | grep -q 'topic read\|readwrite\|/#$'; then fail "the alarm node has more than it needs: $AL"; fi
 if grep -q 'armor/alarm/alarm-1/command' "$ACL"; then fail "an alarm command is reachable before it was turned on"; fi
 run alarm-commands alarm-1 on >/dev/null
 grep -qx 'topic read armor/alarm/alarm-1/command' <<<"$(block alarm-node-alarm-1)" || fail "the alarm node cannot read its commands after on"
@@ -173,4 +173,44 @@ if grep -q 'homeassistant' "$ACL"; then fail "ha-discovery off left the line"; f
 run ha-discovery on casa >/dev/null
 grep -qx 'topic write casa/#' <<<"$(block armor-server)" || fail "a prefix of its own was not honoured"
 if run ha-discovery on 'bad prefix' >/dev/null 2>&1; then fail "a prefix with a space was accepted"; fi
-echo "ARMOR_MQTT_IDENTITY=PASS the switch and the relays of an electrical node and the commands of an alarm node are reachable only after an explicit on, and off and remove take them away"
+# Remote control of the nodes (restart, pause, standby ...): the five kinds of node read their own order topic and the broadcast one and write their own answer, and nothing more; only the
+# server's identity may publish an order. No node can publish on any order topic, so none can command another.
+sed -i 's|^topic readwrite armor/device/#$|topic write armor/control/+/command\ntopic read armor/control/+/result\n&|' "$ACL"
+grep -qx 'topic write armor/control/+/command' <<<"$(block armor-server)" || fail "the test could not give the server the order line"
+for ROLE_AND_NAME in "node:field-node-c1" "hmi-node:hmi-node-c2" "solar-node:solar-node-c3" "electrical-node:electrical-node-c4" "alarm-node:alarm-node-c5"; do
+  ROLE="${ROLE_AND_NAME%%:*}"; USER_NAME="${ROLE_AND_NAME#*:}"; NODE_ID="${USER_NAME#*-node-}"; NODE_ID="${NODE_ID#field-node-}"
+  run add "$ROLE" "$NODE_ID" >/dev/null
+  CB="$(block "$USER_NAME")"
+  grep -qx "topic read armor/control/$NODE_ID/command" <<<"$CB" || fail "the $ROLE $NODE_ID cannot read its own control orders"
+  grep -qx 'topic read armor/control/all/command' <<<"$CB" || fail "the $ROLE $NODE_ID cannot read the broadcast orders"
+  grep -qx "topic write armor/control/$NODE_ID/result" <<<"$CB" || fail "the $ROLE $NODE_ID cannot write its own answer"
+  if grep -E '^topic (write|readwrite) armor/control/.*/command|armor/control/(\+|#)|^topic readwrite armor/control' <<<"$CB" >/dev/null; then fail "the $ROLE $NODE_ID can publish an order: $CB"; fi
+  if [[ "$(grep -c 'armor/control/' <<<"$CB")" != "3" ]]; then fail "the $ROLE $NODE_ID has other control rules than its three: $CB"; fi
+done
+# Only the server's block carries a write on an order topic, and no other identity reaches another node's answer or order.
+[[ "$(grep -c '^topic write armor/control/.*/command' "$ACL")" == "1" ]] || fail "more than the server can publish orders"
+grep -qx 'topic write armor/control/+/command' <<<"$(block armor-server)" || fail "the server lost the order line"
+if grep -q 'armor/control/c3/\|armor/control/c1/' <<<"$(block electrical-node-c4)"; then fail "a node reaches another node's control topics"; fi
+# A node with no control rules (installed before) gets exactly the three lines, once, and the previous ACL is kept; a node-control on a node that has them changes nothing.
+awk -v u="user alarm-node-c5" 'BEGIN{inb=0} $0==u{inb=1; print; next} inb && /^$/{inb=0} inb && /armor\/control\//{next} {print}' "$ACL" >"$ACL.tmp" && cat "$ACL.tmp" >"$ACL"; rm -f "$ACL.tmp"
+if grep -q 'armor/control/c5' "$ACL"; then fail "the test could not take the control lines away"; fi
+run node-control alarm-node c5 >/dev/null
+CB="$(block alarm-node-c5)"
+grep -qx 'topic read armor/control/c5/command' <<<"$CB" || fail "node-control did not add the order line"
+grep -qx 'topic read armor/control/all/command' <<<"$CB" || fail "node-control did not add the broadcast line"
+grep -qx 'topic write armor/control/c5/result' <<<"$CB" || fail "node-control did not add the answer line"
+[[ -f "$WORK/prefix/etc/mosquitto/acl.before-control" ]] || fail "the previous ACL was not kept"
+BEFORE="$(cat "$ACL")"
+run node-control alarm-node c5 >/dev/null
+[[ "$(cat "$ACL")" == "$BEFORE" ]] || fail "a second node-control changed the ACL"
+if run node-control alarm-node nobody >/dev/null 2>&1; then fail "an unknown node was accepted for control"; fi
+if run node-control network-node c5 >/dev/null 2>&1; then fail "a kind of node without control was accepted"; fi
+if run node-control alarm-node 'Bad Node' >/dev/null 2>&1; then fail "a bad node id was accepted for control"; fi
+# The network watcher and the plain devices get no control rules at all, and removing a node takes its control lines with it.
+run add network-node cn1 >/dev/null
+if grep -q 'armor/control/cn1' "$ACL"; then fail "the network node got control rules"; fi
+run remove alarm-node-c5 >/dev/null
+if grep -q 'armor/control/c5' "$ACL"; then fail "removing the node left control rules behind"; fi
+grep -qx 'topic write armor/control/+/command' <<<"$(block armor-server)" || fail "removing a node took the server's order line"
+
+echo "ARMOR_MQTT_IDENTITY=PASS the switch and the relays of an electrical node and the commands of an alarm node are reachable only after an explicit on, only the server publishes control orders and each node reads only its own, and off and remove take them away"

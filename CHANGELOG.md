@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented here.
 
+## [0.6.4] - Broker rules for controlling the nodes
+
+- The broker's rules for controlling the nodes from Studio: only the server's identity can publish an order (`armor/control/+/command`, which covers `armor/control/all/command`) and it reads the answers (`armor/control/+/result`); no node block has a write on an order topic, so no node can command another and a stolen node password can not restart the others.
+- `mqtt_identity.sh add node|hmi-node|solar-node|electrical-node|alarm-node` gives each new node three lines: it reads `armor/control/<node>/command` and `armor/control/all/command` and writes `armor/control/<node>/result`. The network watcher and the plain devices get none.
+- `mqtt_identity.sh node-control <role> <node>` adds the same three lines to a node installed before (idempotent, the previous rules are kept as `acl.before-control`); `install_cm5.sh` writes the server's two lines on a new install and adds them once to an existing one.
+- `test_mqtt_identity.sh` checks every kind of node, that nothing but the server can publish an order, the upgrade and its refusals, and that removing a node takes its rules with it. `acl.example` and the deployment notes describe the rules.
+
 ## [0.6.3] - The installer no longer stops silently on a first install
 
 - `install_cm5.sh` ended with exit code 2 and no message on a machine that had no `armor.network-node.env` yet (a first install without `--network-node-id`): the missing file made a pipeline fail under `pipefail`. It is now a first install like any other.

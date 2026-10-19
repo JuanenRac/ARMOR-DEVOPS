@@ -45,3 +45,11 @@ in it, or leave `--clients` out. **Never forward the broker's port.** The rules 
 ## Health reports
 
 Every kind of node writes its own `armor/health/<node>` (the same report for a radar, a solar, an electrical, an alarm node and a wall panel), and the server reads `armor/health/#`. `scripts/mqtt_identity.sh add <role> <id>` writes the line for new nodes; for a node installed before, run `scripts/mqtt_identity.sh health-report <role> <id>` (idempotent, the previous rules are kept as `acl.before-health`). On an existing server `install_cm5.sh` adds the read line once.
+
+## Remote control of the nodes
+
+Studio can restart, pause, put on standby, identify and read the diagnostics of a node through the server, which publishes the orders on `armor/control/<node>/command` (and on `armor/control/all/command` to arm every node at once); a node answers on `armor/control/<node>/result`. The broker's rules make this safe by themselves, whatever the software says:
+
+- only the server's identity (`armor-server`) has `topic write armor/control/+/command`; no node block has a write on an order topic, so no node can command another, and a stolen node password can not restart the others;
+- every kind of node (radar, solar, electrical, alarm, wall panel) reads only its own order topic and the broadcast one, and writes only its own answer; the network watcher and the plain devices get none of this;
+- `scripts/mqtt_identity.sh add <role> <id>` writes the three lines for new nodes; for a node installed before, run `scripts/mqtt_identity.sh node-control <role> <id>` (idempotent, the previous rules are kept as `acl.before-control`). On an existing server `install_cm5.sh` adds the server's two lines once.

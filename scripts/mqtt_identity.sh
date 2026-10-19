@@ -14,6 +14,7 @@
 #   sudo mqtt_identity.sh add device kitchen   # one smart device (a plug, a sensor): reads and writes armor/device/kitchen/# only
 #   sudo mqtt_identity.sh add bridge zigbee    # a bridge to many devices (Zigbee2MQTT, a Shelly gateway): all of armor/device/#
 #   sudo mqtt_identity.sh upgrade-node north-1 # an existing field node: also let it write armor/node/north-1/info (where its panel is) use armor/device/north-1/# (its mapped pins) and write armor/solar/north-1/# (inverters and batteries it reads)
+#   sudo mqtt_identity.sh node-control alarm-node alarm-1   # an identity made before remote control existed: also let the node read its own control orders and write its own answers
 #   sudo mqtt_identity.sh remove field-node-north-1
 #
 # The generated password is printed once, because the device needs it; it is
@@ -24,7 +25,7 @@ MQ="$PREFIX/etc/mosquitto"
 [[ "$(id -u)" -eq 0 ]] || { echo "run as root" >&2; exit 1; }
 [[ -f "$MQ/passwd" && -f "$MQ/acl" ]] || { echo "the A.R.M.O.R. broker is not installed (install_cm5.sh --with-mqtt)" >&2; exit 1; }
 
-usage() { echo "Usage: mqtt_identity.sh add node ID | add solar-node ID | add electrical-node ID | add network-node ID | add alarm-node ID | add hmi-node ID | add consumer NAME | add device NAME | add bridge NAME | upgrade-node NODE_ID | health-report ROLE NODE_ID | electrical-switching NODE_ID on|off | alarm-commands NODE_ID on|off | electrical-relays NODE_ID on|off | alarm-relays NODE_ID on|off | ha-discovery on|off [PREFIX] | remove USER" >&2; exit 2; }
+usage() { echo "Usage: mqtt_identity.sh add node ID | add solar-node ID | add electrical-node ID | add network-node ID | add alarm-node ID | add hmi-node ID | add consumer NAME | add device NAME | add bridge NAME | upgrade-node NODE_ID | health-report ROLE NODE_ID | node-control ROLE NODE_ID | electrical-switching NODE_ID on|off | alarm-commands NODE_ID on|off | electrical-relays NODE_ID on|off | alarm-relays NODE_ID on|off | ha-discovery on|off [PREFIX] | remove USER" >&2; exit 2; }
 ACTION="${1:-}"
 # Removes one line from the block of ONE identity ("user NAME" up to the next blank line), never from the others: the same line (topic readwrite armor/device/garage/#) can be in the
 # blocks of a device and of a node with the same name.
@@ -95,6 +96,13 @@ case "$ACTION" in
       else
         echo "topic read armor/server/alert"
       fi
+      # Remote control from Studio (restart, pause, standby ...): every kind of node READS its own order topic and the broadcast one, and WRITES its own answer. It can write no order topic,
+      # so no node can command another: only the server's identity may publish on armor/control/+/command.
+      case "$ROLE" in node|hmi-node|solar-node|electrical-node|alarm-node)
+        echo "topic read armor/control/$NAME/command"
+        echo "topic read armor/control/all/command"
+        echo "topic write armor/control/$NAME/result" ;;
+      esac
     } >>"$MQ/acl"
     chown root:armor "$MQ/passwd" "$MQ/acl"; chmod 0640 "$MQ/passwd" "$MQ/acl"
     reload_broker
@@ -168,6 +176,34 @@ case "$ACTION" in
       sed -i "/^user $USER_NAME\$/a $LINE" "$MQ/acl"
       chown root:armor "$MQ/acl"; chmod 0640 "$MQ/acl"; reload_broker
       echo "$USER_NAME now has: $LINE (the previous ACL is kept as acl.before-health)"
+    fi
+    ;;
+  node-control)
+    # A node installed before remote control existed may not read its own control orders nor write its answer: this adds the three lines to its block (idempotent; the previous ACL is kept).
+    # The server's right to publish the orders (armor/control/+/command) and to read the answers is added by install_cm5.sh. A node can never publish an order.
+    ROLE="${2:-}"; NAME="${3:-}"
+    [[ "$NAME" =~ ^[a-z0-9][a-z0-9_-]{0,63}$ ]] || { echo "the node id must match ^[a-z0-9][a-z0-9_-]{0,63}\$" >&2; exit 2; }
+    case "$ROLE" in
+      node) USER_NAME="field-node-$NAME" ;;
+      solar-node) USER_NAME="solar-node-$NAME" ;;
+      electrical-node) USER_NAME="electrical-node-$NAME" ;;
+      alarm-node) USER_NAME="alarm-node-$NAME" ;;
+      hmi-node) USER_NAME="hmi-node-$NAME" ;;
+      *) usage ;;
+    esac
+    grep -qx "user $USER_NAME" "$MQ/acl" || { echo "$USER_NAME does not exist" >&2; exit 1; }
+    CHANGED=0
+    for LINE in "topic read armor/control/$NAME/command" "topic read armor/control/all/command" "topic write armor/control/$NAME/result"; do
+      if awk -v u="user $USER_NAME" -v l="$LINE" 'BEGIN{inb=0; found=0} $0==u{inb=1; next} inb && /^$/{inb=0} inb && $0==l{found=1} END{exit found?0:1}' "$MQ/acl"; then
+        echo "$USER_NAME already has: $LINE"
+      else
+        [[ "$CHANGED" -eq 1 ]] || cp -p "$MQ/acl" "$MQ/acl.before-control"
+        sed -i "/^user $USER_NAME\$/a $LINE" "$MQ/acl"; CHANGED=1; echo "$USER_NAME now has: $LINE"
+      fi
+    done
+    if [[ "$CHANGED" -eq 1 ]]; then
+      chown root:armor "$MQ/acl"; chmod 0640 "$MQ/acl"; reload_broker
+      echo "the previous ACL is kept as acl.before-control"
     fi
     ;;
   electrical-relays|alarm-relays)

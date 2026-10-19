@@ -416,6 +416,8 @@ topic read armor/electrical/#
 topic read armor/alarm/#
 topic read armor/network/#
 topic write armor/alarm/+/zigbee
+topic write armor/control/+/command
+topic read armor/control/+/result
 topic write armor/server/alert
 topic readwrite armor/device/#
 ACL
@@ -428,7 +430,7 @@ ACL
   sed -i "s#^ARMOR_MQTT_URL=mqtt://.*#ARMOR_MQTT_URL=mqtt://$LOCAL_HOST:$MQTT_PORT#" "$PREFIX/etc/armor.mqtt.env"
   # An install made before devices existed: let the server listen on, and command, the devices' topics too.
   # An install made before the nodes said where their panel is, or before solar gateways or electrical nodes existed: let the server read those topics too (each line added once).
-  for ACL_LINE in 'topic read armor/node/+/info' 'topic read armor/solar/#' 'topic read armor/electrical/#' 'topic read armor/alarm/#' 'topic read armor/network/#' 'topic read armor/health/#' 'topic write armor/alarm/+/zigbee'; do
+  for ACL_LINE in 'topic read armor/node/+/info' 'topic read armor/solar/#' 'topic read armor/electrical/#' 'topic read armor/alarm/#' 'topic read armor/network/#' 'topic read armor/health/#' 'topic write armor/alarm/+/zigbee' 'topic write armor/control/+/command' 'topic read armor/control/+/result'; do
     grep -qxF "$ACL_LINE" "$MQ/acl" || sed -i "/^topic write armor\/server\/alert\$/a $ACL_LINE" "$MQ/acl"
   done
   grep -qx 'topic readwrite armor/device/#' "$MQ/acl" || sed -i '0,/^topic write armor\/server\/alert$/s//topic write armor\/server\/alert\ntopic readwrite armor\/device\/#/' "$MQ/acl"
