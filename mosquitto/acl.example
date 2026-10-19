@@ -1,7 +1,7 @@
 # Broker access rules. Copy to secrets/mqtt.acl and adapt.
 #
 # One identity per field node, and a node reaches only its own namespace: it writes
-# its telemetry and health (its MQTT last will is a health message) and reads its own
+# its telemetry and health (its MQTT last will and its "online" message are health messages, retained) and reads its own
 # commands. It can not read another node's data.
 # Replace NODE_ID per device; repeat the block for every node.
 user field-node-NODE_ID

@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented here.
 
+## [0.6.5] - The broker keeps the life state of the nodes
+
+- Documented that the node's last will and its "online" message on `armor/health/<node>` are retained and are covered by the rule `mqtt_identity.sh` already writes for every kind of node; no new line is needed.
+
 ## [0.6.4] - Broker rules for controlling the nodes
 
 - The broker's rules for controlling the nodes from Studio: only the server's identity can publish an order (`armor/control/+/command`, which covers `armor/control/all/command`) and it reads the answers (`armor/control/+/result`); no node block has a write on an order topic, so no node can command another and a stolen node password can not restart the others.
