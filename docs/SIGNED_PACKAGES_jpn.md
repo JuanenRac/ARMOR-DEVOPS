@@ -47,3 +47,5 @@ ARMOR_MAINT_ALLOW_UNSIGNED=1
 ## テスト
 
 `scripts/test_maintenance_agent.py` は、有効な署名、改ざんされたパッケージ、`.sig` の欠落、別の鍵による署名、不正なデータ、例外(ファイルからのみ)、RFC 8032 のテストベクター、ヘルパーの鍵が `fw_trust.hpp` の鍵と同じであることを確認します。使い捨ての鍵を使い、本物の鍵は使いません。
+
+パッケージ作成ツールは古いビルドのパッケージ化を拒否します。`server` と `studio` では、`package.json`(Studio では `dist/version.json` も)のバージョンが `armor.project.json` と一致し、`dist/` がビルド元のソースより古くないことが必要です。先に再ビルドしてください(`npm run build`)。

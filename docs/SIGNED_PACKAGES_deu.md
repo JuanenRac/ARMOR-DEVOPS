@@ -47,3 +47,5 @@ Erzeugen Sie ein neues Paar und tragen Sie den neuen öffentlichen Schlüssel in
 ## Tests
 
 `scripts/test_maintenance_agent.py` deckt ab: gültige Signatur, manipuliertes Paket, fehlende `.sig`, Signatur eines anderen Schlüssels, Datenmüll, die Ausnahme (nur aus der Datei), den RFC-8032-Testvektor und dass der Schlüssel im Helfer der aus `fw_trust.hpp` ist. Sie verwenden Wegwerfschlüssel, nie den echten.
+
+Der Paketierer weigert sich, einen veralteten Build zu packen: Bei `server` und `studio` muss die Version in `package.json` (bei Studio auch in `dist/version.json`) die aus `armor.project.json` sein, und `dist/` darf nicht älter sein als der Quellcode, aus dem es gebaut wurde. Zuerst neu bauen (`npm run build`).

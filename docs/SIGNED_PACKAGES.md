@@ -47,3 +47,5 @@ Make a new pair and put the new public key in `PACKAGE_PUBLIC_KEY` and in the fi
 ## Tests
 
 `scripts/test_maintenance_agent.py` covers a valid signature, a tampered package, a missing `.sig`, a signature by another key, garbage, the override (only from the file), the RFC 8032 test vector, and that the key in the helper is the one in `fw_trust.hpp`. They use throwaway keys, never the real one.
+
+The packager refuses to pack a stale build: for `server` and `studio` the version in `package.json` (and, for Studio, in `dist/version.json`) must be the one in `armor.project.json`, and `dist/` must not be older than the sources it was built from. Build again (`npm run build`) first.

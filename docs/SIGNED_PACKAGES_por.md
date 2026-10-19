@@ -47,3 +47,5 @@ Crie um par novo e coloque a nova chave pública em `PACKAGE_PUBLIC_KEY` e no fi
 ## Testes
 
 `scripts/test_maintenance_agent.py` cobre uma assinatura válida, um pacote adulterado, um `.sig` em falta, uma assinatura de outra chave, lixo, a exceção (só a partir do ficheiro), o vetor de teste da RFC 8032 e que a chave do assistente é a de `fw_trust.hpp`. Usam chaves descartáveis, nunca a verdadeira.
+
+O empacotador recusa-se a empacotar uma compilação desatualizada: para `server` e `studio`, a versão em `package.json` (e, no Studio, em `dist/version.json`) tem de ser a de `armor.project.json`, e `dist/` não pode ser mais antigo do que o código-fonte a partir do qual foi compilado. Compile de novo (`npm run build`) primeiro.

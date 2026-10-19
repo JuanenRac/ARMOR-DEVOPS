@@ -47,3 +47,5 @@ ARMOR_MAINT_ALLOW_UNSIGNED=1
 ## 测试
 
 `scripts/test_maintenance_agent.py` 覆盖:有效签名、被篡改的软件包、缺失的 `.sig`、其他密钥的签名、乱码、例外(仅限来自该文件)、RFC 8032 测试向量,以及助手中的密钥与 `fw_trust.hpp` 中的一致。测试使用一次性密钥,绝不使用真实密钥。
+
+打包工具会拒绝打包过期的构建:对于 `server` 和 `studio`,`package.json` 中的版本(Studio 还包括 `dist/version.json`)必须与 `armor.project.json` 一致,且 `dist/` 不能比其构建所用的源代码更旧。请先重新构建(`npm run build`)。

@@ -49,7 +49,7 @@ class PackageTest(unittest.TestCase):
             return {member.name for member in tar.getmembers()}
 
     def test_the_server_package_has_the_built_code_and_the_dependencies_list(self) -> None:
-        repo = make(self.root, "ARMOR-SERVER", "0.5.6", {"dist/server.mjs": "x", "dist/server_solar.mjs": "y", "package.json": "{}", "package-lock.json": "{}", "src/app.ts": "no"})
+        repo = make(self.root, "ARMOR-SERVER", "0.5.6", {"dist/server.mjs": "x", "dist/server_solar.mjs": "y", "package.json": json.dumps({"version": "0.5.6"}), "package-lock.json": "{}", "src/app.ts": "no"})
         package, version, digest = module.build("server", repo, self.root / "out")
         self.assertEqual((package.name, version), ("armor-server-0.5.6.tgz", "0.5.6"))
         self.assertEqual(self.names(package), {"server/dist/server.mjs", "server/dist/server_solar.mjs", "server/package.json", "server/package-lock.json"})
@@ -75,6 +75,70 @@ class PackageTest(unittest.TestCase):
             module.build("studio", repo, self.root / "out")
         with self.assertRaises(SystemExit):
             module.build("server", repo, self.root / "out")
+
+    # ---- a stale build is never packed ----
+    def built_repo(self, component: str, name: str, version: str = "0.8.0.4", dist_version: str | None = None):
+        """A repository whose build is newer than its source (the normal state after `npm run build`)."""
+        files = {"src/app.ts": "x", "package.json": json.dumps({"version": version})}
+        if component == "studio":
+            files.update({"index.html": "<html>", "dist/index.html": "<html>", "dist/version.json": json.dumps({"name": "armor-studio", "version": dist_version or version}), "tools/serve.mjs": "s"})
+        else:
+            files.update({"dist/server.mjs": "m", "package-lock.json": "{}"})
+        repo = make(self.root, name, version, files)
+        future = os.path.getmtime(repo / "src" / "app.ts") + 100
+        for item in (repo / "dist").rglob("*"):
+            if item.is_file():
+                os.utime(item, (future, future))
+        return repo
+
+    def test_a_studio_build_with_the_current_version_and_newer_than_the_source_is_packed(self) -> None:
+        repo = self.built_repo("studio", "ARMOR-STUDIO")
+        package, version, _digest = module.build("studio", repo, self.root / "out")
+        self.assertEqual(version, "0.8.0.4")
+        self.assertIn("studio/dist/version.json", self.names(package))
+
+    def test_a_studio_dist_that_says_another_version_is_refused(self) -> None:
+        repo = self.built_repo("studio", "ARMOR-STUDIO", dist_version="0.8.0.3")
+        with self.assertRaises(SystemExit) as raised:
+            module.build("studio", repo, self.root / "out")
+        self.assertIn("dist/version.json says 0.8.0.3", str(raised.exception))
+        self.assertFalse((self.root / "out").exists() and list((self.root / "out").glob("*.tgz")))
+
+    def test_a_dist_older_than_the_source_is_refused(self) -> None:
+        for component, name in (("studio", "ARMOR-STUDIO"), ("server", "ARMOR-SERVER")):
+            repo = self.built_repo(component, name)
+            old = os.path.getmtime(repo / "src" / "app.ts") - 3600
+            for item in (repo / "dist").rglob("*"):
+                if item.is_file():
+                    os.utime(item, (old, old))
+            with self.assertRaises(SystemExit) as raised:
+                module.build(component, repo, self.root / "out")
+            self.assertIn("older than the source", str(raised.exception))
+
+    def test_a_source_edited_after_the_build_is_refused(self) -> None:
+        repo = self.built_repo("server", "ARMOR-SERVER", version="0.8.0.0")
+        later = os.path.getmtime(repo / "dist" / "server.mjs") + 60
+        os.utime(repo / "src" / "app.ts", (later, later))
+        with self.assertRaises(SystemExit):
+            module.build("server", repo, self.root / "out")
+
+    def test_a_package_json_with_another_version_is_refused(self) -> None:
+        for component, name in (("studio", "ARMOR-STUDIO"), ("server", "ARMOR-SERVER")):
+            repo = self.built_repo(component, name)
+            (repo / "package.json").write_text(json.dumps({"version": "0.8.0.3"}), encoding="utf-8")
+            with self.assertRaises(SystemExit) as raised:
+                module.build(component, repo, self.root / "out")
+            self.assertIn("package.json says 0.8.0.3", str(raised.exception))
+
+    def test_a_missing_package_json_is_refused(self) -> None:
+        repo = self.built_repo("server", "ARMOR-SERVER")
+        (repo / "package.json").unlink()
+        with self.assertRaises(SystemExit):
+            module.build("server", repo, self.root / "out")
+
+    def test_the_other_components_are_not_checked_for_a_build(self) -> None:
+        repo = make(self.root, "ARMOR-NETWORK", "0.8.0.1", {"src/armor_network/__init__.py": "n", "pyproject.toml": "p"})
+        module.build("network", repo, self.root / "out")
 
     def test_a_four_part_version_is_accepted_and_a_bad_one_is_not(self) -> None:
         repo = make(self.root, "ARMOR-NETWORK", "0.8.0.1", {"src/armor_network/__init__.py": "n", "pyproject.toml": "p"})

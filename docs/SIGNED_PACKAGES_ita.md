@@ -47,3 +47,5 @@ Crea una nuova coppia e metti la nuova chiave pubblica in `PACKAGE_PUBLIC_KEY` e
 ## Test
 
 `scripts/test_maintenance_agent.py` copre una firma valida, un pacchetto manomesso, un `.sig` mancante, una firma di un'altra chiave, dati spazzatura, l'eccezione (solo dal file), il vettore di prova della RFC 8032 e che la chiave dell'assistente sia quella di `fw_trust.hpp`. Usano chiavi usa e getta, mai quella vera.
+
+Il pacchettizzatore rifiuta di impacchettare una build obsoleta: per `server` e `studio` la versione in `package.json` (e, per Studio, in `dist/version.json`) deve essere quella di `armor.project.json`, e `dist/` non deve essere più vecchio dei sorgenti da cui è stato compilato. Ricompila prima (`npm run build`).

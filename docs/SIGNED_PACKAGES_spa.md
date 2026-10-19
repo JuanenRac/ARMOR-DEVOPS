@@ -47,3 +47,5 @@ Crea un par nuevo y pon la clave pública nueva en `PACKAGE_PUBLIC_KEY` y en el 
 ## Pruebas
 
 `scripts/test_maintenance_agent.py` cubre una firma válida, un paquete manipulado, un `.sig` ausente, una firma de otra clave, basura, la excepción (solo desde el archivo), el vector de prueba de la RFC 8032 y que la clave del ayudante es la de `fw_trust.hpp`. Usan claves desechables, nunca la real.
+
+El empaquetador se niega a empaquetar una compilación obsoleta: para `server` y `studio`, la versión de `package.json` (y, en Studio, la de `dist/version.json`) debe ser la de `armor.project.json`, y `dist/` no puede ser más antiguo que el código fuente con el que se compiló. Compila de nuevo (`npm run build`) antes.

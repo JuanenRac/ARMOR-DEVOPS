@@ -107,6 +107,47 @@ def version_of(repo: Path) -> str:
     return version
 
 
+# What a built program is made from, by component: if any of it is newer than what was built, the build is stale (the package would carry the OLD program under the NEW version).
+SOURCES = {"server": ["src", "tsconfig.json"], "studio": ["src", "index.html", "public", "vite.config.ts"]}
+BUILT = {"server": ["dist/server.mjs", "dist/server_solar.mjs"], "studio": ["dist/index.html", "dist/version.json"]}
+STALE_TOLERANCE_SECONDS = 2.0
+
+
+def newest_mtime(root: Path, names: list[str]) -> float:
+    newest = 0.0
+    for name in names:
+        path = root / name
+        if path.is_file():
+            newest = max(newest, path.stat().st_mtime)
+        elif path.is_dir():
+            newest = max([newest, *(item.stat().st_mtime for item in files_under(path))])
+    return newest
+
+
+def check_built_is_current(component: str, repo: Path, version: str) -> None:
+    """Refuses to pack a build that is not the current version of the code: the version it says, and the age of what it was built from."""
+    if component not in SOURCES:
+        return
+    problems: list[str] = []
+    package_json = repo / "package.json"
+    if not package_json.is_file():
+        problems.append("package.json is missing")
+    else:
+        found = str(json.loads(package_json.read_text(encoding="utf-8")).get("version"))
+        if found != version:
+            problems.append(f"package.json says {found} and the manifest {version}")
+    if component == "studio":
+        built = str(json.loads((repo / "dist" / "version.json").read_text(encoding="utf-8")).get("version"))
+        if built != version:
+            problems.append(f"dist/version.json says {built} and the manifest {version}: dist is stale, run `npm run build`")
+    built_at = min((repo / name).stat().st_mtime for name in BUILT[component] if (repo / name).is_file())
+    source_at = newest_mtime(repo, SOURCES[component])
+    if source_at > built_at + STALE_TOLERANCE_SECONDS:
+        problems.append("the build is older than the source it was built from (dist is stale): run `npm run build` again")
+    if problems:
+        raise SystemExit(f"{repo.name} is not ready to pack: " + "; ".join(problems))
+
+
 def files_under(root: Path):
     for path in sorted(root.rglob("*")):
         if path.is_file() and not (set(path.relative_to(root).parts) & SKIP) and not path.name.endswith((".pyc", ".map")):
@@ -121,6 +162,7 @@ def build(component: str, repo: Path, out: Path) -> tuple[Path, str, str]:
     if missing:
         raise SystemExit(f"{name} is not ready to pack (build it first): missing {', '.join(missing)}")
     version = version_of(repo)
+    check_built_is_current(component, repo, version)
     out.mkdir(parents=True, exist_ok=True)
     package = out / f"armor-{component}-{version}.tgz"
     with tarfile.open(package, "w:gz") as tar:

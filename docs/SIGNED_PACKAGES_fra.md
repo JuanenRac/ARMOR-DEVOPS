@@ -47,3 +47,5 @@ Créez une nouvelle paire et placez la nouvelle clé publique dans `PACKAGE_PUBL
 ## Tests
 
 `scripts/test_maintenance_agent.py` couvre une signature valide, un paquet altéré, un `.sig` absent, une signature d'une autre clé, du bruit, la dérogation (uniquement depuis le fichier), le vecteur de test de la RFC 8032 et le fait que la clé de l'assistant est celle de `fw_trust.hpp`. Ils utilisent des clés jetables, jamais la vraie.
+
+Le packager refuse d'empaqueter une compilation périmée : pour `server` et `studio`, la version de `package.json` (et, pour Studio, celle de `dist/version.json`) doit être celle de `armor.project.json`, et `dist/` ne doit pas être plus ancien que les sources dont il est issu. Recompilez d'abord (`npm run build`).
