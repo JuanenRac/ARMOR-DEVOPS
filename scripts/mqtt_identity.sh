@@ -14,7 +14,7 @@
 #   sudo mqtt_identity.sh add device kitchen   # one smart device (a plug, a sensor): reads and writes armor/device/kitchen/# only
 #   sudo mqtt_identity.sh add bridge zigbee    # a bridge to many devices (Zigbee2MQTT, a Shelly gateway): all of armor/device/#
 #   sudo mqtt_identity.sh upgrade-node north-1 # an existing field node: also let it write armor/node/north-1/info (where its panel is) use armor/device/north-1/# (its mapped pins) and write armor/solar/north-1/# (inverters and batteries it reads)
-#   sudo mqtt_identity.sh node-control alarm-node alarm-1   # an identity made before remote control existed: also let the node read its own control orders and write its own answers
+#   sudo mqtt_identity.sh node-control alarm-node alarm-1   # an identity made before remote control existed: also let the node read its own control orders and write its own answers and maintenance signal
 #   sudo mqtt_identity.sh remove field-node-north-1
 #
 # The generated password is printed once, because the device needs it; it is
@@ -96,12 +96,14 @@ case "$ACTION" in
       else
         echo "topic read armor/server/alert"
       fi
-      # Remote control from Studio (restart, pause, standby ...): every kind of node READS its own order topic and the broadcast one, and WRITES its own answer. It can write no order topic,
+      # Remote control from Studio (restart, pause, standby ...): every kind of node READS its own order topic and the broadcast one, and WRITES its own answer and its own maintenance signal. It can write no order topic,
       # so no node can command another: only the server's identity may publish on armor/control/+/command.
       case "$ROLE" in node|hmi-node|solar-node|electrical-node|alarm-node)
         echo "topic read armor/control/$NAME/command"
         echo "topic read armor/control/all/command"
-        echo "topic write armor/control/$NAME/result" ;;
+        echo "topic write armor/control/$NAME/result"
+        # Its own planned-maintenance signal (retained): the node says it is about to be quiet on purpose. Only its own topic; the server reads armor/control/+/maintenance.
+        echo "topic write armor/control/$NAME/maintenance" ;;
       esac
     } >>"$MQ/acl"
     chown root:armor "$MQ/passwd" "$MQ/acl"; chmod 0640 "$MQ/passwd" "$MQ/acl"
@@ -179,7 +181,7 @@ case "$ACTION" in
     fi
     ;;
   node-control)
-    # A node installed before remote control existed may not read its own control orders nor write its answer: this adds the three lines to its block (idempotent; the previous ACL is kept).
+    # A node installed before remote control existed may not read its own control orders nor write its answer and its maintenance signal: this adds the four lines to its block (idempotent; the previous ACL is kept).
     # The server's right to publish the orders (armor/control/+/command) and to read the answers is added by install_cm5.sh. A node can never publish an order.
     ROLE="${2:-}"; NAME="${3:-}"
     [[ "$NAME" =~ ^[a-z0-9][a-z0-9_-]{0,63}$ ]] || { echo "the node id must match ^[a-z0-9][a-z0-9_-]{0,63}\$" >&2; exit 2; }
@@ -193,7 +195,7 @@ case "$ACTION" in
     esac
     grep -qx "user $USER_NAME" "$MQ/acl" || { echo "$USER_NAME does not exist" >&2; exit 1; }
     CHANGED=0
-    for LINE in "topic read armor/control/$NAME/command" "topic read armor/control/all/command" "topic write armor/control/$NAME/result"; do
+    for LINE in "topic read armor/control/$NAME/command" "topic read armor/control/all/command" "topic write armor/control/$NAME/result" "topic write armor/control/$NAME/maintenance"; do
       if awk -v u="user $USER_NAME" -v l="$LINE" 'BEGIN{inb=0; found=0} $0==u{inb=1; next} inb && /^$/{inb=0} inb && $0==l{found=1} END{exit found?0:1}' "$MQ/acl"; then
         echo "$USER_NAME already has: $LINE"
       else

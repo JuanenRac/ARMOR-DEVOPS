@@ -175,7 +175,7 @@ grep -qx 'topic write casa/#' <<<"$(block armor-server)" || fail "a prefix of it
 if run ha-discovery on 'bad prefix' >/dev/null 2>&1; then fail "a prefix with a space was accepted"; fi
 # Remote control of the nodes (restart, pause, standby ...): the five kinds of node read their own order topic and the broadcast one and write their own answer, and nothing more; only the
 # server's identity may publish an order. No node can publish on any order topic, so none can command another.
-sed -i 's|^topic readwrite armor/device/#$|topic write armor/control/+/command\ntopic read armor/control/+/result\n&|' "$ACL"
+sed -i 's|^topic readwrite armor/device/#$|topic write armor/control/+/command\ntopic read armor/control/+/result\ntopic read armor/control/+/maintenance\n&|' "$ACL"
 grep -qx 'topic write armor/control/+/command' <<<"$(block armor-server)" || fail "the test could not give the server the order line"
 for ROLE_AND_NAME in "node:field-node-c1" "hmi-node:hmi-node-c2" "solar-node:solar-node-c3" "electrical-node:electrical-node-c4" "alarm-node:alarm-node-c5"; do
   ROLE="${ROLE_AND_NAME%%:*}"; USER_NAME="${ROLE_AND_NAME#*:}"; NODE_ID="${USER_NAME#*-node-}"; NODE_ID="${NODE_ID#field-node-}"
@@ -184,14 +184,19 @@ for ROLE_AND_NAME in "node:field-node-c1" "hmi-node:hmi-node-c2" "solar-node:sol
   grep -qx "topic read armor/control/$NODE_ID/command" <<<"$CB" || fail "the $ROLE $NODE_ID cannot read its own control orders"
   grep -qx 'topic read armor/control/all/command' <<<"$CB" || fail "the $ROLE $NODE_ID cannot read the broadcast orders"
   grep -qx "topic write armor/control/$NODE_ID/result" <<<"$CB" || fail "the $ROLE $NODE_ID cannot write its own answer"
+  grep -qx "topic write armor/control/$NODE_ID/maintenance" <<<"$CB" || fail "the $ROLE $NODE_ID cannot write its own maintenance signal"
+  if grep -E 'armor/control/[^ ]*/maintenance' <<<"$CB" | grep -vx "topic write armor/control/$NODE_ID/maintenance" | grep -q .; then fail "the $ROLE $NODE_ID reaches a maintenance topic that is not its own: $CB"; fi
   if grep -E '^topic (write|readwrite) armor/control/.*/command|armor/control/(\+|#)|^topic readwrite armor/control' <<<"$CB" >/dev/null; then fail "the $ROLE $NODE_ID can publish an order: $CB"; fi
-  if [[ "$(grep -c 'armor/control/' <<<"$CB")" != "3" ]]; then fail "the $ROLE $NODE_ID has other control rules than its three: $CB"; fi
+  if [[ "$(grep -c 'armor/control/' <<<"$CB")" != "4" ]]; then fail "the $ROLE $NODE_ID has other control rules than its four: $CB"; fi
 done
 # Only the server's block carries a write on an order topic, and no other identity reaches another node's answer or order.
 [[ "$(grep -c '^topic write armor/control/.*/command' "$ACL")" == "1" ]] || fail "more than the server can publish orders"
 grep -qx 'topic write armor/control/+/command' <<<"$(block armor-server)" || fail "the server lost the order line"
+grep -qx 'topic read armor/control/+/maintenance' <<<"$(block armor-server)" || fail "the server cannot read the maintenance signals"
+[[ "$(grep -c '^topic write armor/control/.*/maintenance' "$ACL")" == "$(grep -c '^topic write armor/control/[^+]*/result' "$ACL")" ]] || fail "every node that may answer may write its maintenance signal, and nothing else may"
+if grep -E '^topic (write|readwrite) armor/control/(\+|#)/maintenance' "$ACL" >/dev/null; then fail "a wildcard may write maintenance signals"; fi
 if grep -q 'armor/control/c3/\|armor/control/c1/' <<<"$(block electrical-node-c4)"; then fail "a node reaches another node's control topics"; fi
-# A node with no control rules (installed before) gets exactly the three lines, once, and the previous ACL is kept; a node-control on a node that has them changes nothing.
+# A node with no control rules (installed before) gets exactly the four lines, once, and the previous ACL is kept; a node-control on a node that has them changes nothing.
 awk -v u="user alarm-node-c5" 'BEGIN{inb=0} $0==u{inb=1; print; next} inb && /^$/{inb=0} inb && /armor\/control\//{next} {print}' "$ACL" >"$ACL.tmp" && cat "$ACL.tmp" >"$ACL"; rm -f "$ACL.tmp"
 if grep -q 'armor/control/c5' "$ACL"; then fail "the test could not take the control lines away"; fi
 run node-control alarm-node c5 >/dev/null
@@ -199,6 +204,7 @@ CB="$(block alarm-node-c5)"
 grep -qx 'topic read armor/control/c5/command' <<<"$CB" || fail "node-control did not add the order line"
 grep -qx 'topic read armor/control/all/command' <<<"$CB" || fail "node-control did not add the broadcast line"
 grep -qx 'topic write armor/control/c5/result' <<<"$CB" || fail "node-control did not add the answer line"
+grep -qx 'topic write armor/control/c5/maintenance' <<<"$CB" || fail "node-control did not add the maintenance line"
 [[ -f "$WORK/prefix/etc/mosquitto/acl.before-control" ]] || fail "the previous ACL was not kept"
 BEFORE="$(cat "$ACL")"
 run node-control alarm-node c5 >/dev/null

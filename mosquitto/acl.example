@@ -16,6 +16,8 @@ topic read armor/node/NODE_ID/command
 topic read armor/control/NODE_ID/command
 topic read armor/control/all/command
 topic write armor/control/NODE_ID/result
+# Its planned-maintenance signal (retained), only its own topic: it says it is about to be quiet on purpose, and the server holds back the offline alert for a bounded time.
+topic write armor/control/NODE_ID/maintenance
 # The pins mapped in the node's web panel are devices named after the node (armor/device/NODE_ID/<pin>/state and /set).
 topic readwrite armor/device/NODE_ID/#
 
@@ -35,9 +37,10 @@ topic write armor/alarm/+/zigbee
 # What the network nodes see on the local network.
 topic read armor/network/#
 topic write armor/node/+/command
-# Remote control of the nodes: ONLY the server publishes an order (armor/control/<node>/command and armor/control/all/command) and it reads the answers. No node block has a write on an order topic.
+# Remote control of the nodes: ONLY the server publishes an order (armor/control/<node>/command and armor/control/all/command) and it reads the answers and the maintenance signals. No node block has a write on an order topic.
 topic write armor/control/+/command
 topic read armor/control/+/result
+topic read armor/control/+/maintenance
 # Alarm output: the server publishes alert.raised / alert.cleared / node.offline / node.stale here.
 topic write armor/server/alert
 # Smart devices (smoke, door, plug, light ...): the server listens on their state and commands them.
@@ -50,6 +53,7 @@ topic readwrite armor/device/#
 # topic read armor/control/solar-1/command
 # topic read armor/control/all/command
 # topic write armor/control/solar-1/result
+# topic write armor/control/solar-1/maintenance
 #
 # An electrical node (ARMOR-ELECTRICAL, scripts/mqtt_identity.sh add electrical-node ID): it writes what it measures and its answers, and reads nothing.
 # user electrical-node-electrical-1
@@ -59,6 +63,7 @@ topic readwrite armor/device/#
 # topic read armor/control/electrical-1/command
 # topic read armor/control/all/command
 # topic write armor/control/electrical-1/result
+# topic write armor/control/electrical-1/maintenance
 #
 # A command to a node's switch is refused by the broker unless BOTH of these lines exist, and only `scripts/mqtt_identity.sh electrical-switching ID on` writes them
 # (`off` removes them). The server also needs ARMOR_ELECTRICAL_SWITCHING=1 and the node has to allow switching itself: three independent switches, all off by default.
@@ -73,6 +78,7 @@ topic readwrite armor/device/#
 # topic read armor/control/alarm-1/command
 # topic read armor/control/all/command
 # topic write armor/control/alarm-1/result
+# topic write armor/control/alarm-1/maintenance
 # topic read armor/alarm/alarm-1/zigbee
 #
 # A command to a panel (arm, disarm) is refused by the broker unless BOTH of these lines exist, and only `scripts/mqtt_identity.sh alarm-commands ID on` adds them (`off` removes them). The
