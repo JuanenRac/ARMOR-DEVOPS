@@ -21,7 +21,7 @@
   <img src="https://img.shields.io/badge/License-GPL%203.0-blue.svg" alt="GPL 3.0">
   <img src="https://img.shields.io/badge/Deploy-Docker%20Compose-2496ed.svg" alt="Deploy">
   <img src="https://img.shields.io/badge/Bench-systemd-FFB020.svg" alt="Bench">
-  <img src="https://img.shields.io/badge/Version-0.6.3-0f6cbd.svg" alt="Version">
+  <img src="https://img.shields.io/badge/Version-0.6.4-0f6cbd.svg" alt="Version">
   <img src="https://img.shields.io/badge/Maturity-established-2EA44F.svg" alt="Maturity">
 </p>
 
@@ -35,7 +35,7 @@
 
 | | |
 |---|---|
-| Version | `0.6.3` |
+| Version | `0.6.4` |
 | Reifegrad | Etabliert |
 | Technik | Docker Compose / Bash / YAML |
 | Auf echter Hardware | Betreibt den CM5-Testaufbau im täglichen Einsatz, auf einem echten CM5, der andere Software beherbergt; noch nicht auf dem Jetson |
@@ -54,6 +54,7 @@
 * **Ein VPN und ein Name für das Haus, aus Studio eingerichtet:** `armor_wireguard.sh` baut mit wenigen Befehlen ein WireGuard-VPN (Schlüssel auf der Maschine, je Handy eine Konfiguration mit QR-Code, bei Bedarf Routing zu den Knoten) und `armor_ddns.sh` hält einen Namen bei DuckDNS, Cloudflare oder anderswo auf das Haus gerichtet, wenn der Anbieter die Adresse ändert; der Wartungsagent bietet beides Studio und dem Handy an, sodass niemand einen Befehl tippen muss, und eine Schritt-für-Schritt-Anleitung in acht Sprachen deckt den Router ab.**Signierte Pakete:** der Wartungsassistent installiert ein Paket des Servers, von Studio oder eines anderen Programms nur mit gültiger Ed25519-Signatur des Release-Schlüssels des Projekts (in reinem Python geprüft, ohne Zusatzsoftware); eine fehlende, falsche oder manipulierte Signatur lässt den Rechner unverändert. Eine Notfall-Ausnahme gibt es nur als Einstellung in der Datei des Rechners selbst.
 * **Eine optionale verschlüsselte Tür zum Broker (MQTT über TLS):** `scripts/armor_mqtt_tls.sh` erstellt eine Zertifizierungsstelle für die Anlage (ihr Schlüssel bleibt auf dem Rechner, Modus `0600`), ein Broker-Zertifikat für die Namen und Adressen des Rechners und einen zweiten Mosquitto-Listener auf 8883 neben dem normalen, den es nie anfasst; es ist idempotent und bietet `status`, `export-ca`, `server-tls` und `remove` (Dateien werden beiseitegelegt, nie gelöscht). Getestet mit OpenSSL, auch mit echten Handshakes, und auf einem echten Mosquitto 2.0 ([Anleitung](docs/MQTT_TLS_deu.md)).
 * **Zustandsberichte erlaubt:** Die Regeln des Brokers lassen jeden Knoten sein eigenes `armor/health/<Knoten>` schreiben und den Server `armor/health/#` lesen; `mqtt_identity.sh add` schreibt die Zeile für jede Knotenart, und `mqtt_identity.sh health-report <Rolle> <Knoten>` fügt sie einem früher installierten Knoten hinzu (idempotent, die vorherigen Regeln bleiben erhalten).
+* **Broker-Regeln für die Knotensteuerung:** Nur die Identität des Servers darf auf `armor/control/+/command` veröffentlichen (das schließt `armor/control/all/command` ein); jeder Knoten liest sein eigenes Befehlsthema und das Rundsendethema und schreibt seine eigene Antwort auf `armor/control/<Knoten>/result`, mehr nicht. So kann kein Knoten einen anderen steuern, und das gestohlene Passwort eines Knotens kann die anderen nicht neu starten. `mqtt_identity.sh node-control` fügt einem früher installierten Knoten die drei Zeilen hinzu, und der ACL-Test prüft jede Knotenart.
 
 ## 🧩 Rolle in A.R.M.O.R.
 

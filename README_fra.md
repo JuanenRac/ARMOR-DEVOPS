@@ -21,7 +21,7 @@
   <img src="https://img.shields.io/badge/License-GPL%203.0-blue.svg" alt="GPL 3.0">
   <img src="https://img.shields.io/badge/Deploy-Docker%20Compose-2496ed.svg" alt="Deploy">
   <img src="https://img.shields.io/badge/Bench-systemd-FFB020.svg" alt="Bench">
-  <img src="https://img.shields.io/badge/Version-0.6.3-0f6cbd.svg" alt="Version">
+  <img src="https://img.shields.io/badge/Version-0.6.4-0f6cbd.svg" alt="Version">
   <img src="https://img.shields.io/badge/Maturity-established-2EA44F.svg" alt="Maturity">
 </p>
 
@@ -35,7 +35,7 @@
 
 | | |
 |---|---|
-| Version | `0.6.3` |
+| Version | `0.6.4` |
 | Maturité | Établi |
 | Technologie | Docker Compose / Bash / YAML |
 | Sur matériel réel | Fait tourner le banc de test CM5 en usage quotidien, sur un vrai CM5 qui héberge d'autres logiciels ; pas encore sur le Jetson |
@@ -54,6 +54,7 @@
 * **Un VPN et un nom pour la maison, configurés depuis Studio :** `armor_wireguard.sh` monte un VPN WireGuard en quelques commandes (clés sur la machine, une configuration par téléphone avec code QR, routage vers les nœuds si voulu) et `armor_ddns.sh` garde un nom DuckDNS, Cloudflare ou autre pointé sur la maison quand le fournisseur change l'adresse ; l'agent de maintenance propose les deux à Studio et au téléphone, personne n'a donc à taper une commande, et un guide pas à pas en huit langues couvre le routeur.**Paquets signés :** l'assistant de maintenance n'installe un paquet du serveur, de Studio ou d'un autre programme que s'il porte une signature Ed25519 valide de la clé de release du projet (vérifiée en Python pur, sans logiciel supplémentaire) ; une signature absente, fausse ou altérée laisse la machine inchangée. Une dérogation d'urgence n'existe que comme réglage dans le fichier de la machine elle-même.
 * **Une porte chiffrée facultative vers le broker (MQTT sur TLS) :** `scripts/armor_mqtt_tls.sh` crée une autorité de certification pour l'installation (sa clé reste sur la machine, mode `0600`), un certificat de broker pour les noms et adresses de la machine et un second listener Mosquitto sur le 8883 à côté du normal, qu'il ne touche jamais ; il est idempotent et offre `status`, `export-ca`, `server-tls` et `remove` (les fichiers sont mis de côté, jamais supprimés). Testé avec OpenSSL, avec de vraies poignées de main, et sur un vrai Mosquitto 2.0 ([guide](docs/MQTT_TLS_fra.md)).
 * **Rapports de santé autorisés :** les règles du broker laissent chaque nœud écrire son propre `armor/health/<nœud>` et le serveur lire `armor/health/#` ; `mqtt_identity.sh add` écrit la ligne pour chaque type de nœud et `mqtt_identity.sh health-report <rôle> <nœud>` l'ajoute à un nœud installé avant (idempotent, les règles précédentes sont conservées).
+* **Règles du broker pour la commande des nœuds :** seule l'identité du serveur peut publier sur `armor/control/+/command` (qui couvre `armor/control/all/command`) ; chaque nœud lit son propre sujet d'ordres et celui de diffusion et écrit sa propre réponse sur `armor/control/<nœud>/result`, rien de plus, de sorte qu'aucun nœud ne peut commander un autre et que le mot de passe volé d'un nœud ne peut pas redémarrer les autres. `mqtt_identity.sh node-control` ajoute les trois lignes à un nœud installé avant, et le test des ACL vérifie chaque type de nœud.
 
 ## 🧩 Rôle dans A.R.M.O.R.
 
