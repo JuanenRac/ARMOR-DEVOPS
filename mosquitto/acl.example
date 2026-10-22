@@ -12,6 +12,9 @@ topic write armor/node/NODE_ID/info
 # How the node is doing (uptime, memory, link ...): the same report for every kind of node, armor/health/NODE_ID.
 topic write armor/health/NODE_ID
 topic read armor/node/NODE_ID/command
+# A radar node: the events of its own perimeter engine (QoS 1) and whether the perimeter is armed (only its own subtree).
+topic write armor/radar/NODE_ID/events
+topic read armor/radar/NODE_ID/control/armed
 # Remote control from Studio (restart, pause, standby ...): the node reads its own orders and the ones for every node, and writes its own answer. It can publish no order.
 topic read armor/control/NODE_ID/command
 topic read armor/control/all/command
@@ -28,6 +31,8 @@ topic read armor/node/+/health
 topic read armor/node/+/info
 # The health report of every kind of node (radar, solar, electrical, alarm, hmi).
 topic read armor/health/#
+# The events of the perimeter engine of the radar nodes (a zone, a line crossed, a covered sensor, a sensor whose own Bluetooth is open ...).
+topic read armor/radar/+/events
 # What the solar gateway nodes and the electrical nodes measure (each node writes only its own subtree, see scripts/mqtt_identity.sh).
 topic read armor/solar/#
 topic read armor/electrical/#

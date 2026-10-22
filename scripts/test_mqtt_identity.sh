@@ -219,4 +219,30 @@ run remove alarm-node-c5 >/dev/null
 if grep -q 'armor/control/c5' "$ACL"; then fail "removing the node left control rules behind"; fi
 grep -qx 'topic write armor/control/+/command' <<<"$(block armor-server)" || fail "removing a node took the server's order line"
 
+# A radar node writes the events of its own perimeter engine and reads only whether the perimeter is armed; the server reads every radar node's events and writes none.
+run add node rd1 >/dev/null
+RB="$(block field-node-rd1)"
+grep -qx 'topic write armor/radar/rd1/events' <<<"$RB" || fail "a radar node cannot write its events"
+grep -qx 'topic read armor/radar/rd1/control/armed' <<<"$RB" || fail "a radar node cannot read whether the perimeter is armed"
+if grep -E '^topic (write|readwrite) armor/radar/(\+|#)' "$ACL" >/dev/null; then fail "a wildcard may write radar events"; fi
+if grep -q 'armor/radar/rd1' <<<"$(block electrical-node-c4)"; then fail "another kind of node reaches the radar topics"; fi
+# A radar node made before the events existed gets the two lines of its own and the server gets its one, once; the previous ACL is kept.
+run add node rd2 >/dev/null
+awk -v u="user field-node-rd2" 'BEGIN{inb=0} $0==u{inb=1; print; next} inb && /^$/{inb=0} inb && /armor\/radar\//{next} {print}' "$ACL" >"$ACL.tmp" && cat "$ACL.tmp" >"$ACL"; rm -f "$ACL.tmp"
+sed -i '/^topic read armor\/radar\/+\/events$/d' "$ACL"
+if grep -q 'armor/radar/rd2' "$ACL"; then fail "the test could not take the radar lines away"; fi
+run radar-events rd2 >/dev/null
+grep -qx 'topic write armor/radar/rd2/events' <<<"$(block field-node-rd2)" || fail "radar-events did not add the events line"
+grep -qx 'topic read armor/radar/rd2/control/armed' <<<"$(block field-node-rd2)" || fail "radar-events did not add the armed line"
+grep -qx 'topic read armor/radar/+/events' <<<"$(block armor-server)" || fail "radar-events did not let the server read the events"
+[[ -f "$WORK/prefix/etc/mosquitto/acl.before-radar-events" ]] || fail "the previous ACL was not kept"
+BEFORE="$(cat "$ACL")"
+run radar-events rd2 >/dev/null
+[[ "$(cat "$ACL")" == "$BEFORE" ]] || fail "a second radar-events changed the ACL"
+[[ "$(grep -c '^topic read armor/radar/+/events$' "$ACL")" == "1" ]] || fail "the server's line is there more than once"
+if run radar-events nobody >/dev/null 2>&1; then fail "an unknown node was accepted for radar events"; fi
+if run radar-events 'Bad Node' >/dev/null 2>&1; then fail "a bad node id was accepted for radar events"; fi
+run remove field-node-rd2 >/dev/null
+if grep -q 'armor/radar/rd2' "$ACL"; then fail "removing the node left radar rules behind"; fi
+
 echo "ARMOR_MQTT_IDENTITY=PASS the switch and the relays of an electrical node and the commands of an alarm node are reachable only after an explicit on, only the server publishes control orders and each node reads only its own, and off and remove take them away"

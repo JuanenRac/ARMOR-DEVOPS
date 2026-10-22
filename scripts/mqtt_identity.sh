@@ -15,6 +15,7 @@
 #   sudo mqtt_identity.sh add bridge zigbee    # a bridge to many devices (Zigbee2MQTT, a Shelly gateway): all of armor/device/#
 #   sudo mqtt_identity.sh upgrade-node north-1 # an existing field node: also let it write armor/node/north-1/info (where its panel is) use armor/device/north-1/# (its mapped pins) and write armor/solar/north-1/# (inverters and batteries it reads)
 #   sudo mqtt_identity.sh node-control alarm-node alarm-1   # an identity made before remote control existed: also let the node read its own control orders and write its own answers and maintenance signal
+#   sudo mqtt_identity.sh radar-events north-1   # a radar node made before the events of its perimeter engine existed: let it write armor/radar/north-1/events and read armor/radar/north-1/control/armed, and let the server read the events
 #   sudo mqtt_identity.sh remove field-node-north-1
 #
 # The generated password is printed once, because the device needs it; it is
@@ -64,6 +65,9 @@ case "$ACTION" in
         echo "topic readwrite armor/device/$NAME/#"
         # A node that also reads solar inverters and batteries publishes them as armor/solar/<node>/<device>/state.
         echo "topic write armor/solar/$NAME/#"
+        # The events of a radar node's own perimeter engine (a zone, a line crossed, a covered sensor, a sensor whose Bluetooth is open ...) go to its own subtree only; it reads only whether the perimeter is armed.
+        echo "topic write armor/radar/$NAME/events"
+        echo "topic read armor/radar/$NAME/control/armed"
       elif [[ "$ROLE" == "hmi-node" ]]; then
         # ARMOR-HMI, the touch panel: it only says that it is alive (health) and where its web page is (info). It sends no telemetry, so it cannot make up radar tracks.
         echo "topic write armor/node/$NAME/health"
@@ -206,6 +210,27 @@ case "$ACTION" in
     if [[ "$CHANGED" -eq 1 ]]; then
       chown root:armor "$MQ/acl"; chmod 0640 "$MQ/acl"; reload_broker
       echo "the previous ACL is kept as acl.before-control"
+    fi
+    ;;
+  radar-events)
+    # A radar node installed before the events of its perimeter engine existed may not write armor/radar/<node>/events nor read whether the perimeter is armed, and the server may not read the events: this
+    # adds the two lines to the node's block and the one line to the server's (idempotent; the previous ACL is kept). A node can write only its own subtree.
+    NAME="${2:-}"; USER_NAME="field-node-$NAME"
+    [[ "$NAME" =~ ^[a-z0-9][a-z0-9_-]{0,63}$ ]] || { echo "the node id must match ^[a-z0-9][a-z0-9_-]{0,63}\$" >&2; exit 2; }
+    grep -qx "user $USER_NAME" "$MQ/acl" || { echo "$USER_NAME does not exist" >&2; exit 1; }
+    grep -qx "user armor-server" "$MQ/acl" || { echo "the server's identity (armor-server) is not in the ACL" >&2; exit 1; }
+    has_line() { awk -v u="user $1" -v l="$2" 'BEGIN{inb=0; found=0} $0==u{inb=1; next} inb && /^$/{inb=0} inb && $0==l{found=1} END{exit found?0:1}' "$MQ/acl"; }
+    CHANGED=0
+    for PAIR in "$USER_NAME|topic write armor/radar/$NAME/events" "$USER_NAME|topic read armor/radar/$NAME/control/armed" "armor-server|topic read armor/radar/+/events"; do
+      WHO="${PAIR%%|*}"; LINE="${PAIR#*|}"
+      if has_line "$WHO" "$LINE"; then echo "$WHO already has: $LINE"; continue; fi
+      [[ "$CHANGED" -eq 1 ]] || cp -p "$MQ/acl" "$MQ/acl.before-radar-events"
+      sed -i "/^user $WHO\$/a $LINE" "$MQ/acl"; CHANGED=1; echo "$WHO now has: $LINE"
+    done
+    if [[ "$CHANGED" -eq 1 ]]; then
+      chown root:armor "$MQ/acl"; chmod 0640 "$MQ/acl"
+      reload_broker
+      echo "the previous ACL is kept as acl.before-radar-events"
     fi
     ;;
   electrical-relays|alarm-relays)
