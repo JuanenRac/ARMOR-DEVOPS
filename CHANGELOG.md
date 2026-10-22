@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented here.
 
+## [Unreleased]
+
+- The banner follows the animated style of the ecosystem banners, with the name, the kind and the technologies of the project.
+
 ## [0.6.5] - The broker keeps the life state of the nodes
 
 - Documented that the node's last will and its "online" message on `armor/health/<node>` are retained and are covered by the rule `mqtt_identity.sh` already writes for every kind of node; no new line is needed.
