@@ -21,7 +21,7 @@
   <img src="https://img.shields.io/badge/License-GPL%203.0-blue.svg" alt="GPL 3.0">
   <img src="https://img.shields.io/badge/Deploy-Docker%20Compose-2496ed.svg" alt="Deploy">
   <img src="https://img.shields.io/badge/Bench-systemd-FFB020.svg" alt="Bench">
-  <img src="https://img.shields.io/badge/Version-0.6.4-0f6cbd.svg" alt="Version">
+  <img src="https://img.shields.io/badge/Version-0.6.5-0f6cbd.svg" alt="Version">
   <img src="https://img.shields.io/badge/Maturity-established-2EA44F.svg" alt="Maturity">
 </p>
 
@@ -35,7 +35,7 @@
 
 | | |
 |---|---|
-| バージョン | `0.6.4` |
+| バージョン | `0.6.5` |
 | 成熟度 | 確立 |
 | 技術 | Docker Compose / Bash / YAML |
 | 実機での確認 | 他のソフトウェアも載る実際の CM5 で CM5 テストベンチを日常的に運用。Jetson ではまだ |
@@ -54,7 +54,7 @@
 * **Studio から設定できる VPN と家の名前：** `armor_wireguard.sh` は数コマンドで WireGuard VPN を作り（鍵はマシン上、スマホごとに QR コード付きの設定、必要ならノードへのルーティング）、`armor_ddns.sh` はプロバイダーがアドレスを変えても DuckDNS・Cloudflare などの名前が家を指し続けるようにします。メンテナンスエージェントが両方を Studio とスマホに提供するので、コマンドを打つ必要はなく、ルーターの設定も 8 言語の手順書で説明しています。**署名付きパッケージ：** メンテナンスヘルパーは、サーバー、Studio などのパッケージを、プロジェクトのリリース鍵による有効な Ed25519 署名がある場合にのみインストールします（追加ソフトなしの純粋な Python で検証）。署名がない、誤っている、改ざんされている場合、マシンは変更されません。緊急用の例外は、マシン自身のファイルの設定としてのみ存在します。
 * **ブローカーへの任意の暗号化された入口(TLS 上の MQTT):** `scripts/armor_mqtt_tls.sh` は設備用の認証局(鍵はマシン上に留まり、モード `0600`)、マシンの名前とアドレス向けのブローカー証明書、通常のリスナーの隣の 8883 番の 2 つ目の Mosquitto リスナーを作ります(通常のリスナーには触れません)。冪等で、`status`、`export-ca`、`server-tls`、`remove` があります(ファイルは退避され、削除されません)。実際のハンドシェイクを含む OpenSSL での検証と、実際の Mosquitto 2.0 での検証済みです([ガイド](docs/MQTT_TLS_jpn.md))。
 * **状態報告の許可:** ブローカーの規則は、各ノードが自分の `armor/health/<ノード>` に書き込み、サーバーが `armor/health/#` を読むことを許可します。`mqtt_identity.sh add` はすべての種類のノードにこの行を書き、`mqtt_identity.sh health-report <ロール> <ノード>` は以前に設置したノードに追加します（冪等で、以前の規則は保存されます）。
-* **ノード制御のためのブローカー規則：** `armor/control/+/command`（`armor/control/all/command` を含む）に発行できるのはサーバーの ID だけです。各ノードは自分の命令トピックと一斉配信トピックを読み、自分の応答を `armor/control/<ノード>/result` に書くだけで、それ以外はできません。そのため、あるノードが別のノードに命令することはできず、盗まれたノードのパスワードで他のノードを再起動することもできません。ノードは自身のメンテナンス通知を `armor/control/<ノード>/maintenance`（保持）に書き込むこともでき、サーバーは `armor/control/+/maintenance` を読みます。`mqtt_identity.sh node-control` は以前にインストールしたノードに 4 行を追加し、ACL テストはすべての種類のノードを確認します。
+* **ノード制御のためのブローカー規則：** `armor/control/+/command`（`armor/control/all/command` を含む）に発行できるのはサーバーの ID だけです。各ノードは自分の命令トピックと一斉配信トピックを読み、自分の応答を `armor/control/<ノード>/result` に書くだけで、それ以外はできません。そのため、あるノードが別のノードに命令することはできず、盗まれたノードのパスワードで他のノードを再起動することもできません。`mqtt_identity.sh node-control` は以前にインストールしたノードに 3 行を追加し、ACL テストはすべての種類のノードを確認します。
 
 ## 🧩 A.R.M.O.R. での役割
 

@@ -21,7 +21,7 @@
   <img src="https://img.shields.io/badge/License-GPL%203.0-blue.svg" alt="GPL 3.0">
   <img src="https://img.shields.io/badge/Deploy-Docker%20Compose-2496ed.svg" alt="Deploy">
   <img src="https://img.shields.io/badge/Bench-systemd-FFB020.svg" alt="Bench">
-  <img src="https://img.shields.io/badge/Version-0.6.4-0f6cbd.svg" alt="Version">
+  <img src="https://img.shields.io/badge/Version-0.6.5-0f6cbd.svg" alt="Version">
   <img src="https://img.shields.io/badge/Maturity-established-2EA44F.svg" alt="Maturity">
 </p>
 
@@ -35,7 +35,7 @@
 
 | | |
 |---|---|
-| 版本 | `0.6.4` |
+| 版本 | `0.6.5` |
 | 成熟度 | 成熟 |
 | 技术栈 | Docker Compose / Bash / YAML |
 | 真实硬件 | 日常运行 CM5 测试台，在托管其他软件的真实 CM5 上；尚未在 Jetson 上 |
@@ -54,7 +54,7 @@
 * **可在 Studio 中设置的 VPN 和家的域名：** `armor_wireguard.sh` 用几条命令建立 WireGuard VPN（密钥保存在本机，每部手机一份带二维码的配置，需要时可路由到节点），`armor_ddns.sh` 在运营商更换地址时让 DuckDNS、Cloudflare 或其他域名始终指向您家；维护代理把两者提供给 Studio 和手机，无需任何人输入命令，并有八种语言的分步指南说明路由器设置。**签名软件包：** 维护助手只有在软件包带有项目发布密钥的有效 Ed25519 签名时，才会安装服务器、Studio 或其他程序的软件包（用纯 Python 验证，无需额外软件）；签名缺失、错误或被篡改时机器保持不变。紧急例外仅作为机器自身文件中的设置存在。
 * **可选的通往代理的加密入口(基于 TLS 的 MQTT):** `scripts/armor_mqtt_tls.sh` 为本安装创建证书颁发机构(密钥留在本机,权限 `0600`)、为本机名称和地址签发代理证书,并在普通监听器旁增加 8883 的第二个 Mosquitto 监听器(绝不改动普通监听器);它是幂等的,提供 `status`、`export-ca`、`server-tls` 和 `remove`(文件被放到一边,绝不删除)。已用 OpenSSL(含真实握手)和真实的 Mosquitto 2.0 测试([指南](docs/MQTT_TLS_zho.md))。
 * **允许健康报告：** 代理规则允许每个节点写入自己的 `armor/health/<节点>`，并允许服务器读取 `armor/health/#`；`mqtt_identity.sh add` 为每种节点写入该行，`mqtt_identity.sh health-report <角色> <节点>` 把它加到此前安装的节点上（幂等，保留之前的规则）。
-* **节点控制的代理规则：** 只有服务器的身份可以向 `armor/control/+/command`（包含 `armor/control/all/command`）发布；每个节点只读取自己的命令主题和广播主题，并只在 `armor/control/<节点>/result` 上写自己的应答，仅此而已，因此任何节点都不能指挥另一个节点，被盗的节点密码也无法重启其他节点。节点还可以把自己的维护通知写到 `armor/control/<节点>/maintenance`（保留消息），服务器读取 `armor/control/+/maintenance`。`mqtt_identity.sh node-control` 会给较早安装的节点补上这四行，ACL 测试会检查每一种节点。
+* **节点控制的代理规则：** 只有服务器的身份可以向 `armor/control/+/command`（包含 `armor/control/all/command`）发布；每个节点只读取自己的命令主题和广播主题，并只在 `armor/control/<节点>/result` 上写自己的应答，仅此而已，因此任何节点都不能指挥另一个节点，被盗的节点密码也无法重启其他节点。`mqtt_identity.sh node-control` 会给较早安装的节点补上这三行，ACL 测试会检查每一种节点。
 
 ## 🧩 在 A.R.M.O.R. 中的角色
 
