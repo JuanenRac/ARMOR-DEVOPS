@@ -18,7 +18,7 @@ sudo scripts/armor_mqtt_tls.sh status
 * A **chave privada da autoridade** é criada na máquina e fica em `etc/mqtt-ca` (pasta `0700`, chave `0600`, só root). Nunca está num repositório, nunca junto ao broker e nunca sai da máquina. O broker recebe apenas a sua própria chave.
 * O `setup` reinicia o broker (um novo listener exige reinício): os nós voltam a ligar-se em poucos segundos. A porta sem cifra não é tocada.
 * Executar o `setup` outra vez não altera nada do que ainda está bom. Cria um **novo certificado do broker com a mesma autoridade** quando os endereços mudam ou faltam menos de 30 dias (o certificado do broker dura dois anos). Como a autoridade é a mesma, **não é preciso mexer nos nós**. A autoridade dura dez anos.
-* Se a firewall do anfitrião deste repositório for usada, ela só conhece a porta sem cifra: permita você mesmo `8883/tcp` a partir da rede de campo.
+* Se a firewall do anfitrião deste repositório for usada, ela só conhece a porta sem cifra: permita manualmente `8883/tcp` a partir da rede de campo.
 
 ## 2. Em cada nó
 

@@ -8,7 +8,7 @@ O assistente de manutenção da máquina (`armor_maintenance_agent.py`) atualiza
    `armor-pkg/1|<componente>|<versão>|<sha256>`
 
    feita com a chave privada das releases. O assistente verifica-a com a chave pública incluída no seu código (`PACKAGE_PUBLIC_KEY`), a mesma em que confia o firmware dos nós. Uma release sem `.sig`, ou com uma que não verifica, é recusada (`missing_signature`, `bad_signature`) e o sistema fica como estava: nada é extraído nem reiniciado.
-3. **O arquivo:** sem nomes absolutos, sem `..`, sem ligações nem dispositivos.
+3. **O ficheiro:** sem nomes absolutos, sem `..`, sem ligações nem dispositivos.
 
 Quem apenas consiga alterar o conteúdo de uma release no GitHub (uma conta roubada, uma dependência maliciosa das ferramentas de publicação) pode publicar um pacote e o seu hash, mas não a assinatura: a chave privada nunca está no GitHub. O texto começa por `armor-pkg/1` e não pelo `armor-fw/1` do firmware, pelo que uma assinatura de firmware nunca pode passar por assinatura de pacote; e inclui o componente e a versão, pelo que um pacote assinado não se pode fazer passar por outro programa nem por uma versão mais recente.
 
