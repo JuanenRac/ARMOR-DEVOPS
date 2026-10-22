@@ -132,6 +132,18 @@ if grep -q 'armor/alarm/alarm-1/command' "$ACL"; then fail "an alarm command is 
 grep -qx 'topic write armor/alarm/+/policy' "$HERE/../mosquitto/acl.example" || fail "acl.example does not let the server write the panel policy"
 test "$(grep -c "topic write armor/alarm/+/policy" "$HERE/install_cm5.sh")" -ge 2 || fail "install_cm5.sh does not write the policy rule for a new and an old install"
 if grep -q 'topic write armor/alarm/' <<<"$AL"; then grep 'topic write armor/alarm/' <<<"$AL" | grep -qv '/state$\|/result$' && fail "an alarm node can write something besides its state and results"; fi
+# An alarm node made before the server's options existed gets the one line it lacks, once, and only for that node.
+sed -i '/^topic read armor\/alarm\/alarm-2\/policy$/d' "$ACL"
+if grep -qx 'topic read armor/alarm/alarm-2/policy' <<<"$(block alarm-node-alarm-2)"; then fail "the test could not make an alarm node without the policy line"; fi
+run alarm-policy alarm-2 >/dev/null
+grep -qx 'topic read armor/alarm/alarm-2/policy' <<<"$(block alarm-node-alarm-2)" || fail "alarm-policy did not give the old alarm node its policy line"
+test -f "$ACL.before-alarm-policy" || fail "alarm-policy did not keep the previous ACL"
+BEFORE="$(cat "$ACL")"
+run alarm-policy alarm-2 >/dev/null
+[[ "$BEFORE" == "$(cat "$ACL")" ]] || fail "alarm-policy is not idempotent"
+if run alarm-policy no-such-node >/dev/null 2>&1; then fail "alarm-policy invented a node"; fi
+if run alarm-policy 'Bad Node' >/dev/null 2>&1; then fail "alarm-policy accepted a bad node id"; fi
+[[ "$(grep -c 'topic read armor/alarm/alarm-1/policy' "$ACL")" == 1 ]] || fail "another alarm node got a second policy line"
 run alarm-commands alarm-1 on >/dev/null
 grep -qx 'topic read armor/alarm/alarm-1/command' <<<"$(block alarm-node-alarm-1)" || fail "the alarm node cannot read its commands after on"
 grep -qx 'topic write armor/alarm/alarm-1/command' <<<"$(block armor-server)" || fail "the server cannot write the alarm command after on"
