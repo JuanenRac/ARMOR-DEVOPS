@@ -73,7 +73,7 @@ ARMOR-DEVOPS/
 
 ## 🛠️ 开发环境
 
-**环境要求:** Docker Engine with Compose (for the container topology), a CM5 or any Debian-based machine reachable by SSH (for the test bench), Bash, `ssh` and `tar` on the machine that deploys
+**环境要求:** 带 Compose 的 Docker Engine（用于容器拓扑）, CM5 或任何可通过 SSH 访问的基于 Debian 的机器（用于测试台）, 执行部署的机器上需要 Bash、`ssh` 和 `tar`
 
 ```bash
 scripts/generate_secrets.sh          # .env and secrets/ (Git-ignored)

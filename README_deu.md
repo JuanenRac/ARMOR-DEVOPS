@@ -73,7 +73,7 @@ ARMOR-DEVOPS/
 
 ## 🛠️ Entwicklungsumgebung
 
-**Voraussetzungen:** Docker Engine with Compose (for the container topology), a CM5 or any Debian-based machine reachable by SSH (for the test bench), Bash, `ssh` and `tar` on the machine that deploys
+**Voraussetzungen:** Docker Engine mit Compose (für die Container-Topologie), ein CM5 oder ein beliebiger Debian-basierter Rechner per SSH erreichbar (für den Prüfstand), Bash, `ssh` und `tar` auf dem Rechner, der ausrollt
 
 ```bash
 scripts/generate_secrets.sh          # .env and secrets/ (Git-ignored)
