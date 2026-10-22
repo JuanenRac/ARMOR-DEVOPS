@@ -6,6 +6,10 @@ All notable changes to this project are documented here.
 
 - The repository has a security policy, a code of conduct, a contributing guide and a support file.
 - The banner follows the animated style of the ecosystem banners, with the name, the kind and the technologies of the project.
+## [0.6.6] - Broker rules for the radar events
+
+- **The broker rules cover the radar events:** the node publishes its perimeter events on `armor/radar/<node>/events` and only the server's identity reads them; `acl.example` and `scripts/mqtt_identity.sh` give every new radar, solar, electrical, alarm and panel node the lines it needs, and `scripts/test_mqtt_identity.sh` checks them.
+- `install_cm5.sh` installs the new rules together with the identities.
 
 ## [0.6.5] - The broker keeps the life state of the nodes
 
