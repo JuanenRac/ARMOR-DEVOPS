@@ -76,11 +76,12 @@ class AgentTest(unittest.TestCase):
     def tearDownClass(cls) -> None:
         cls.tmp.cleanup()
 
-    def call(self, method: str, path: str, body: object | None = None, token: str | None = TOKEN) -> tuple[int, dict]:
+    def call(self, method: str, path: str, body: object | None = None, token: str | None = TOKEN, extra: dict[str, str] | None = None) -> tuple[int, dict]:
         connection = UnixConnection(self.sock)
         headers = {"Content-Type": "application/json"}
         if token is not None:
             headers["X-Armor-Admin-Token"] = token
+        headers.update(extra or {})
         connection.request(method, path, json.dumps(body) if body is not None else None, headers)
         response = connection.getresponse()
         data = json.loads(response.read().decode("utf-8"))
@@ -283,6 +284,46 @@ class AgentTest(unittest.TestCase):
                     self.assertEqual(self.agent.main(), 2, token)
             self.assertIn("ARMOR_ADMIN_TOKEN", err.getvalue())
             self.assertFalse((Path(self.tmp.name) / "never.sock").exists())
+
+    def with_sensitive(self, mode: str, token: str = "") -> None:
+        self.addCleanup(self.agent.configure_sensitive, "open", "")
+        self.assertIsNone(self.agent.configure_sensitive(mode, token, TOKEN))
+
+    def test_by_default_the_broker_rules_and_the_env_files_stay_writable_with_the_admin_token_alone(self) -> None:
+        status, data = self.call("GET", "/v1/status")
+        self.assertEqual((status, data["sensitive_writes"]["mode"], data["sensitive_writes"]["warning"]), (200, "open", "open"))
+        self.assertEqual(self.call("PUT", "/v1/files/server.env", {"content": "ARMOR_PORT=18080\n"})[0], 200)
+
+    def test_with_a_second_secret_the_sensitive_files_and_accounts_need_it_and_the_rest_does_not(self) -> None:
+        second = "s" * 32
+        self.with_sensitive("second_token", second)
+        status, data = self.call("GET", "/v1/status")
+        self.assertEqual((data["sensitive_writes"]["mode"], data["sensitive_writes"]["protected"], data["sensitive_writes"]["warning"]), ("second_token", True, ""))
+        for file_id, text in (("mosquitto.acl", "user x\n"), ("server.env", "A=1\n"), ("mqtt.env", "A=1\n"), ("network.env", "A=1\n")):
+            self.assertEqual(self.call("PUT", f"/v1/files/{file_id}", {"content": text}), (403, {"error": "sensitive_token_required"}), file_id)
+            self.assertEqual(self.call("PUT", f"/v1/files/{file_id}", {"content": text}, extra={"X-Armor-Admin-Sensitive-Token": TOKEN})[1], {"error": "sensitive_token_required"})
+        self.assertEqual(self.call("POST", "/v1/mqtt/accounts", {"role": "node", "name": "north-2"})[1], {"error": "sensitive_token_required"})
+        self.assertEqual(self.call("DELETE", "/v1/mqtt/accounts/field-node-north-1")[1], {"error": "sensitive_token_required"})
+        self.assertEqual(self.call("PUT", "/v1/files/server.env", {"content": "ARMOR_PORT=18080\n"}, extra={"X-Armor-Admin-Sensitive-Token": second})[0], 200)
+        self.assertEqual(self.call("PUT", "/v1/files/reach.txt", {"content": ""})[0], 200)       # not sensitive
+        self.assertEqual(self.call("GET", "/v1/files/server.env")[0], 200)                       # reading is not locked
+
+    def test_read_only_refuses_every_sensitive_write_even_with_a_secret(self) -> None:
+        self.with_sensitive("read_only")
+        self.assertEqual(self.call("PUT", "/v1/files/mosquitto.acl", {"content": "user x\n"}, extra={"X-Armor-Admin-Sensitive-Token": "s" * 32}), (403, {"error": "sensitive_read_only"}))
+        self.assertEqual(self.call("POST", "/v1/mqtt/accounts", {"role": "node", "name": "n"})[0], 403)
+        self.assertEqual(self.call("GET", "/v1/status")[1]["sensitive_writes"]["mode"], "read_only")
+
+    def test_a_bad_protection_setting_is_never_taken_as_open(self) -> None:
+        self.addCleanup(self.agent.configure_sensitive, "open", "")
+        self.assertEqual(self.agent.configure_sensitive("nonsense", "", TOKEN), "unknown_mode")
+        self.assertEqual(self.agent.configure_sensitive("second_token", "short", TOKEN), "second_token_missing_or_equal")
+        self.assertEqual(self.agent.configure_sensitive("second_token", TOKEN, TOKEN), "second_token_missing_or_equal")
+        for env in ({"ARMOR_ADMIN_SENSITIVE": "nonsense"}, {"ARMOR_ADMIN_SENSITIVE": "second_token"}):
+            with mock.patch.dict(os.environ, {"ARMOR_ADMIN_TOKEN": TOKEN, **env}), mock.patch.object(sys, "argv", ["armor_admin_agent.py", "--socket", str(Path(self.tmp.name) / "never.sock")]):
+                with contextlib.redirect_stderr(io.StringIO()) as err:
+                    self.assertEqual(self.agent.main(), 2)
+            self.assertIn("ARMOR_ADMIN_SENSITIVE", err.getvalue())
 
     def test_the_socket_is_not_open_to_everybody(self) -> None:
         mode = stat.S_IMODE(os.stat(self.sock).st_mode)

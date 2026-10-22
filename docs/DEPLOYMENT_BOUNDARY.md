@@ -55,3 +55,13 @@ Studio can restart, pause, put on standby, identify and read the diagnostics of 
 - only the server's identity (`armor-server`) has `topic write armor/control/+/command`; no node block has a write on an order topic, so no node can command another, and a stolen node password can not restart the others;
 - every kind of node (radar, solar, electrical, alarm, wall panel) reads only its own order topic and the broadcast one, and writes only its own answer and its own planned-maintenance signal (`armor/control/<node>/maintenance`, retained, which the server reads on `armor/control/+/maintenance`; the server bounds the time it believes it, so a stuck node can not silence the alerts for ever); the network watcher and the plain devices get none of this;
 - `scripts/mqtt_identity.sh add <role> <id>` writes the four lines for new nodes; for a node installed before, run `scripts/mqtt_identity.sh node-control <role> <id>` (idempotent, the previous rules are kept as `acl.before-control`). On an existing server `install_cm5.sh` adds the server's three lines once.
+
+## Locking the broker rules and the .env files (admin agent)
+
+The admin agent (`scripts/armor_admin_agent.py`) lets Studio, through the server, rewrite `mosquitto.acl` and the `.env` files and add or remove broker accounts. With the admin token alone, a compromised server could therefore open the broker to anything. The agent has a setting for that, `ARMOR_ADMIN_SENSITIVE` (in the unit's environment, never changed by a request):
+
+- `open` (default, the behaviour of earlier versions): the admin token is enough. The agent prints a warning at start-up saying so.
+- `second_token`: writing `mosquitto.acl`, `server.env`, `mqtt.env`, `network.env` and adding or removing broker accounts also needs a second secret, sent in the header `X-Armor-Admin-Sensitive-Token` and set with `ARMOR_ADMIN_SENSITIVE_TOKEN` (at least 24 characters and different from `ARMOR_ADMIN_TOKEN`). Keep the second secret where the server's user can not read it; a server that does not have it gets `403 sensitive_token_required`.
+- `read_only`: those writes are refused (`403 sensitive_read_only`) whoever asks; change them on the machine.
+
+Reading is not affected. A wrong value, or `second_token` without a usable second secret, stops the agent at start-up instead of falling back to `open`. `GET /v1/status` on the agent returns `{"sensitive_writes": {"mode", "protected", "files", "warning"}}` so that a console can show which of the three is in force; the server does not forward it yet.

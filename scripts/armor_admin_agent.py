@@ -13,6 +13,8 @@
 #   * only the files in FILES, each at its own fixed path (a client never sends a path), with a size limit, a format check and a copy kept of the old one;
 #   * only the broker accounts that mqtt_identity.sh knows how to make (it does the work, as it always did), never the password file itself.
 # It listens on a Unix socket that only the group `armor` can open, and also wants a token (ARMOR_ADMIN_TOKEN, from a file only root and that group read).
+# Writing the broker rules and the .env files is the most powerful thing it does, so it can be locked with ARMOR_ADMIN_SENSITIVE (open = as always, the
+# default; second_token = a second, different secret is also needed; read_only = never from a request).
 # It uses nothing but the Python standard library.
 #
 #   armor_admin_agent.py --socket /run/armor-admin.sock        # as root, by the systemd unit armor-admin.service
@@ -70,6 +72,44 @@ FILES: dict[str, tuple[str, str, tuple[str, ...], str]] = {
     "mosquitto.acl": ("etc/mosquitto/acl", "acl", ("mosquitto",), "MQTT broker: who may read and write which topic"),
 }
 SECRET_KEY = re.compile(r"(PASSWORD|SECRET|TOKEN|KEY|PASS)", re.IGNORECASE)
+# What a compromised server must not be able to rewrite on its own: the broker rules and the .env files (and, because it edits the rules, the broker accounts).
+SENSITIVE_MODES = ("open", "second_token", "read_only")
+SENSITIVE_HEADER = "X-Armor-Admin-Sensitive-Token"
+MIN_SECRET = 24
+
+
+def is_sensitive_file(file_id: str) -> bool:
+    return file_id in FILES and FILES[file_id][1] in ("env", "acl")
+
+
+class Sensitive:
+    """How writes to the broker rules and the .env files are protected. Set at start-up from the environment, never from a request."""
+    mode = "open"
+    token = ""
+
+
+def configure_sensitive(mode: str, token: str, main_token: str = "") -> str | None:
+    """Sets the protection; returns the reason it is unusable (None when fine). An unknown mode or a bad second secret never falls back to open."""
+    if mode not in SENSITIVE_MODES:
+        return "unknown_mode"
+    if mode == "second_token" and (len(token) < MIN_SECRET or hmac.compare_digest(token.encode(), main_token.encode())):
+        return "second_token_missing_or_equal"
+    Sensitive.mode, Sensitive.token = mode, token if mode == "second_token" else ""
+    return None
+
+
+def sensitive_status() -> dict[str, object]:
+    return {"mode": Sensitive.mode, "protected": Sensitive.mode != "open", "files": [key for key in FILES if is_sensitive_file(key)],
+            "warning": "open" if Sensitive.mode == "open" else ""}
+
+
+def require_sensitive(given: str) -> None:
+    if Sensitive.mode == "read_only":
+        raise Refused(403, "sensitive_read_only")
+    if Sensitive.mode == "second_token" and not (Sensitive.token and hmac.compare_digest(given.encode(), Sensitive.token.encode())):
+        raise Refused(403, "sensitive_token_required")
+
+
 ROLES = {"node", "solar-node", "electrical-node", "network-node", "alarm-node", "consumer", "device", "bridge"}
 NAME = re.compile(r"[a-z0-9][a-z0-9_-]{0,63}")
 USER = re.compile(r"(field-node|solar-node|electrical-node|network-node|alarm-node|alarm|device|bridge)-[a-z0-9][a-z0-9_-]{0,63}")
@@ -312,7 +352,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if parts[:1] != ["v1"]:
                 raise Refused(404, "not_found")
             parts = parts[1:]
-            if method == "GET" and parts == ["services"]:
+            sensitive_given = self.headers.get(SENSITIVE_HEADER, "")
+            if method == "GET" and parts == ["status"]:
+                self.reply(200, {"sensitive_writes": sensitive_status()})
+            elif method == "GET" and parts == ["services"]:
                 self.reply(200, {"services": [service_state(key) for key in SERVICES]})
             elif method == "POST" and len(parts) == 3 and parts[0] == "services":
                 self.reply(200, service_action(parts[1], parts[2]))
@@ -321,6 +364,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             elif method == "GET" and len(parts) == 2 and parts[0] == "files":
                 self.reply(200, read_file(parts[1]))
             elif method == "PUT" and len(parts) == 2 and parts[0] == "files":
+                if is_sensitive_file(parts[1]):
+                    require_sensitive(sensitive_given)
                 data = self.body()
                 content = data.get("content")
                 if not isinstance(content, str):
@@ -336,9 +381,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
             elif method == "GET" and parts == ["mqtt", "accounts"]:
                 self.reply(200, list_accounts())
             elif method == "POST" and parts == ["mqtt", "accounts"]:
+                require_sensitive(sensitive_given)
                 data = self.body()
                 self.reply(200, add_account(str(data.get("role", "")), str(data.get("name", ""))))
             elif method == "DELETE" and len(parts) == 3 and parts[:2] == ["mqtt", "accounts"]:
+                require_sensitive(sensitive_given)
                 self.reply(200, remove_account(parts[2]))
             else:
                 raise Refused(404, "not_found")
@@ -391,6 +438,14 @@ def main() -> int:
     if len(token) < 24:
         print("ARMOR_ADMIN_TOKEN must be set (at least 24 characters)", file=sys.stderr)
         return 2
+    mode = os.environ.get("ARMOR_ADMIN_SENSITIVE", "open").strip().lower() or "open"
+    problem = configure_sensitive(mode, os.environ.get("ARMOR_ADMIN_SENSITIVE_TOKEN", ""), token)
+    if problem:
+        print(f"ARMOR_ADMIN_SENSITIVE is not usable ({problem}): use open, read_only, or second_token with ARMOR_ADMIN_SENSITIVE_TOKEN (at least {MIN_SECRET} characters, different from ARMOR_ADMIN_TOKEN)", file=sys.stderr)
+        return 2
+    if mode == "open":
+        print("WARNING: the broker rules and the .env files can be rewritten with the admin token alone; a compromised server could open the broker. "
+              "Set ARMOR_ADMIN_SENSITIVE=second_token (with ARMOR_ADMIN_SENSITIVE_TOKEN) or read_only to lock them.", file=sys.stderr, flush=True)
     serve(arguments.socket, token, arguments.group)
     return 0
 

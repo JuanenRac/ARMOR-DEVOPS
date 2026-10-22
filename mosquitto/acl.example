@@ -39,6 +39,8 @@ topic read armor/electrical/#
 # What the alarm nodes say about their panels and their answers, and the state of the Zigbee zones the server tells them while it holds the radio (information, never a command).
 topic read armor/alarm/#
 topic write armor/alarm/+/zigbee
+# The security policy the server keeps for the panels (restore check, zone feed signature): information the panel applies, never a command.
+topic write armor/alarm/+/policy
 # What the network nodes see on the local network.
 topic read armor/network/#
 topic write armor/node/+/command
@@ -85,6 +87,7 @@ topic readwrite armor/device/#
 # topic write armor/control/alarm-1/result
 # topic write armor/control/alarm-1/maintenance
 # topic read armor/alarm/alarm-1/zigbee
+# topic read armor/alarm/alarm-1/policy
 #
 # A command to a panel (arm, disarm) is refused by the broker unless BOTH of these lines exist, and only `scripts/mqtt_identity.sh alarm-commands ID on` adds them (`off` removes them). The
 # server also needs ARMOR_ALARM_COMMANDS=1 and the node has to allow it itself (server.commands): three independent switches. The server asks for the PIN of the signed-in user before it sends a disarm

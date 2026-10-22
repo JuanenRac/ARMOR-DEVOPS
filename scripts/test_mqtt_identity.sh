@@ -125,8 +125,13 @@ AL="$(block alarm-node-alarm-1)"
 grep -qx 'topic write armor/alarm/alarm-1/state' <<<"$AL" || fail "the alarm node cannot write its state"
 grep -qx 'topic write armor/alarm/alarm-1/result' <<<"$AL" || fail "the alarm node cannot write its results"
 grep -qx 'topic read armor/alarm/alarm-1/zigbee' <<<"$AL" || fail "the alarm node cannot read the Zigbee zones the server tells it"
-if grep -v '^user ' <<<"$AL" | grep -v 'topic read armor/alarm/alarm-1/zigbee' | grep -v 'armor/control/' | grep -q 'topic read\|readwrite\|/#$'; then fail "the alarm node has more than it needs: $AL"; fi
+grep -qx 'topic read armor/alarm/alarm-1/policy' <<<"$AL" || fail "the alarm node cannot read the security policy the server tells it"
+if grep -v '^user ' <<<"$AL" | grep -v 'topic read armor/alarm/alarm-1/zigbee' | grep -v 'topic read armor/alarm/alarm-1/policy' | grep -v 'armor/control/' | grep -q 'topic read\|readwrite\|/#$'; then fail "the alarm node has more than it needs: $AL"; fi
 if grep -q 'armor/alarm/alarm-1/command' "$ACL"; then fail "an alarm command is reachable before it was turned on"; fi
+# Only the server may write the policy: its rule is in the example and in what the installer writes, in a new install and in an old one.
+grep -qx 'topic write armor/alarm/+/policy' "$HERE/../mosquitto/acl.example" || fail "acl.example does not let the server write the panel policy"
+test "$(grep -c "topic write armor/alarm/+/policy" "$HERE/install_cm5.sh")" -ge 2 || fail "install_cm5.sh does not write the policy rule for a new and an old install"
+if grep -q 'topic write armor/alarm/' <<<"$AL"; then grep 'topic write armor/alarm/' <<<"$AL" | grep -qv '/state$\|/result$' && fail "an alarm node can write something besides its state and results"; fi
 run alarm-commands alarm-1 on >/dev/null
 grep -qx 'topic read armor/alarm/alarm-1/command' <<<"$(block alarm-node-alarm-1)" || fail "the alarm node cannot read its commands after on"
 grep -qx 'topic write armor/alarm/alarm-1/command' <<<"$(block armor-server)" || fail "the server cannot write the alarm command after on"
