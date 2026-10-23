@@ -4,6 +4,7 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+- **HTTPS for the phones, checked and pairable:** the maintenance agent answers `GET /v1/tls/ca` with the pin of the root certificate of Caddy's own authority (the setting `ARMOR_TLS_CA_FILE`, else the usual places of a Caddy from the package or from its container volume; only the public certificate is read), and `scripts/armor_tls_check.sh HOST [PORT] [ROOT]` checks the HTTPS the way a phone meets it (answers, chain valid for the name, more than 14 days left, the authority's pin) and prints the `armor-pin:` text, with a test against a throwaway authority.
 - **A node adopted again gets a new broker password in one step:** `mqtt_identity.sh rotate ROLE NAME` writes a new hash over the old one and does not touch the ACL (an identity that was never made is refused), and the admin agent takes `"rotate": true` on `POST /v1/mqtt/accounts`, so the old password works until the new one is written and nothing is removed on the way.
 - **The maintenance helper makes room on a nearly full disk:** besides keeping the six newest copies it sets aside, it removes the oldest ones, down to the newest, while the free space is under `ARMOR_MAINT_MIN_FREE_MB` (500 by default, 0 turns it off; written in its settings file). The copy in use is never removed.
 - The repository has a security policy, a code of conduct, a contributing guide and a support file.

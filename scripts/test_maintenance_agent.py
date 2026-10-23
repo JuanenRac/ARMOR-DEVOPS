@@ -557,6 +557,38 @@ class MaintenanceTest(unittest.TestCase):
         self.agent.prune_old(releases)
         self.assertEqual(len(list(releases.iterdir())), before, "with the floor off nothing more goes")
 
+    CA_PEM = """-----BEGIN CERTIFICATE-----
+MIIBoDCCAUegAwIBAgIUPfPshr4Eb3mV74kEv9qGieOcCwUwCgYIKoZIzj0EAwIw
+JTEjMCEGA1UEAwwaQVJNT1IgVGVzdCBMb2NhbCBBdXRob3JpdHkwIBcNMjYxMDIz
+MTkyNzMwWhgPMjEyNjA5MjkxOTI3MzBaMCUxIzAhBgNVBAMMGkFSTU9SIFRlc3Qg
+TG9jYWwgQXV0aG9yaXR5MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEKUcMwzBV
+32BNQgj4tNq5MePPgzGWikgb23f2YD3z76yFzhF2dCDFFndT8C4KEHJC0eIqhTdY
+HWOIYWLExr93P6NTMFEwHQYDVR0OBBYEFMe8GLKFhRsx34EB6UBK1ervXAdkMB8G
+A1UdIwQYMBaAFMe8GLKFhRsx34EB6UBK1ervXAdkMA8GA1UdEwEB/wQFMAMBAf8w
+CgYIKoZIzj0EAwIDRwAwRAIgL47fw4JQEAgCHps2ltPX/FTlW875zxwNsSYyzFIj
+SToCID/Tnl749Xyavje+uW2Avtcf/y5Kwy5X4vsDAWQuAWBQ
+-----END CERTIFICATE-----
+"""
+
+    def test_the_pin_of_the_installations_authority_is_the_one_a_phone_pins(self) -> None:
+        # a stand-in authority (made with openssl for this test only): the pin is the SHA-256 of its public key, in base64, as the phone computes it
+        folder = self.prefix / "tls"
+        folder.mkdir(exist_ok=True)
+        (folder / "root.crt").write_text(self.CA_PEM, encoding="utf-8")
+        self.assertEqual(self.agent.tls_ca_info(), {"present": False}, "nothing is claimed while no authority is set")
+        self.maint_env.write_text("ARMOR_TLS_CA_FILE=%s\n" % (folder / "root.crt"), encoding="utf-8")
+        info = self.agent.tls_ca_info()
+        self.assertEqual(info["pin"], "fRsI9SH78MeN93Xk+x0jam6g1I38j9Bv3yYxAwFoKZs=")
+        self.assertIn("ARMOR Test Local Authority", str(info["subject"]))
+        self.assertTrue(str(info["not_after"]).endswith("2126 GMT"))
+        self.assertNotIn("PRIVATE", json.dumps(info))
+        # a file that is not a certificate is said, not guessed
+        (folder / "root.crt").write_text("not a certificate\n", encoding="utf-8")
+        self.assertEqual(self.agent.tls_ca_info(), {"present": True, "error": "unreadable_certificate"})
+        # a relative path in the settings is never followed
+        self.maint_env.write_text("ARMOR_TLS_CA_FILE=tls/root.crt\n", encoding="utf-8")
+        self.assertEqual(self.agent.tls_ca_info(), {"present": False})
+
     def test_the_release_just_made_is_never_the_one_pruned(self) -> None:
         releases = self.prefix / "releases"
         releases.mkdir(exist_ok=True)

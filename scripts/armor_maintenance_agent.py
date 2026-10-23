@@ -21,6 +21,7 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import hashlib
 import hmac
 import http.server
@@ -1105,10 +1106,56 @@ def overview(force: bool) -> dict[str, object]:
 # once more and handed over as a list of arguments, never through a shell.
 WIREGUARD = PREFIX / "bin" / "armor_wireguard.sh"
 DDNS = PREFIX / "bin" / "armor_ddns.sh"
+# The certificate authority of the installation's own HTTPS (Caddy's `tls internal`): where its root certificate is looked for when the setting ARMOR_TLS_CA_FILE (in armor.maint.env or armor.network.env)
+# does not say, from the most to the least likely. Only the public certificate is ever read; the key of the authority is never touched.
+TLS_CA_CANDIDATES = (
+    "/var/lib/caddy/.local/share/caddy/pki/authorities/local/root.crt",      # Caddy installed from the package
+    "/root/.local/share/caddy/pki/authorities/local/root.crt",
+    "/data/caddy/pki/authorities/local/root.crt",                             # the Caddy image, in its volume
+)
+OPENSSL = os.environ.get("ARMOR_OPENSSL", "openssl")
 PEER_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$")
 HOST_NAME = re.compile(r"^[A-Za-z0-9]([A-Za-z0-9.-]{0,251}[A-Za-z0-9])?(:[0-9]{1,5})?$")
 CIDR = re.compile(r"^[0-9]{1,3}(\.[0-9]{1,3}){3}/[0-9]{1,2}$")
 IFACE_NAME = re.compile(r"^[A-Za-z0-9_.-]{1,15}$")
+
+
+def tls_ca_file() -> Path | None:
+    """The root certificate of the installation's authority: the setting when it names a file, else the first of the usual places that exists."""
+    def usable(path: Path) -> bool:
+        try:
+            return path.is_file()
+        except OSError:       # a folder this user may not enter is not a place where the file is
+            return False
+    for settings in (MAINT_ENV, PREFIX / "etc" / "armor.network.env"):
+        named = read_settings(settings).get("ARMOR_TLS_CA_FILE", "")
+        if named and Path(named).is_absolute() and usable(Path(named)):
+            return Path(named)
+    for guess in TLS_CA_CANDIDATES:
+        if usable(Path(guess)):
+            return Path(guess)
+    try:
+        found = sorted(Path("/var/lib/docker/volumes").glob("*proxy-data*/_data/caddy/pki/authorities/local/root.crt"))
+    except OSError:
+        found = []
+    return found[0] if found else None
+
+
+def tls_ca_info() -> dict[str, object]:
+    """The pin of the authority's public key (SHA-256 of its SubjectPublicKeyInfo, base64: what the phone pins), its name and the day it ends. Nothing secret is in it."""
+    path = tls_ca_file()
+    if path is None:
+        return {"present": False}
+    try:
+        text = subprocess.run([OPENSSL, "x509", "-in", str(path), "-noout", "-subject", "-enddate"], capture_output=True, text=True, timeout=15, check=False)
+        key = subprocess.run([OPENSSL, "x509", "-in", str(path), "-noout", "-pubkey"], capture_output=True, text=True, timeout=15, check=False)
+        der = subprocess.run([OPENSSL, "pkey", "-pubin", "-outform", "DER"], input=key.stdout.encode("utf-8"), capture_output=True, timeout=15, check=False)
+    except (OSError, subprocess.TimeoutExpired):
+        return {"present": True, "error": "openssl_failed"}
+    if text.returncode != 0 or key.returncode != 0 or der.returncode != 0 or not der.stdout:
+        return {"present": True, "error": "unreadable_certificate"}
+    fields = dict(line.split("=", 1) for line in text.stdout.splitlines() if "=" in line)
+    return {"present": True, "pin": base64.b64encode(hashlib.sha256(der.stdout).digest()).decode("ascii"), "subject": fields.get("subject", "").strip()[:200], "not_after": fields.get("notAfter", "").strip()[:40]}
 
 
 def read_settings(path: Path) -> dict[str, str]:
@@ -1321,6 +1368,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 self.reply(200, {"ok": True})
             elif method == "GET" and parts == ["remote"]:
                 self.reply(200, remote_state())
+            elif method == "GET" and parts == ["tls", "ca"]:
+                self.reply(200, tls_ca_info())
             elif method == "POST" and parts == ["remote", "wireguard", "setup"]:
                 self.reply(200, wireguard_setup(self.body()))
             elif method == "POST" and parts == ["remote", "wireguard", "peers"]:
