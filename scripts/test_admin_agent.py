@@ -126,6 +126,8 @@ class AgentTest(unittest.TestCase):
     def test_reads_and_writes_a_file_with_a_copy_and_the_same_mode(self) -> None:
         env = self.prefix / "etc/armor.env"
         env.chmod(0o640)
+        for earlier in env.parent.glob("armor.env.bak-*"):      # the copies other tests left in the shared folder are not this test's
+            earlier.unlink()
         status, data = self.call("GET", "/v1/files/server.env")
         self.assertEqual((status, data["exists"], data["format"]), (200, True, "env"))
         self.assertIn("ARMOR_PORT=18080", data["content"])
