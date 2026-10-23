@@ -62,3 +62,5 @@ From the phone **on mobile data**, in Studio or the app, press "Check how the se
 ## Never
 
 Forward the broker's port, a node's port, or "just for a moment"; use the address instead of the name; leave the default passwords; skip the second factor for an administrator who signs in from outside.
+
+For the HTTPS with an authority of the house itself, and how a phone is paired with it, see `HTTPS_PAIRING.md`.

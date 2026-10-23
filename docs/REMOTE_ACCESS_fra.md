@@ -60,3 +60,5 @@ Depuis le téléphone **en données mobiles**, dans Studio ou l'application, app
 ## Jamais
 
 Rediriger le port du broker ou d'un nœud, même « un instant » ; utiliser l'adresse au lieu du nom ; laisser les mots de passe par défaut ; sauter le second facteur pour un administrateur qui se connecte de l'extérieur.
+
+Pour le HTTPS avec une autorité propre à la maison et l'appairage d'un téléphone avec elle, voir `HTTPS_PAIRING_fra.md`.

@@ -60,3 +60,5 @@ Dal telefono **con dati mobili**, in Studio o nell'app, premi «Controlla come m
 ## Mai
 
 Inoltrare la porta del broker o di un nodo, nemmeno «solo un momento»; usare l'indirizzo invece del nome; lasciare le password predefinite; saltare il secondo fattore per un amministratore che accede da fuori.
+
+Per l'HTTPS con un'autorità propria della casa e per come si abbina un telefono, vedi `HTTPS_PAIRING_ita.md`.

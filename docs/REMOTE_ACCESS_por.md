@@ -60,3 +60,5 @@ No telemóvel **com dados móveis**, no Studio ou na aplicação, carregue em «
 ## Nunca
 
 Redirecionar a porta do broker ou de um nó, nem «só por um momento»; usar o endereço em vez do nome; deixar as palavras-passe por defeito; saltar o segundo fator num administrador que entra de fora.
+
+Para o HTTPS com uma autoridade própria da casa e o emparelhamento de um telemóvel com ela, ver `HTTPS_PAIRING_por.md`.

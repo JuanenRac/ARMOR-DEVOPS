@@ -60,3 +60,5 @@ Desde el móvil **con datos móviles**, en Studio o en la app, pulsa «Comprobar
 ## Nunca
 
 Reenvíes el puerto del broker, el de un nodo, ni «solo un momento»; uses la dirección en vez del nombre; dejes las contraseñas por defecto; ni te saltes el segundo factor en un administrador que entra desde fuera.
+
+Para el HTTPS con una autoridad propia de la casa y cómo se empareja un teléfono con ella, véase `HTTPS_PAIRING_spa.md`.

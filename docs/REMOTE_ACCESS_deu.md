@@ -60,3 +60,5 @@ Drücken Sie vom Handy **mit Mobilfunk** in Studio oder der App „Prüfen, wie 
 ## Niemals
 
 Den Port des Brokers oder eines Knotens weiterleiten, auch nicht „nur kurz“; die Adresse statt des Namens verwenden; Standardpasswörter lassen; den zweiten Faktor bei einem Administrator überspringen, der sich von außen anmeldet.
+
+Zum HTTPS mit einer eigenen Zertifizierungsstelle des Hauses und zum Koppeln eines Telefons siehe `HTTPS_PAIRING_deu.md`.
