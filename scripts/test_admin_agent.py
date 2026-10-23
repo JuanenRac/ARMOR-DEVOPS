@@ -55,6 +55,7 @@ class AgentTest(unittest.TestCase):
         identity.write_text(
             f"#!/bin/bash\necho \"$@\" >> '{root}/identity.log'\n"
             "case \"$1\" in\n"
+            "  rotate) if [ \"$3\" = ghost ]; then echo 'field-node-ghost does not exist' >&2; exit 1; fi; echo \"user: field-node-$3\"; echo 'password: pw456';;\n"
             "  add) if [ \"$3\" = taken ]; then echo 'field-node-taken already exists' >&2; exit 1; fi; echo \"user: field-node-$3\"; echo 'password: pw123';;\n"
             "  remove) echo removed;;\n"
             "esac\n", encoding="utf-8")
@@ -170,6 +171,16 @@ class AgentTest(unittest.TestCase):
         self.assertIn("add node south-2", log)
         self.assertIn("remove field-node-south-2", log)
         self.assertNotIn("armor-server", log)
+
+    def test_an_account_that_exists_gets_a_new_password_in_one_step_through_the_script(self) -> None:
+        status, data = self.call("POST", "/v1/mqtt/accounts", {"role": "node", "name": "taken", "rotate": True})
+        self.assertEqual((status, data), (200, {"ok": True, "user": "field-node-taken", "password": "pw456"}))
+        self.assertEqual(self.call("POST", "/v1/mqtt/accounts", {"role": "node", "name": "ghost", "rotate": True})[0], 502)       # an identity that was never made is not made by a rotation
+        self.assertEqual(self.call("POST", "/v1/mqtt/accounts", {"role": "node", "name": "taken", "rotate": "yes"})[0], 409)     # only a real true asks for it
+        self.assertEqual(self.call("POST", "/v1/mqtt/accounts", {"role": "root", "name": "x", "rotate": True})[1], {"error": "unknown_role"})
+        log = (Path(self.tmp.name) / "identity.log").read_text(encoding="utf-8")
+        self.assertIn("rotate node taken", log)
+        self.assertNotIn("remove field-node-taken", log)
 
     def raw(self, method: str, path: str, headers: dict[str, str], body: bytes = b"") -> tuple[int, dict]:
         connection = UnixConnection(self.sock)

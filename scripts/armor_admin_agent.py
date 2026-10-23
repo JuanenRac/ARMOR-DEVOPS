@@ -282,12 +282,13 @@ def identity(arguments: list[str]) -> subprocess.CompletedProcess[str]:
     return subprocess.run(["bash", str(IDENTITY_SCRIPT), *arguments], capture_output=True, text=True, timeout=60, check=False, env=environment)
 
 
-def add_account(role: str, name: str) -> dict[str, object]:
+def add_account(role: str, name: str, rotate: bool = False) -> dict[str, object]:
+    """A new identity, or with `rotate` a new password for one that exists (one step: the old password works until the new one is written, and the ACL is not touched)."""
     if role not in ROLES:
         raise Refused(422, "unknown_role")
     if not NAME.fullmatch(name):
         raise Refused(422, "invalid_name")
-    done = identity(["add", role, name])
+    done = identity(["rotate" if rotate else "add", role, name])
     if done.returncode != 0:
         message = (done.stderr or done.stdout).strip().splitlines()[-1:] or [""]
         raise Refused(409 if "already exists" in message[0] else 502, "identity_failed")
@@ -383,7 +384,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             elif method == "POST" and parts == ["mqtt", "accounts"]:
                 require_sensitive(sensitive_given)
                 data = self.body()
-                self.reply(200, add_account(str(data.get("role", "")), str(data.get("name", ""))))
+                self.reply(200, add_account(str(data.get("role", "")), str(data.get("name", "")), data.get("rotate") is True))
             elif method == "DELETE" and len(parts) == 3 and parts[:2] == ["mqtt", "accounts"]:
                 require_sensitive(sensitive_given)
                 self.reply(200, remove_account(parts[2]))

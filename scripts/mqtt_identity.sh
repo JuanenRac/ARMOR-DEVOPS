@@ -17,6 +17,7 @@
 #   sudo mqtt_identity.sh alarm-policy alarm-1       # an alarm node made before the server's security options existed: also let it read armor/alarm/alarm-1/policy (idempotent)
 #   sudo mqtt_identity.sh node-control alarm-node alarm-1   # an identity made before remote control existed: also let the node read its own control orders and write its own answers and maintenance signal
 #   sudo mqtt_identity.sh radar-events north-1   # a radar node made before the events of its perimeter engine existed: let it write armor/radar/north-1/events and read armor/radar/north-1/control/armed, and let the server read the events
+#   sudo mqtt_identity.sh rotate node north-1  # a new password for an identity that exists, in one step: the ACL block is not touched, so the node is never left without access (what a node adopted again needs)
 #   sudo mqtt_identity.sh remove field-node-north-1
 #
 # The generated password is printed once, because the device needs it; it is
@@ -113,6 +114,29 @@ case "$ACTION" in
       esac
     } >>"$MQ/acl"
     chown root:armor "$MQ/passwd" "$MQ/acl"; chmod 0640 "$MQ/passwd" "$MQ/acl"
+    reload_broker
+    echo "user: $USER_NAME"
+    echo "password: $PASSWORD"
+    ;;
+  rotate)
+    # A new password for an identity that already exists: the broker's password file is replaced in one step (mosquitto_passwd writes the new hash over the old one) and the ACL is not
+    # touched, so a failure leaves the old password working and an identity that was never made is refused instead of being made without its ACL.
+    ROLE="${2:-}"; NAME="${3:-}"
+    [[ "$NAME" =~ ^[a-z0-9][a-z0-9_-]{0,63}$ ]] || { echo "the name must match ^[a-z0-9][a-z0-9_-]{0,63}\$" >&2; exit 2; }
+    case "$ROLE" in
+      node) USER_NAME="field-node-$NAME" ;;
+      solar-node) USER_NAME="solar-node-$NAME" ;;
+      electrical-node) USER_NAME="electrical-node-$NAME" ;;
+      network-node) USER_NAME="network-node-$NAME" ;;
+      alarm-node) USER_NAME="alarm-node-$NAME" ;;
+      hmi-node) USER_NAME="hmi-node-$NAME" ;;
+      *) usage ;;
+    esac
+    grep -qx "user $USER_NAME" "$MQ/acl" || { echo "$USER_NAME does not exist (add it first)" >&2; exit 1; }
+    PASSWORD="$(head -c 48 /dev/urandom | base64 | tr -d '
+=+/' | head -c 32)"
+    mosquitto_passwd -b "$MQ/passwd" "$USER_NAME" "$PASSWORD" >/dev/null
+    chown root:armor "$MQ/passwd"; chmod 0640 "$MQ/passwd"
     reload_broker
     echo "user: $USER_NAME"
     echo "password: $PASSWORD"

@@ -262,4 +262,17 @@ if run radar-events 'Bad Node' >/dev/null 2>&1; then fail "a bad node id was acc
 run remove field-node-rd2 >/dev/null
 if grep -q 'armor/radar/rd2' "$ACL"; then fail "removing the node left radar rules behind"; fi
 
+# A node adopted again gets a new password in one step: the same identity, the ACL not touched, a different password each time, and an identity that was never made is refused.
+run add node rot1 >/dev/null
+BEFORE="$(cat "$ACL")"
+FIRST="$(run rotate node rot1)"; SECOND="$(run rotate node rot1)"
+grep -qx 'user: field-node-rot1' <<<"$FIRST" || fail "rotate did not name the identity"
+[[ "$(grep '^password: ' <<<"$FIRST")" != "$(grep '^password: ' <<<"$SECOND")" ]] || fail "rotate gave the same password twice"
+[[ "$(grep -c '^password: [A-Za-z0-9]\{32\}$' <<<"$FIRST")" == "1" ]] || fail "rotate did not print a password of 32 characters"
+[[ "$(cat "$ACL")" == "$BEFORE" ]] || fail "rotate changed the ACL"
+if run rotate node nobody >/dev/null 2>&1; then fail "rotate made an identity that did not exist"; fi
+if run rotate node 'Bad Node' >/dev/null 2>&1; then fail "rotate took a bad name"; fi
+if run rotate consumer rot1 >/dev/null 2>&1; then fail "rotate took a role it does not know"; fi
+run remove field-node-rot1 >/dev/null
+
 echo "ARMOR_MQTT_IDENTITY=PASS the switch and the relays of an electrical node and the commands of an alarm node are reachable only after an explicit on, only the server publishes control orders and each node reads only its own, and off and remove take them away"
