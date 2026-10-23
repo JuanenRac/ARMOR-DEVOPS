@@ -58,6 +58,10 @@ MAX_DOWNLOAD = 300 * 1024 * 1024
 MAX_LOG_LINES = 2000
 MAX_CONSOLE_BYTES = 256 * 1024
 KEEP_OLD = 6
+# Below this free space (MB) on the disk of the folder, the copies set aside are removed oldest first, down to the newest one, even when fewer than KEEP_OLD are left (the setting
+# ARMOR_MAINT_MIN_FREE_MB of armor.maint.env, 0 to turn it off; 500 when it is not written).
+MIN_FREE_MB_DEFAULT = 500
+DISK_USAGE = shutil.disk_usage
 MAINT_ENV = Path(os.environ.get("ARMOR_MAINT_ENV", str(PREFIX / "etc" / "armor.maint.env")))
 
 # id -> what it is. `kind` says how it is put in; `service` is restarted afterwards (None: nothing to restart).
@@ -516,8 +520,21 @@ def prune_old(folder: Path, prefix: str = "", protect: tuple[Path, ...] = ()) ->
         for entry in entries[:-KEEP_OLD]:
             if entry.resolve() not in keep:
                 shutil.rmtree(entry, ignore_errors=True)
+        # A disk that is nearly full cannot afford six copies: the oldest go until there is room again, and the newest one that is not in use always stays.
+        floor = min_free_bytes()
+        if floor > 0:
+            left = [entry for entry in entries[-KEEP_OLD:] if entry.exists() and entry.resolve() not in keep]
+            while len(left) > 1 and DISK_USAGE(folder).free < floor:
+                shutil.rmtree(left.pop(0), ignore_errors=True)
     except OSError:
         pass
+
+
+def min_free_bytes() -> int:
+    """The free space under which the copies set aside are removed beyond the usual number (ARMOR_MAINT_MIN_FREE_MB in the settings file; a value that is not a whole number counts as the default)."""
+    value = read_settings(MAINT_ENV).get("ARMOR_MAINT_MIN_FREE_MB", "")
+    megabytes = int(value) if re.fullmatch(r"\d{1,7}", value) else MIN_FREE_MB_DEFAULT
+    return megabytes * 1024 * 1024
 
 
 def install_release_dir(job: Job, component: str, staged: Path, version: str) -> dict[str, object]:

@@ -135,6 +135,7 @@ class MaintenanceTest(unittest.TestCase):
         FakeGitHub.healthy = True
         cls.maint_env.unlink(missing_ok=True)
         self.agent._cache.clear()
+        self.agent.DISK_USAGE = lambda path: type("Usage", (), {"free": 10**12})()       # a disk with room, unless a test says otherwise
         (cls.prefix / "releases" / "20260101-000000" / "server" / "dist").mkdir(parents=True)
         (cls.prefix / "releases" / "20260101-000000" / "server" / "package.json").write_text('{"version": "0.5.4"}', encoding="utf-8")
         (cls.prefix / "releases" / "20260101-000000" / "server" / "package-lock.json").write_text('{"lock": 1}', encoding="utf-8")
@@ -515,6 +516,46 @@ class MaintenanceTest(unittest.TestCase):
         self.assertNotIn("maint-voice-0", voice)
         self.assertTrue((old / "maint-ai-1").exists())
         self.assertTrue((old / "20261016-000000").exists())
+
+    def test_a_nearly_full_disk_loses_its_oldest_copies_first_but_never_the_newest_or_the_active_one(self) -> None:
+        releases = self.prefix / "releases"
+        releases.mkdir(exist_ok=True)
+        for index in range(self.agent.KEEP_OLD):
+            (releases / f"2026101{index}-000000").mkdir()
+        active = releases / "20261010-000000"
+        free = [10 * 1024 * 1024]                       # 10 MB free, the floor is 500 MB
+        def usage(path):
+            return type("Usage", (), {"free": free[0]})()
+        self.agent.DISK_USAGE = usage
+        self.agent.prune_old(releases, protect=(active,))
+        names = sorted(entry.name for entry in releases.iterdir())
+        self.assertEqual(names, ["20261010-000000", "20261015-000000"], "only the one in use and the newest are left")
+
+    def test_the_copies_stop_going_when_there_is_room_again_and_the_floor_is_a_setting(self) -> None:
+        releases = self.prefix / "releases"
+        releases.mkdir(exist_ok=True)
+        for index in range(self.agent.KEEP_OLD):
+            (releases / f"2026101{index}-000000").mkdir()
+        def usage(path):
+            return type("Usage", (), {"free": (400 + 150 * (self.agent.KEEP_OLD - len(list(releases.iterdir())))) * 1024 * 1024})()
+        self.agent.DISK_USAGE = usage
+        self.agent.prune_old(releases)
+        left = sorted(entry.name for entry in releases.iterdir())
+        self.assertEqual(len(left), self.agent.KEEP_OLD - 1, "one copy gave the room that was missing")
+        self.assertNotIn("20261010-000000", left)
+        # the floor is read from the settings file: 0 turns it off, a bad value is the default
+        self.assertEqual(self.agent.min_free_bytes(), 500 * 1024 * 1024)
+        self.maint_env.write_text("ARMOR_MAINT_MIN_FREE_MB=0\n", encoding="utf-8")
+        self.assertEqual(self.agent.min_free_bytes(), 0)
+        self.maint_env.write_text("ARMOR_MAINT_MIN_FREE_MB=lots\n", encoding="utf-8")
+        self.assertEqual(self.agent.min_free_bytes(), 500 * 1024 * 1024)
+        self.maint_env.write_text("ARMOR_MAINT_MIN_FREE_MB=2048\n", encoding="utf-8")
+        self.assertEqual(self.agent.min_free_bytes(), 2048 * 1024 * 1024)
+        self.maint_env.write_text("ARMOR_MAINT_MIN_FREE_MB=0\n", encoding="utf-8")
+        self.agent.DISK_USAGE = lambda path: type("Usage", (), {"free": 1})()
+        before = len(list(releases.iterdir()))
+        self.agent.prune_old(releases)
+        self.assertEqual(len(list(releases.iterdir())), before, "with the floor off nothing more goes")
 
     def test_the_release_just_made_is_never_the_one_pruned(self) -> None:
         releases = self.prefix / "releases"

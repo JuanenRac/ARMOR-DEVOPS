@@ -43,7 +43,7 @@
 ## 🎯 概述
 
 * **CM5 测试台：**`scripts/deploy_cm5.sh` 在干净副本中构建，发送一个归档并运行 `scripts/install_cm5.sh`，它为服务器和 Studio 创建自己的用户、自己的目录和使用独立端口的 systemd 单元，并可通过选项加入 MQTT 代理、网络节点、观察服务、语音网关、管理代理、维护助手和每日备份。它从不触碰机器上运行的其他东西。
-* **维护助手**（`armor_maintenance_agent.py`）：从 GitHub 更新安装自身的组件（下载发布包，检查其 SHA-256，并带回滚地替换）、操作系统更新和可选的 root 控制台，全部从 Studio 的*更新*标签页驱动；控制台除非开启否则关闭。
+* **维护助手**（`armor_maintenance_agent.py`）：从 GitHub 更新安装自身的组件（下载发布包，检查其 SHA-256，并带回滚地替换）、操作系统更新和可选的 root 控制台，全部从 Studio 的*更新*标签页驱动；控制台除非开启否则关闭。它保留最新的六份备份，磁盘接近写满时则更少（设置文件中的 `ARMOR_MAINT_MIN_FREE_MB`：默认 500，0 表示关闭）。
 * **管理代理**（`armor_admin_agent.py`）：唯一有特权的部分，只有一份封闭的服务、设置文件和代理账户列表，因此 Studio 从不需要 root。
 * **每个版本的包：**`scripts/package_component.py` 构建某个组件（Studio、服务器、网络、观察服务、语音网关、DevOps）的包，在旁边写入其 SHA-256，并作为 GitHub 发布版发布。
 * **Compose 拓扑：**每个节点一个身份并带 ACL 的非匿名 Mosquitto 代理（包括报警节点和服务器告诉它们的 Zigbee 防区）、服务器，以及位于代理 `/api/` 的 nginx 之后的 Studio；只有 Studio 对外发布，且在回环上。加固的容器、固定的镜像、内部核心网络和用于状态的命名卷。

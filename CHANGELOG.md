@@ -4,6 +4,7 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+- **The maintenance helper makes room on a nearly full disk:** besides keeping the six newest copies it sets aside, it removes the oldest ones, down to the newest, while the free space is under `ARMOR_MAINT_MIN_FREE_MB` (500 by default, 0 turns it off; written in its settings file). The copy in use is never removed.
 - The repository has a security policy, a code of conduct, a contributing guide and a support file.
 - The banner follows the animated style of the ecosystem banners, with the name, the kind and the technologies of the project.
 ## [0.6.6] - Broker rules for the radar events
