@@ -3,9 +3,9 @@
 # Copyright (C) 2026 JuanenRac (Electro Hobby 3D). GPL-3.0-or-later.
 #
 #   sudo mqtt_identity.sh add node north-1     # a field node: writes its own telemetry/health, reads its own commands (and writes armor/solar/north-1/# if it also reads solar equipment)
-#   sudo mqtt_identity.sh add solar-node solar-1  # a solar gateway node (ARMOR-SOLAR): writes armor/solar/solar-1/# and nothing else
-#   sudo mqtt_identity.sh add electrical-node electrical-1  # an electrical node (ARMOR-ELECTRICAL): writes armor/electrical/electrical-1/state and /result and nothing else, reads nothing
-#   sudo mqtt_identity.sh add alarm-node alarm-1   # an alarm node (ARMOR-ALARM): writes armor/alarm/alarm-1/state and /result and reads only armor/alarm/alarm-1/zigbee and .../policy (the Zigbee zones and the security policy the server tells it)
+#   sudo mqtt_identity.sh add solar-node solar-1  # a solar gateway node (ARMOR-NODE-SOLAR): writes armor/solar/solar-1/# and nothing else
+#   sudo mqtt_identity.sh add electrical-node electrical-1  # an electrical node (ARMOR-NODE-ELECTRICAL): writes armor/electrical/electrical-1/state and /result and nothing else, reads nothing
+#   sudo mqtt_identity.sh add alarm-node alarm-1   # an alarm node (ARMOR-NODE-ALARM): writes armor/alarm/alarm-1/state and /result and reads only armor/alarm/alarm-1/zigbee and .../policy (the Zigbee zones and the security policy the server tells it)
 #   sudo mqtt_identity.sh add network-node network-1   # a network node (ARMOR-NETWORK): writes armor/network/network-1/state and nothing else, reads nothing
 #   sudo mqtt_identity.sh electrical-relays electrical-1 on     # lets that node's relays be devices of the house (armor/device/electrical-1/#): it publishes their state and reads their commands (off again with `off`): NOT part of any install
 #   sudo mqtt_identity.sh alarm-commands alarm-1 on   # lets the server arm and disarm that alarm node, and the node read the commands (off again with `off`): NOT part of any install
@@ -71,22 +71,22 @@ case "$ACTION" in
         echo "topic write armor/radar/$NAME/events"
         echo "topic read armor/radar/$NAME/control/armed"
       elif [[ "$ROLE" == "hmi-node" ]]; then
-        # ARMOR-HMI, the touch panel: it only says that it is alive (health) and where its web page is (info). It sends no telemetry, so it cannot make up radar tracks.
+        # ARMOR-NODE-HMI, the touch panel: it only says that it is alive (health) and where its web page is (info). It sends no telemetry, so it cannot make up radar tracks.
         echo "topic write armor/node/$NAME/health"
         echo "topic write armor/node/$NAME/info"
         echo "topic write armor/health/$NAME"
       elif [[ "$ROLE" == "solar-node" ]]; then
-        # ARMOR-SOLAR: the readings of the inverters and batteries on its serial ports, armor/solar/<node>/<device>/state; it reads nothing.
+        # ARMOR-NODE-SOLAR: the readings of the inverters and batteries on its serial ports, armor/solar/<node>/<device>/state; it reads nothing.
         echo "topic write armor/solar/$NAME/#"
         echo "topic write armor/health/$NAME"
       elif [[ "$ROLE" == "electrical-node" ]]; then
-        # ARMOR-ELECTRICAL: what it measures on the house's network (armor/electrical/<node>/state) and its answers to a command (.../result); it reads nothing, so no command
+        # ARMOR-NODE-ELECTRICAL: what it measures on the house's network (armor/electrical/<node>/state) and its answers to a command (.../result); it reads nothing, so no command
         # reaches it from the broker until `electrical-switching <node> on` is run for it, on purpose.
         echo "topic write armor/electrical/$NAME/state"
         echo "topic write armor/electrical/$NAME/result"
         echo "topic write armor/health/$NAME"
       elif [[ "$ROLE" == "alarm-node" ]]; then
-        # ARMOR-ALARM: its state (armor/alarm/<node>/state) and its answers to a command (.../result). The only thing it reads is the state of the Zigbee zones the server tells it
+        # ARMOR-NODE-ALARM: its state (armor/alarm/<node>/state) and its answers to a command (.../result). The only thing it reads is the state of the Zigbee zones the server tells it
         # (armor/alarm/<node>/zigbee: information, never a command); no command reaches it from the broker until `alarm-commands <node> on` is run for it, on purpose.
         echo "topic write armor/alarm/$NAME/state"
         echo "topic write armor/alarm/$NAME/result"

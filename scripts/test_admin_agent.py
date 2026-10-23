@@ -83,7 +83,10 @@ class AgentTest(unittest.TestCase):
         if token is not None:
             headers["X-Armor-Admin-Token"] = token
         headers.update(extra or {})
-        connection.request(method, path, json.dumps(body) if body is not None else None, headers)
+        try:
+            connection.request(method, path, json.dumps(body) if body is not None else None, headers)
+        except (BrokenPipeError, ConnectionResetError):
+            pass      # the agent answered a refusal and closed before it read the body: the answer is already there to be read
         response = connection.getresponse()
         data = json.loads(response.read().decode("utf-8"))
         connection.close()

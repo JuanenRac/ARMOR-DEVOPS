@@ -147,7 +147,7 @@ All notable changes to this project are documented here.
 
 ## [0.4.5] - The identity of an alarm node and the switch for its commands
 
-- **`mqtt_identity.sh add alarm-node ID`:** the identity of an ARMOR-ALARM node, which writes `armor/alarm/ID/state` and `armor/alarm/ID/result` and nothing else and reads nothing.
+- **`mqtt_identity.sh add alarm-node ID`:** the identity of an ARMOR-NODE-ALARM node, which writes `armor/alarm/ID/state` and `armor/alarm/ID/result` and nothing else and reads nothing.
 - **`mqtt_identity.sh alarm-commands ID on|off`:** the only thing that lets the server arm and disarm an alarm node: the node may read its command topic and the server may write it. Off by default and for that node only; idempotent; the previous ACL is kept as `acl.before-alarm-commands`. Removing the node takes the server's line with it.
 - **The server's identity** now reads `armor/alarm/#` on a new install and, once, on an existing one.
 - **Tests:** `test_mqtt_identity.sh` covers the alarm node's own topics, the two lines, a second `on`, a node that does not exist, a bad state, a bad id, `off` and `remove`.
@@ -222,11 +222,11 @@ All notable changes to this project are documented here.
 - **A mistake cannot shut you out:** `apply --rollback-after 120` removes the rules again after that many seconds unless `confirm` is run; `apply --persist` loads them at every boot; `revert` removes the table and the boot unit; `print` and `check` change nothing. Networks, ports and names are validated (IPv4 only, no shell text gets through).
 - **`scripts/test_firewall.sh`** (36 checks): the rules printed for the standard case, without clients, with other ports and a trusted interface and several networks; that no rule sets a drop policy or mentions another port; and every refusal (a missing field network, a bad network, a bad port, two services on one port, a tampered interface name, an unknown option). `nft -c` also checks the syntax when nft is installed (it is not on the development machine, so that step was skipped).
 - **Not done:** loading the rules on the CM5 (Monday's bench), and the VLANs themselves, which are the router's and the switch's job. The rules act on the machine's input, so they cover services installed natively (`install_cm5.sh`); a port that Docker publishes is forwarded, not input, and stays on loopback behind Caddy as `docker-compose.yml` has it.
-- `mqtt_identity.sh add electrical-node ID`: the identity of an ARMOR-ELECTRICAL node, which writes `armor/electrical/ID/#` and nothing else and reads nothing.
+- `mqtt_identity.sh add electrical-node ID`: the identity of an ARMOR-NODE-ELECTRICAL node, which writes `armor/electrical/ID/#` and nothing else and reads nothing.
 
 ## [0.2.9] - An identity for the solar nodes
 
-- `mqtt_identity.sh add solar-node <id>` makes the broker identity of an ARMOR-SOLAR node (`solar-node-<id>`): it may write `armor/solar/<id>/#` and nothing else, and it reads nothing. `remove` knows the new kind.
+- `mqtt_identity.sh add solar-node <id>` makes the broker identity of an ARMOR-NODE-SOLAR node (`solar-node-<id>`): it may write `armor/solar/<id>/#` and nothing else, and it reads nothing. `remove` knows the new kind.
 
 ## [0.2.8] - A plainer rule for the install prefix
 

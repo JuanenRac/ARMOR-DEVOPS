@@ -53,7 +53,7 @@ topic write armor/server/alert
 # Smart devices (smoke, door, plug, light ...): the server listens on their state and commands them.
 topic readwrite armor/device/#
 
-# A solar gateway node (ARMOR-SOLAR, scripts/mqtt_identity.sh add solar-node ID): the readings of the inverters and batteries on its ports; it reads nothing.
+# A solar gateway node (ARMOR-NODE-SOLAR, scripts/mqtt_identity.sh add solar-node ID): the readings of the inverters and batteries on its ports; it reads nothing.
 # user solar-node-solar-1
 # topic write armor/solar/solar-1/#
 # topic write armor/health/solar-1
@@ -62,7 +62,7 @@ topic readwrite armor/device/#
 # topic write armor/control/solar-1/result
 # topic write armor/control/solar-1/maintenance
 #
-# An electrical node (ARMOR-ELECTRICAL, scripts/mqtt_identity.sh add electrical-node ID): it writes what it measures and its answers, and reads nothing.
+# An electrical node (ARMOR-NODE-ELECTRICAL, scripts/mqtt_identity.sh add electrical-node ID): it writes what it measures and its answers, and reads nothing.
 # user electrical-node-electrical-1
 # topic write armor/electrical/electrical-1/state
 # topic write armor/electrical/electrical-1/result
@@ -77,7 +77,7 @@ topic readwrite armor/device/#
 #   in the block of electrical-node-electrical-1:   topic read armor/electrical/electrical-1/command
 #   in the block of armor-server:                   topic write armor/electrical/electrical-1/command
 
-# An alarm node (ARMOR-ALARM, scripts/mqtt_identity.sh add alarm-node ID): it writes the state of its panel and its answers, and reads only the state of its Zigbee zones.
+# An alarm node (ARMOR-NODE-ALARM, scripts/mqtt_identity.sh add alarm-node ID): it writes the state of its panel and its answers, and reads only the state of its Zigbee zones.
 # user alarm-node-alarm-1
 # topic write armor/alarm/alarm-1/state
 # topic write armor/alarm/alarm-1/result
