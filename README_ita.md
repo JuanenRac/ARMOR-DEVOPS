@@ -40,6 +40,20 @@
 | Tecnologia | Docker Compose / Bash / YAML |
 | Su hardware reale | Governa il banco di prova CM5 in uso quotidiano, su una vera CM5 che ospita altro software; non ancora sul Jetson |
 
+## 🚦 Stato del progetto
+
+Ogni riga è una parte di questo repository e il semaforo dice a che punto è oggi. È scritta in base a ciò che il repository può mostrare (test, compilazioni, esecuzioni), non a ciò che è previsto.
+
+🟢 Fatto e verificato · 🟡 Funziona, con limiti noti · 🟠 Fatto a metà o non ancora verificato · 🔴 Non fatto o non funzionante
+
+| Area | Stato | Cosa significa qui |
+|---|---|---|
+| Software | 🟡 | L'installatore del banco CM5 è stato eseguito su una CM5 reale che ospita altro software, rimasto in salute; un'installazione pulita su una macchina che non ha mai visto il progetto non è provata. |
+| Test | 🟡 | Gli script di backup e ripristino hanno un test di andata e ritorno che passa, i due assistenti hanno i propri test e la topologia Docker con il profilo TLS opzionale è stata costruita ed eseguita con Docker Engine in WSL; la topologia completa non ha girato sulla sua destinazione. |
+| Hardware | 🟡 | Gestisce il banco di prova CM5 in uso quotidiano; nulla ha girato sulla Jetson. |
+| Aggiornamenti | 🟢 | Gli aggiornamenti dei componenti da GitHub, tramite Studio, sono stati eseguiti sul banco di prova CM5. |
+| Documentazione | 🟢 | Otto lingue e il registro delle modifiche sono aggiornati. |
+
 ## 🎯 Panoramica
 
 * **Banco di prova CM5:** `scripts/deploy_cm5.sh` compila in una copia pulita, invia un archivio ed esegue `scripts/install_cm5.sh`, che crea il proprio utente, la propria directory e unità systemd su porte proprie per il server e Studio e, con opzioni, il broker MQTT, il nodo di rete, il servizio di osservazione, il gateway vocale, l'agente di amministrazione, l'assistente di manutenzione e il backup giornaliero. Non tocca mai ciò che la macchina esegue per altro.

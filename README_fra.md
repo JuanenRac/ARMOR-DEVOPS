@@ -40,6 +40,20 @@
 | Technologie | Docker Compose / Bash / YAML |
 | Sur matériel réel | Fait tourner le banc de test CM5 en usage quotidien, sur un vrai CM5 qui héberge d'autres logiciels ; pas encore sur le Jetson |
 
+## 🚦 État du projet
+
+Chaque ligne est une partie de ce dépôt et le feu dit où elle en est aujourd'hui. Elle est écrite d'après ce que le dépôt peut montrer (tests, compilations, exécutions), pas d'après ce qui est prévu.
+
+🟢 Fait et vérifié · 🟡 Fonctionne, avec des limites connues · 🟠 À moitié fait ou pas encore vérifié · 🔴 Pas fait ou ne fonctionne pas
+
+| Domaine | État | Ce que cela veut dire ici |
+|---|---|---|
+| Logiciel | 🟡 | L'installateur du banc CM5 a tourné sur un vrai CM5 qui héberge d'autres logiciels, restés en bonne santé ; une installation propre sur une machine qui n'a jamais vu le projet n'est pas prouvée. |
+| Tests | 🟡 | Les scripts de sauvegarde et de restauration ont un test aller-retour qui réussit, les deux assistants ont leurs propres tests, et la topologie Docker avec son profil TLS optionnel a été construite et exécutée avec Docker Engine sous WSL ; la topologie complète n'a pas tourné sur sa cible. |
+| Matériel | 🟡 | Il fait tourner le banc d'essai CM5 au quotidien ; rien n'a tourné sur le Jetson. |
+| Mises à jour | 🟢 | Les mises à jour des composants depuis GitHub, via Studio, ont été faites sur le banc d'essai CM5. |
+| Documentation | 🟢 | Huit langues et le journal des modifications sont à jour. |
+
 ## 🎯 Présentation
 
 * **Banc de test CM5 :** `scripts/deploy_cm5.sh` compile dans une copie propre, envoie une archive et lance `scripts/install_cm5.sh`, qui crée son propre utilisateur, son propre répertoire et des unités systemd sur leurs propres ports pour le serveur et Studio et, avec des options, le broker MQTT, le nœud réseau, le service d'observation, la passerelle vocale, l'agent d'administration, l'assistant de maintenance et la sauvegarde quotidienne. Il ne touche jamais à ce que la machine exécute par ailleurs.

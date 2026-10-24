@@ -40,6 +40,20 @@
 | Technik | Docker Compose / Bash / YAML |
 | Auf echter Hardware | Betreibt den CM5-Testaufbau im täglichen Einsatz, auf einem echten CM5, der andere Software beherbergt; noch nicht auf dem Jetson |
 
+## 🚦 Projektstatus
+
+Jede Zeile ist ein Teil dieses Repositorys, und die Ampel sagt, wie weit er heute ist. Sie beruht auf dem, was das Repository zeigen kann (Tests, Builds, Läufe), nicht auf dem, was geplant ist.
+
+🟢 Fertig und überprüft · 🟡 Funktioniert, mit bekannten Grenzen · 🟠 Teilweise fertig oder noch nicht überprüft · 🔴 Nicht gemacht oder funktioniert nicht
+
+| Bereich | Stand | Was das hier bedeutet |
+|---|---|---|
+| Software | 🟡 | Der Installer des CM5-Prüfstands lief auf einem echten CM5, auf dem andere Software läuft und gesund blieb; eine saubere Installation auf einem Rechner, der das Projekt nie gesehen hat, ist nicht belegt. |
+| Tests | 🟡 | Die Skripte für Sicherung und Wiederherstellung haben einen bestandenen Hin-und-zurück-Test, die beiden Helfer haben eigene Tests, und die Docker-Topologie mit ihrem optionalen TLS-Profil wurde mit Docker Engine in WSL gebaut und ausgeführt; die gesamte Topologie lief nicht auf ihrem Ziel. |
+| Hardware | 🟡 | Er betreibt den CM5-Prüfstand im täglichen Einsatz; auf dem Jetson lief nichts. |
+| Aktualisierungen | 🟢 | Aktualisierungen der Komponenten von GitHub über Studio wurden auf dem CM5-Prüfstand durchgeführt. |
+| Dokumentation | 🟢 | Acht Sprachen und das Änderungsprotokoll sind aktuell. |
+
 ## 🎯 Überblick
 
 * **CM5-Testaufbau:** `scripts/deploy_cm5.sh` baut in einer sauberen Kopie, sendet ein Archiv und führt `scripts/install_cm5.sh` aus, das einen eigenen Benutzer, ein eigenes Verzeichnis und systemd-Einheiten auf eigenen Ports für Server und Studio anlegt und, mit Optionen, den MQTT-Broker, den Netzwerkknoten, den Beobachtungsdienst, das Sprach-Gateway, den Administrationsagenten, den Wartungshelfer und die tägliche Sicherung. Es berührt nie, was die Maschine sonst ausführt.
