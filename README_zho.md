@@ -78,11 +78,13 @@ ARMOR-DEVOPS 是其他一切到达机器并保持最新的途径。它在 CM5 �
 
 ```text
 ARMOR-DEVOPS/
-├── docker-compose.yml, docker-compose.tls.yml, .env.example, mosquitto/ (broker, TLS profile, ACL example)
+├── docker-compose.yml, docker-compose.tls.yml, .env.example
+├── mosquitto/ mosquitto.conf, mosquitto-tls.conf (the TLS profile), acl.example
 ├── caddy/     Caddyfile (TLS)
-├── scripts/   deploy_cm5, install_cm5, package_component, armor_admin_agent, armor_maintenance_agent, generate_secrets, check-required-env, backup_data, restore_data, firewall_core, mqtt_identity, armor_mqtt_tls (the optional encrypted door of the broker), tests of the agents, the backup, the firewall and the Compose topology
+├── scripts/   deploy_cm5, install_cm5, package_component, armor_admin_agent, armor_maintenance_agent, generate_secrets, check-required-env, backup_data, restore_data, firewall_core, mqtt_identity, armor_mqtt_tls (the optional encrypted door of the broker), armor_ddns, armor_wireguard, armor_tls_check (remote access), tests of the agents, the backup, the firewall and the Compose topology
 │   └── (package_component.py packs a program the way the maintenance helper installs it; the packages are assets of the GitHub releases, not files of this repository)
-└── docs/      DEPLOYMENT_BOUNDARY, CM5_TEST_BENCH, BACKUP_AND_TLS, MQTT_TLS
+├── tools/     the shared CI checks (armor_ci_validate.py, armor_project_tool.py, _armor_readme_parity.py)
+└── docs/      DEPLOYMENT_BOUNDARY, CM5_TEST_BENCH, BENCH_TESTS, BACKUP_AND_TLS, MQTT_TLS, HTTPS_PAIRING, REMOTE_ACCESS, SIGNED_PACKAGES (the last four also in eight languages)
 ```
 
 ## 🛠️ 开发环境
