@@ -2,7 +2,7 @@
 
 All notable changes to this project are documented here.
 
-## [Unreleased]
+## [0.6.7] - A guide to the HTTPS of the house and the pairing of the phones and hTTPS for the phones, checked and pairable
 
 - **The components this repository packages and updates are checked against the registry of the family:** a test (`scripts/test_registry.py`) fails when the packager or the maintenance agent names other programs, or other repositories for them, than `ARMOR-COMMON/registry/repositories.json` does.
 - **A guide to the HTTPS of the house and the pairing of the phones** (`docs/HTTPS_PAIRING.md`, in the eight languages): the default profile (Caddy's own authority), the steps from the name to the check and to the pairing in Studio and in the app, what the pin is, the renewal and the test on the machine before the app stops accepting plain http.
