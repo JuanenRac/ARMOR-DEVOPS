@@ -5,6 +5,7 @@ All notable changes to this project are documented here.
 ## [Unreleased]
 
 - **An update does not install the dependencies again just because the project has a new version:** the maintenance helper compared the whole `package-lock.json`, whose own version changes in every release, so each update of the server ran `npm ci`. It now compares what the lock says about the dependencies, without the version of the project.
+- **The pictures of the README come from shared tools:** `tools/make_architecture.py` draws `images/architecture.svg` from `docs/architecture.json` and `tools/make_structure.py` draws the Repository Structure (the text tree and the animated picture) from `docs/structure.json`; both measure every text, and `--check` fails when a picture, its description or the code it points to disagree. They are vendored from ARMOR-COMMON like the shared CI checks.
 
 ## [0.6.7] - A guide to the HTTPS of the house and the pairing of the phones and hTTPS for the phones, checked and pairable
 
