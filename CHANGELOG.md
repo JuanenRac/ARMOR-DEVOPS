@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented here.
 
+## [Unreleased]
+
+- **An update does not install the dependencies again just because the project has a new version:** the maintenance helper compared the whole `package-lock.json`, whose own version changes in every release, so each update of the server ran `npm ci`. It now compares what the lock says about the dependencies, without the version of the project.
+
 ## [0.6.7] - A guide to the HTTPS of the house and the pairing of the phones and hTTPS for the phones, checked and pairable
 
 - **The components this repository packages and updates are checked against the registry of the family:** a test (`scripts/test_registry.py`) fails when the packager or the maintenance agent names other programs, or other repositories for them, than `ARMOR-COMMON/registry/repositories.json` does.

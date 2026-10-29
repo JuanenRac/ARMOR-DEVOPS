@@ -190,6 +190,20 @@ class MaintenanceTest(unittest.TestCase):
         self.assertIn('"npm_config_cache"', source)
         self.assertIn('job.say("npm: " + line[:200])', source)
 
+    def test_a_new_version_of_the_project_alone_does_not_run_npm_again(self) -> None:
+        folder = Path(self.tmp.name) / "locks"
+        folder.mkdir(exist_ok=True)
+        def write(name: str, version: str, dependency: str) -> Path:
+            path = folder / name
+            path.write_text(json.dumps({"name": "armor-server", "version": version, "packages": {"": {"name": "armor-server", "version": version, "dependencies": {"express": dependency}}, "node_modules/express": {"version": dependency}}}), encoding="utf-8")
+            return path
+        same = self.agent.lock_fingerprint(write("a.json", "0.8.0.5", "5.1.0"))
+        self.assertEqual(same, self.agent.lock_fingerprint(write("b.json", "0.8.0.6", "5.1.0")))
+        self.assertNotEqual(same, self.agent.lock_fingerprint(write("c.json", "0.8.0.6", "5.2.0")))
+        broken = folder / "broken.json"
+        broken.write_text("{ not json", encoding="utf-8")
+        self.assertEqual(len(self.agent.lock_fingerprint(broken)), 32)
+
     # ---- versions ----
     def test_versions_compare_with_three_and_four_components(self) -> None:
         key = self.agent.version_key

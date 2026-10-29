@@ -491,6 +491,20 @@ def healthy(component: str, unit: str, wait: float = 40.0) -> bool:
     return False
 
 
+def lock_fingerprint(path: Path) -> bytes:
+    """What a package-lock.json says about the dependencies, without the version of the project itself: that number changes in every release and is no reason to run `npm ci` again."""
+    raw = path.read_bytes()
+    try:
+        lock = json.loads(raw)
+        lock.pop("version", None)
+        root = lock.get("packages", {}).get("")
+        if isinstance(root, dict):
+            root.pop("version", None)
+        return hashlib.sha256(json.dumps(lock, sort_keys=True).encode("utf-8")).digest()
+    except (ValueError, AttributeError):
+        return hashlib.sha256(raw).digest()
+
+
 def link_or_copy(source: str, destination: str) -> str:
     """A hard link when the files are on the same disk (a new release folder costs nothing), a copy when they are not."""
     try:
@@ -559,7 +573,7 @@ def install_release_dir(job: Job, component: str, staged: Path, version: str) ->
             if (source / name).exists():
                 put_file(source / name, target / "server" / name)
         old_lock = (current / "server" / "package-lock.json")
-        if (source / "package-lock.json").exists() and old_lock.exists() and hashlib.sha256(old_lock.read_bytes()).digest() != hashlib.sha256((source / "package-lock.json").read_bytes()).digest():
+        if (source / "package-lock.json").exists() and old_lock.exists() and lock_fingerprint(old_lock) != lock_fingerprint(source / "package-lock.json"):
             job.say("the dependencies changed: npm ci --omit=dev")
             npm_home = DATA_DIR / "npm-home"
             npm_home.mkdir(parents=True, exist_ok=True)
