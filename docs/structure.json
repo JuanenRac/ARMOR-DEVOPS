@@ -1,0 +1,434 @@
+{
+ "repo": "ARMOR-DEVOPS",
+ "ecosystem": "armor",
+ "svg": "en",
+ "cards": [
+  {
+   "name": "scripts/",
+   "span": 3,
+   "accent": "a",
+   "sub": {
+    "en": "the installer, the helpers and their tests",
+    "es": "el instalador, los ayudantes y sus pruebas",
+    "de": "der Installer, die Helfer und ihre Tests",
+    "fr": "l'installateur, les assistants et leurs tests",
+    "it": "l'installatore, gli assistenti e i loro test",
+    "ja": "インストーラー、ヘルパーとそのテスト",
+    "zh": "安装器、助手及其测试",
+    "pt": "o instalador, os ajudantes e os seus testes"
+   },
+   "rows": [
+    {
+     "name": "deploy_cm5.sh  install_cm5.sh",
+     "desc": {
+      "en": "deploy to the bench, install it",
+      "es": "despliega en el banco, lo instala",
+      "de": "auf den Prüfstand bringen, installieren",
+      "fr": "déploie sur le banc, l'installe",
+      "it": "distribuisce sul banco, lo installa",
+      "ja": "ベンチへデプロイしてインストール",
+      "zh": "部署到测试台并安装",
+      "pt": "implanta na bancada, instala-o"
+     },
+     "tree_name": "deploy_cm5.sh install_cm5.sh"
+    },
+    {
+     "name": "package_component.py",
+     "desc": {
+      "en": "the package of each release",
+      "es": "el paquete de cada versión",
+      "de": "das Paket jedes Releases",
+      "fr": "le paquet de chaque version",
+      "it": "il pacchetto di ogni rilascio",
+      "ja": "各リリースのパッケージ",
+      "zh": "每个版本的包",
+      "pt": "o pacote de cada versão"
+     }
+    },
+    {
+     "name": "armor_admin_agent.py  armor_maintenance_agent.py",
+     "desc": {
+      "en": "the two helpers of Studio",
+      "es": "los dos ayudantes de Studio",
+      "de": "die zwei Helfer von Studio",
+      "fr": "les deux assistants de Studio",
+      "it": "i due assistenti di Studio",
+      "ja": "Studio の 2 つのヘルパー",
+      "zh": "Studio 的两个助手",
+      "pt": "os dois ajudantes do Studio"
+     },
+     "tree_name": "armor_admin_agent.py armor_maintenance_agent.py"
+    },
+    {
+     "name": "generate_secrets.sh  check-required-env.sh",
+     "desc": {
+      "en": "random secrets; refuse weak ones",
+      "es": "secretos aleatorios; rechaza los débiles",
+      "de": "zufällige Geheimnisse; weist schwache ab",
+      "fr": "secrets aléatoires ; refuse les faibles",
+      "it": "segreti casuali; rifiuta i deboli",
+      "ja": "ランダムな秘密、弱いものは拒否",
+      "zh": "随机密钥；拒绝弱密钥",
+      "pt": "segredos aleatórios; recusa os fracos"
+     },
+     "tree_name": "generate_secrets.sh check-required-env.sh"
+    },
+    {
+     "name": "backup_data.sh  restore_data.sh",
+     "desc": {
+      "en": "encrypted backup and restore",
+      "es": "copia cifrada y restauración",
+      "de": "verschlüsselte Sicherung und Wiederherstellung",
+      "fr": "sauvegarde chiffrée et restauration",
+      "it": "backup cifrato e ripristino",
+      "ja": "暗号化バックアップと復元",
+      "zh": "加密备份与恢复",
+      "pt": "cópia cifrada e restauro"
+     },
+     "tree_name": "backup_data.sh restore_data.sh"
+    },
+    {
+     "name": "firewall_core.sh  mqtt_identity.sh",
+     "desc": {
+      "en": "firewall and broker identities",
+      "es": "cortafuegos e identidades del broker",
+      "de": "Firewall und Broker-Identitäten",
+      "fr": "pare-feu et identités du broker",
+      "it": "firewall e identità del broker",
+      "ja": "ファイアウォールとブローカー ID",
+      "zh": "防火墙与代理身份",
+      "pt": "firewall e identidades do broker"
+     },
+     "tree_name": "firewall_core.sh mqtt_identity.sh"
+    },
+    {
+     "name": "armor_mqtt_tls.sh  armor_tls_check.sh",
+     "desc": {
+      "en": "MQTT over TLS and its check",
+      "es": "MQTT sobre TLS y su comprobación",
+      "de": "MQTT über TLS und seine Prüfung",
+      "fr": "MQTT sur TLS et sa vérification",
+      "it": "MQTT su TLS e il suo controllo",
+      "ja": "TLS 上の MQTT とその確認",
+      "zh": "TLS 上的 MQTT 及其检查",
+      "pt": "MQTT sobre TLS e a sua verificação"
+     },
+     "tree_name": "armor_mqtt_tls.sh armor_tls_check.sh"
+    },
+    {
+     "name": "armor_ddns.sh  armor_wireguard.sh",
+     "desc": {
+      "en": "a name for the house and a VPN",
+      "es": "un nombre para la casa y una VPN",
+      "de": "ein Name für das Haus und ein VPN",
+      "fr": "un nom pour la maison et un VPN",
+      "it": "un nome per la casa e una VPN",
+      "ja": "家の名前と VPN",
+      "zh": "房子的域名和 VPN",
+      "pt": "um nome para a casa e uma VPN"
+     },
+     "tree_name": "armor_ddns.sh armor_wireguard.sh"
+    },
+    {
+     "name": "test_*.py  test_*.sh  validate-compose.sh",
+     "desc": {
+      "en": "the tests of the helpers and scripts",
+      "es": "las pruebas de los ayudantes y scripts",
+      "de": "die Tests der Helfer und Skripte",
+      "fr": "les tests des assistants et scripts",
+      "it": "i test degli assistenti e degli script",
+      "ja": "ヘルパーとスクリプトのテスト",
+      "zh": "助手与脚本的测试",
+      "pt": "os testes dos ajudantes e scripts"
+     },
+     "tree_name": "test_*.py test_*.sh validate-compose.sh"
+    }
+   ]
+  },
+  {
+   "name": {
+    "en": "topology and documents",
+    "es": "topología y documentos",
+    "de": "Topologie und Dokumente",
+    "fr": "topologie et documents",
+    "it": "topologia e documenti",
+    "ja": "構成と文書",
+    "zh": "拓扑与文档",
+    "pt": "topologia e documentos"
+   },
+   "kind": "group",
+   "span": 3,
+   "accent": "b",
+   "columns": 2,
+   "sub": {
+    "en": "Compose, broker, TLS, guides",
+    "es": "Compose, broker, TLS, guías",
+    "de": "Compose, Broker, TLS, Leitfäden",
+    "fr": "Compose, broker, TLS, guides",
+    "it": "Compose, broker, TLS, guide",
+    "ja": "Compose、ブローカー、TLS、ガイド",
+    "zh": "Compose、代理、TLS、指南",
+    "pt": "Compose, broker, TLS, guias"
+   },
+   "rows": [
+    {
+     "name": "docker-compose.yml  docker-compose.tls.yml",
+     "desc": {
+      "en": "broker, server, Studio; TLS profile",
+      "es": "broker, servidor, Studio; perfil TLS",
+      "de": "Broker, Server, Studio; TLS-Profil",
+      "fr": "broker, serveur, Studio ; profil TLS",
+      "it": "broker, server, Studio; profilo TLS",
+      "ja": "ブローカー、サーバー、Studio、TLS プロファイル",
+      "zh": "代理、服务器、Studio；TLS 配置",
+      "pt": "broker, servidor, Studio; perfil TLS"
+     },
+     "tree_name": "docker-compose.yml docker-compose.tls.yml"
+    },
+    {
+     "name": "mosquitto/",
+     "desc": {
+      "en": "mosquitto.conf, TLS config, acl.example",
+      "es": "mosquitto.conf, config TLS, acl.example",
+      "de": "mosquitto.conf, TLS-Konfig, acl.example",
+      "fr": "mosquitto.conf, config TLS, acl.example",
+      "it": "mosquitto.conf, config TLS, acl.example",
+      "ja": "mosquitto.conf、TLS 設定、acl.example",
+      "zh": "mosquitto.conf、TLS 配置、acl.example",
+      "pt": "mosquitto.conf, config TLS, acl.example"
+     }
+    },
+    {
+     "name": "caddy/",
+     "desc": {
+      "en": "Caddyfile: HTTPS in front of Studio",
+      "es": "Caddyfile: HTTPS delante de Studio",
+      "de": "Caddyfile: HTTPS vor Studio",
+      "fr": "Caddyfile : HTTPS devant Studio",
+      "it": "Caddyfile: HTTPS davanti a Studio",
+      "ja": "Caddyfile：Studio の前段の HTTPS",
+      "zh": "Caddyfile：Studio 前的 HTTPS",
+      "pt": "Caddyfile: HTTPS à frente do Studio"
+     }
+    },
+    {
+     "name": "docs/",
+     "desc": {
+      "en": "deployment, bench, backup, TLS, remote access",
+      "es": "despliegue, banco, copia, TLS, acceso remoto",
+      "de": "Bereitstellung, Prüfstand, Sicherung, TLS, Fernzugriff",
+      "fr": "déploiement, banc, sauvegarde, TLS, accès à distance",
+      "it": "distribuzione, banco, backup, TLS, accesso remoto",
+      "ja": "デプロイ、ベンチ、バックアップ、TLS、リモートアクセス",
+      "zh": "部署、测试台、备份、TLS、远程访问",
+      "pt": "implantação, bancada, cópia, TLS, acesso remoto"
+     },
+     "tree_desc": {
+      "en": "DEPLOYMENT_BOUNDARY, CM5_TEST_BENCH, BENCH_TESTS, BACKUP_AND_TLS, MQTT_TLS, HTTPS_PAIRING, REMOTE_ACCESS, SIGNED_PACKAGES (the last four also in eight languages)",
+      "es": "DEPLOYMENT_BOUNDARY, CM5_TEST_BENCH, BENCH_TESTS, BACKUP_AND_TLS, MQTT_TLS, HTTPS_PAIRING, REMOTE_ACCESS, SIGNED_PACKAGES (cuatro también en ocho idiomas)",
+      "de": "DEPLOYMENT_BOUNDARY, CM5_TEST_BENCH, BENCH_TESTS, BACKUP_AND_TLS, MQTT_TLS, HTTPS_PAIRING, REMOTE_ACCESS, SIGNED_PACKAGES (vier auch in acht Sprachen)",
+      "fr": "DEPLOYMENT_BOUNDARY, CM5_TEST_BENCH, BENCH_TESTS, BACKUP_AND_TLS, MQTT_TLS, HTTPS_PAIRING, REMOTE_ACCESS, SIGNED_PACKAGES (quatre aussi en huit langues)",
+      "it": "DEPLOYMENT_BOUNDARY, CM5_TEST_BENCH, BENCH_TESTS, BACKUP_AND_TLS, MQTT_TLS, HTTPS_PAIRING, REMOTE_ACCESS, SIGNED_PACKAGES (quattro anche in otto lingue)",
+      "ja": "DEPLOYMENT_BOUNDARY、CM5_TEST_BENCH、BENCH_TESTS、BACKUP_AND_TLS、MQTT_TLS、HTTPS_PAIRING、REMOTE_ACCESS、SIGNED_PACKAGES（後ろ 4 つは 8 言語版あり）",
+      "zh": "DEPLOYMENT_BOUNDARY、CM5_TEST_BENCH、BENCH_TESTS、BACKUP_AND_TLS、MQTT_TLS、HTTPS_PAIRING、REMOTE_ACCESS、SIGNED_PACKAGES（后四篇另有八种语言版）",
+      "pt": "DEPLOYMENT_BOUNDARY, CM5_TEST_BENCH, BENCH_TESTS, BACKUP_AND_TLS, MQTT_TLS, HTTPS_PAIRING, REMOTE_ACCESS, SIGNED_PACKAGES (as últimas quatro também em oito idiomas)"
+     }
+    },
+    {
+     "name": "tools/",
+     "desc": {
+      "en": "shared CI checks and tools",
+      "es": "comprobaciones de CI y herramientas",
+      "de": "CI-Prüfungen und Werkzeuge",
+      "fr": "vérifications CI et outils",
+      "it": "controlli CI e strumenti",
+      "ja": "CI 検査とツール",
+      "zh": "CI 检查和工具",
+      "pt": "verificações de CI e ferramentas"
+     },
+     "tree_desc": {
+      "en": "the shared CI checks and project tooling",
+      "es": "las comprobaciones de CI y las herramientas compartidas",
+      "de": "die gemeinsamen CI-Prüfungen und Werkzeuge",
+      "fr": "les vérifications CI et les outils partagés",
+      "it": "i controlli CI e gli strumenti condivisi",
+      "ja": "共通の CI 検査とツール",
+      "zh": "共用的 CI 检查和工具",
+      "pt": "as verificações de CI e as ferramentas partilhadas"
+     }
+    },
+    {
+     "name": "images/",
+     "desc": {
+      "en": "banner, icon, README pictures",
+      "es": "banner, icono, imágenes del README",
+      "de": "Banner, Symbol, README-Bilder",
+      "fr": "bannière, icône, images du README",
+      "it": "banner, icona, immagini del README",
+      "ja": "バナー、アイコン、README の画像",
+      "zh": "横幅图、图标、README 图片",
+      "pt": "faixa, ícone, imagens do README"
+     },
+     "tree_desc": {
+      "en": "banner, icon and the pictures of the README",
+      "es": "banner, icono y las imágenes del README",
+      "de": "Banner, Symbol und die Bilder des READMEs",
+      "fr": "bannière, icône et images du README",
+      "it": "banner, icona e immagini del README",
+      "ja": "バナー、アイコン、README の画像",
+      "zh": "横幅图、图标和 README 的图片",
+      "pt": "faixa, ícone e as imagens do README"
+     }
+    },
+    {
+     "name": ".github/",
+     "desc": {
+      "en": "CI, dashboard notice, templates",
+      "es": "CI, aviso al panel, plantillas",
+      "de": "CI, Dashboard-Hinweis, Vorlagen",
+      "fr": "CI, avis au tableau de bord, modèles",
+      "it": "CI, avviso alla dashboard, modelli",
+      "ja": "CI、ダッシュボード通知、テンプレート",
+      "zh": "CI、仪表板通知、模板",
+      "pt": "CI, aviso ao painel, modelos"
+     },
+     "tree_desc": {
+      "en": "CI workflow, dashboard notice, issue and pull-request templates",
+      "es": "flujo de CI, aviso al panel, plantillas de incidencias y pull requests",
+      "de": "CI-Workflow, Dashboard-Hinweis, Vorlagen für Issues und Pull Requests",
+      "fr": "workflow CI, avis au tableau de bord, modèles d'issues et de pull requests",
+      "it": "workflow CI, avviso alla dashboard, modelli per issue e pull request",
+      "ja": "CI ワークフロー、ダッシュボード通知、Issue と Pull Request のテンプレート",
+      "zh": "CI 工作流、仪表板通知、议题和 pull request 模板",
+      "pt": "fluxo de CI, aviso ao painel, modelos de issues e pull requests"
+     }
+    }
+   ]
+  },
+  {
+   "name": {
+    "en": "project files",
+    "es": "ficheros del proyecto",
+    "de": "Projektdateien",
+    "fr": "fichiers du projet",
+    "it": "file del progetto",
+    "ja": "プロジェクトのファイル",
+    "zh": "项目文件",
+    "pt": "ficheiros do projeto"
+   },
+   "kind": "group",
+   "span": 3,
+   "accent": "c",
+   "columns": 2,
+   "sub": {
+    "en": "at the root",
+    "es": "en la raíz",
+    "de": "im Stammordner",
+    "fr": "à la racine",
+    "it": "alla radice",
+    "ja": "ルート",
+    "zh": "根目录",
+    "pt": "na raiz"
+   },
+   "rows": [
+    {
+     "name": "armor.project.json",
+     "desc": {
+      "en": "manifest: version, role, maturity",
+      "es": "manifiesto: versión, función, madurez",
+      "de": "Manifest: Version, Rolle, Reife",
+      "fr": "manifeste : version, rôle, maturité",
+      "it": "manifesto: versione, ruolo, maturità",
+      "ja": "マニフェスト：版・役割・成熟度",
+      "zh": "清单：版本、角色、成熟度",
+      "pt": "manifesto: versão, função, maturidade"
+     }
+    },
+    {
+     "name": "CHANGELOG.md",
+     "desc": {
+      "en": "what changed in each version",
+      "es": "qué cambió en cada versión",
+      "de": "was sich in jeder Version geändert hat",
+      "fr": "ce qui a changé à chaque version",
+      "it": "cosa è cambiato in ogni versione",
+      "ja": "各バージョンの変更点",
+      "zh": "每个版本的变化",
+      "pt": "o que mudou em cada versão"
+     }
+    },
+    {
+     "name": "run.sh  run.bat",
+     "tree_name": "run.sh run.bat",
+     "desc": {
+      "en": "start, shared workflow",
+      "es": "arrancar, flujo compartido",
+      "de": "Start, gemeinsamer Ablauf",
+      "fr": "démarrer, flux partagé",
+      "it": "avvio, flusso condiviso",
+      "ja": "起動（共通フロー）",
+      "zh": "启动（共用流程）",
+      "pt": "arrancar, fluxo partilhado"
+     }
+    },
+    {
+     "name": "build.sh  build.bat",
+     "tree_name": "build.sh build.bat",
+     "desc": {
+      "en": "build and test, shared workflow",
+      "es": "construir y probar, flujo compartido",
+      "de": "Bauen und Testen, gemeinsamer Ablauf",
+      "fr": "construire et tester, flux partagé",
+      "it": "compila e prova, flusso condiviso",
+      "ja": "ビルドとテスト（共通フロー）",
+      "zh": "构建并测试（共用流程）",
+      "pt": "compilar e testar, fluxo partilhado"
+     }
+    },
+    {
+     "name": "build-test.sh  build-test.bat",
+     "tree_name": "build-test.sh build-test.bat",
+     "desc": {
+      "en": "build, test and package",
+      "es": "construir, probar y empaquetar",
+      "de": "Bauen, Testen und Verpacken",
+      "fr": "construire, tester, empaqueter",
+      "it": "compila, prova e impacchetta",
+      "ja": "ビルド、テスト、パッケージ化",
+      "zh": "构建、测试并打包",
+      "pt": "compilar, testar e empacotar"
+     }
+    },
+    {
+     "name": "test.sh  test.bat",
+     "tree_name": "test.sh test.bat",
+     "desc": {
+      "en": "only the tests, never the version",
+      "es": "solo las pruebas, nunca la versión",
+      "de": "nur die Tests, nie die Version",
+      "fr": "seulement les tests, jamais la version",
+      "it": "solo i test, mai la versione",
+      "ja": "テストのみ（版は変えません）",
+      "zh": "只运行测试，不改版本",
+      "pt": "só os testes, nunca a versão"
+     }
+    },
+    {
+     "name": "SECURITY  SUPPORT  CONTRIBUTING  LICENSE",
+     "tree_name": "SECURITY.md SUPPORT.md CONTRIBUTING.md CODE_OF_CONDUCT.md LICENSE",
+     "desc": {
+      "en": "community and licence files",
+      "es": "comunidad y licencia",
+      "de": "Community und Lizenz",
+      "fr": "communauté et licence",
+      "it": "comunità e licenza",
+      "ja": "コミュニティとライセンス",
+      "zh": "社区与许可证",
+      "pt": "comunidade e licença"
+     },
+     "tree_desc": ""
+    }
+   ]
+  }
+ ]
+}

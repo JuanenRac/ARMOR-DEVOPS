@@ -18,7 +18,7 @@
 ### Implementação, a bancada de testes do CM5, as suas atualizações a partir do GitHub e a manutenção da instalação
 
 <p align="center">
-  <img src="https://img.shields.io/badge/License-GPL%203.0-blue.svg" alt="GPL 3.0">
+  <img src="https://img.shields.io/badge/License-GPL%203.0--or--later-blue.svg" alt="GPL 3.0 or later">
   <img src="https://img.shields.io/badge/Deploy-Docker%20Compose-2496ed.svg" alt="Deploy">
   <img src="https://img.shields.io/badge/Bench-systemd-FFB020.svg" alt="Bench">
   <img src="https://img.shields.io/badge/Version-0.6.7-0f6cbd.svg" alt="Version">
@@ -37,8 +37,15 @@
 |---|---|
 | Versão | `0.6.7` |
 | Maturidade | Estabelecido |
-| Tecnologia | Docker Compose / Bash / YAML |
+| Função | Kit de implantação: instalador da bancada do CM5, pacotes de versão, dois ajudantes, topologia Compose |
+| Tecnologia | Bash, Python 3 (biblioteca padrão), Docker Compose, Mosquitto, Caddy, nginx, systemd |
+| Testes | Um script de teste para cada parte (`scripts/test_*.sh` e `test_*.py`); a topologia Compose é construída e executada com Docker no WSL |
+| Contrato | Portas da bancada: servidor 18080, Studio 18081, MQTT 18883 (nunca 1883), voz 18090 |
+| Funciona em | Um CM5 ou qualquer máquina baseada em Debian acessível por SSH; Docker Engine com Compose para a topologia de contentores |
 | Em hardware real | Faz correr a bancada de testes do CM5 em uso diário, num CM5 real que aloja outro software; ainda não no Jetson |
+| Licença | GPL-3.0-or-later |
+
+**Ir para:** [Visão geral](#-visão-geral) · [Arquitetura](#-arquitetura) · [Segurança](#-segurança-e-proteção) · [Interfaces](#-interfaces) · [Configuração](#-configuração) · [Início rápido](#-início-rápido) · [Testes](#-testes) · [Problemas](#-resolução-de-problemas) · [Estrutura](#-estrutura-do-repositório) · [Relacionados](#-projetos-relacionados)
 
 ## 🚦 Estado do projeto
 
@@ -75,32 +82,158 @@ Cada linha é uma parte deste repositório e a luz diz até onde chega hoje. É 
 
 O ARMOR-DEVOPS é como tudo o resto chega a uma máquina e se mantém atualizado. Instala o servidor, o Studio, o nó de rede, os serviços de observação e de voz e o broker na bancada de testes do CM5, faz os pacotes de cada versão que o separador *Atualizações* do [ARMOR-STUDIO](https://github.com/JuanenRac/ARMOR-STUDIO) instala a partir do GitHub, e guarda os dois pequenos assistentes que deixam o Studio atualizar a instalação e gerir os seus serviços sem nunca correr como root.
 
+| Fala com | Como | Para quê |
+|---|---|---|
+| ARMOR-STUDIO | o separador *Atualizações* pede ao ajudante de manutenção por um socket local | nunca precisa de root |
+| GitHub Releases | `package_component.py` publica o pacote com o seu SHA-256 e assinatura | os componentes a instalar |
+| ARMOR-SERVER, ARMOR-NETWORK, ARMOR-SERVER-AI, ARMOR-VOICE-AI | instalados como unidades systemd próprias | os serviços da bancada |
+| ARMOR-UPDATER | à parte | a ferramenta de quem guarda uma cópia da família num PC; este repositório é para o CM5 e a topologia Compose |
+
+## 🏛️ Arquitetura
+
+<p align="center">
+  <img src="images/architecture.svg" alt="ARMOR-DEVOPS architecture: where the packages come from, the deployment kit with its installer, helpers and Compose topology, and the bench and broker it sets up" width="100%">
+</p>
+
+## 🔒 Segurança e proteção
+
+| Ameaça | Defesa |
+|---|---|
+| Interferir com outro software do CM5 | Utilizador, diretoria e portas próprios (servidor 18080, Studio 18081, MQTT 18883 e voz 18090, todas entre 1024 e 65535 e diferentes, nunca a padrão 1883); não toca na firewall do sistema |
+| Um broker aberto ou sem autenticação | `allow_anonymous false`, um ficheiro de palavras-passe e uma ACL (segredos montados em `/run/secrets`), uma identidade por nó; só o servidor pode publicar `armor/control/+/command`; cada nó lê a sua ordem e a de difusão e escreve só o seu `armor/control/<nó>/result` e `armor/health/<nó>`; o servidor lê `armor/health/#` |
+| Escuta acidental na rede | O Compose só publica o broker e o Studio em `127.0.0.1`, salvo se `ARMOR_MQTT_BIND`, `ARMOR_STUDIO_BIND` (e `ARMOR_TLS_BIND` para o Caddy) disserem outra coisa |
+| MQTT e Studio em claro | Opcional: um segundo recetor do Mosquitto em 8883 ao lado do simples (`armor_mqtt_tls.sh`: autoridade própria, chave em modo `0600`, certificado para os nomes da máquina, idempotente, nunca toca no simples) e um perfil `tls` do Compose com Caddy e a sua autoridade local |
+| A máquina central aberta a todos | `firewall_core.sh` escreve uma tabela própria (`/etc/armor/firewall.nft`, com uma unidade de reversão): a porta do broker só a partir da rede de campo, as do servidor e do Studio só a partir da rede de clientes; `check` verifica-a com `nft -c` |
+| Segredos fracos ou impressos | `generate_secrets.sh` cria segredos aleatórios e não imprime nenhum; `check-required-env.sh` recusa valores em falta, de modelo, curtos ou repetidos |
+| Uma cópia de segurança roubada | `backup_data.sh` faz um arquivo cifrado AES-256, verificado e com soma de verificação (provas excluídas salvo pedido); `restore_data.sh` lista-o ou restaura-o sem nunca sobrescrever dados existentes |
+| Uma atualização falsa de um componente | O ajudante de manutenção descarrega o pacote de versão, verifica o seu SHA-256 e a assinatura Ed25519 da chave de publicação do projeto (em Python puro) e troca-o com reversão; uma assinatura em falta, errada ou adulterada deixa a máquina inalterada |
+| Root ao alcance do Studio | Nunca é preciso: o agente de administração (`armor_admin_agent.py`) tem uma lista fechada de serviços, ficheiros de definições e contas do broker; a consola de root do ajudante de manutenção está desligada salvo se for ligada |
+
+Os contentores estão reforçados, as imagens fixadas, a rede `core` é interna e o estado fica em volumes com nome. Os dois ajudantes usam sockets Unix locais, por isso os seus testes precisam de Linux. Uma instalação limpa numa máquina que nunca viu o projeto e a topologia Docker completa no seu destino não estão provadas; não houve revisão independente.
+
+## 🔌 Interfaces
+
+| Rota | Autenticação | O que faz |
+|---|---|---|
+| `scripts/deploy_cm5.sh --host <cm5> --user <user> --key <key> --apply` | - | constrói numa cópia limpa, envia um arquivo por SSH e executa `install_cm5.sh` |
+| `scripts/install_cm5.sh --public-host HOST [--apply]` | - | cria o utilizador, a diretoria e as unidades systemd; `--server-port`, `--studio-port`, `--mqtt-port` e `--also-reach` ajustam-no; sem `--apply` só mostra o plano |
+| `scripts/package_component.py` | - | empacota o Studio, o servidor, o nó de rede, o serviço de observação, a gateway de voz ou o DevOps como o ajudante de manutenção os instala, escreve o seu SHA-256 e publica-o como versão do GitHub |
+| `scripts/generate_secrets.sh`  `scripts/check-required-env.sh` | - | `.env` e `secrets/` (ignorados pelo Git); a verificação recusa valores em falta, de modelo, curtos ou repetidos |
+| `scripts/backup_data.sh --data-dir <d> --out-dir <o> --passphrase-file <f>` | - | o arquivo cifrado e verificado dos dados do servidor |
+| `scripts/restore_data.sh` | - | lista um arquivo ou restaura-o sem sobrescrever dados existentes |
+| `scripts/firewall_core.sh apply, check --field <net> [--clients <net>]` | - | a tabela da firewall da máquina central; `check` verifica-a (`FIREWALL_CHECK=SKIP` se `nft` não estiver instalado) |
+| `scripts/mqtt_identity.sh add`  `health-report <role> <node>`  `node-control` | - | escreve a linha do broker de cada tipo de nó; acrescenta relatórios de saúde e controlo a um nó instalado antes (idempotente) |
+| `scripts/armor_mqtt_tls.sh`  `armor_wireguard.sh`  `armor_ddns.sh`  `armor_tls_check.sh` | - | a porta cifrada do broker (`status`, `export-ca`, `server-tls`...), a VPN WireGuard com um QR por telemóvel, um nome DuckDNS, Cloudflare ou outro para a casa e a verificação do acesso remoto; o Studio oferece-os sem escrever um comando |
+
+Os dois ajudantes (`armor_admin_agent.py`, `armor_maintenance_agent.py`) escutam em sockets Unix locais e por isso não correm no Windows. O ficheiro Compose arranca o broker (Mosquitto), o servidor e o Studio (nginx, que reencaminha `/api/`), e um perfil `tls` acrescenta o Caddy; só o Studio é publicado, por predefinição em loopback (`127.0.0.1:8088`, TLS em 8443). Os pacotes de cada versão são ficheiros das versões do GitHub, não ficheiros deste repositório.
+
+## ⚙️ Configuração
+
+| Definição | Predefinição | O que faz |
+|---|---|---|
+| `install_cm5.sh` | 18080  18081  18883  18090 | `--server-port`, `--studio-port`, `--mqtt-port` (mantém-se o instalado se não for repetido) e a porta de voz; todas entre 1024 e 65535 e diferentes; o endereço do broker vai para `PREFIX/etc/armor.mqtt.env` |
+| `ARMOR_MQTT_BIND`  `ARMOR_STUDIO_BIND` | 127.0.0.1 | onde o Compose publica o broker e o Studio |
+| `ARMOR_PUBLIC_ORIGIN` | http://127.0.0.1:8088 | a origem pela qual se chega ao Studio |
+| `ARMOR_TLS_BIND`  `ARMOR_TLS_PORT`  `ARMOR_TLS_HTTP_PORT` | 8443 | Caddy do perfil `tls` |
+| `.env`  `.env.example` | - | criado por `generate_secrets.sh`, ignorado pelo Git; o exemplo lista cada variável |
+
+A consola de root do ajudante de manutenção é uma definição do próprio ficheiro da máquina e está desligada por predefinição; a firewall e o TLS são opções do instalador, não predefinições. Detalhes em [docs/CM5_TEST_BENCH.md](docs/CM5_TEST_BENCH.md).
+
+## 🚀 Início rápido
+
+**Requisitos:** Docker Engine com Compose (para a topologia de contentores), um CM5 ou qualquer máquina baseada em Debian acessível por SSH (para a bancada de testes), Bash, `ssh` e `tar` na máquina que implanta.
+
+```bash
+scripts/generate_secrets.sh                                                            # `.env` e `secrets/` (ignorados pelo Git)
+scripts/check-required-env.sh
+docker compose config --quiet && docker compose up --build                             # a topologia de contentores
+scripts/deploy_cm5.sh --host <cm5> --user <user> --key <key> --apply                   # a bancada de testes
+scripts/backup_data.sh --data-dir <data> --out-dir <backups> --passphrase-file <file>  # uma cópia cifrada
+```
+
+Consulte o [limite da implantação](docs/DEPLOYMENT_BOUNDARY.md) e a [bancada de testes](docs/CM5_TEST_BENCH.md).
+
+## 🧪 Testes
+
+| Área | O que cobre |
+|---|---|
+| `test_admin_agent.py`  `.sh` | a lista fechada do agente de administração (precisa de Linux: sockets Unix) |
+| `test_maintenance_agent.py`  `.sh` | o ajudante de manutenção: descarga, SHA-256, assinatura, troca e reversão (precisa de Linux) |
+| `test_package_component.py`  `test_registry.py`  `test_remote_access.py` | os pacotes, a lista de componentes e os ajudantes de acesso remoto |
+| `test_backup.sh`  `test_env_and_restore.sh` | a ida e volta de cópia e restauro, os segredos e a verificação do ambiente |
+| `test_compose.sh`  `validate-compose.sh` | a topologia Compose e o seu perfil TLS, construídos e executados com Docker Engine no WSL |
+| `test_firewall.sh`  `test_install_plan.sh`  `test_mqtt_identity.sh`  `test_mqtt_tls.sh`  `test_tls_check.sh`  `test_wireguard.sh`  `test_ddns.sh` | a firewall, o plano do instalador, as identidades do broker, MQTT sobre TLS, a verificação TLS, a VPN e o nome dinâmico |
+
+Os testes de Python correm com `python -m unittest discover -s scripts -p "test_*.py"`; no Windows os três que precisam de sockets Unix não podem correr. Os scripts precisam de Bash, WSL, Docker ou root e têm de ser executados em Linux. Ainda não há um número único de testes: o Project status diz o que foi executado. O GitHub Actions executa a base do A.R.M.O.R. em cada push e pull request: a validação do manifesto, da versão, do registo de alterações e da paridade dos README, e depois a compilação e os testes do próprio projeto.
+
+## 🏗️ Compilação e publicação
+
+Não se compila nada: são scripts, um ficheiro Compose e ajudantes em Python. `scripts/package_component.py` constrói o pacote de um componente e escreve o seu SHA-256 ao lado; os pacotes são ficheiros das versões do GitHub, não ficheiros deste repositório. A versão está em `armor.project.json` e no emblema do README (lido do manifesto); cada versão tem a sua entrada em [CHANGELOG.md](CHANGELOG.md).
+
+## 🩺 Resolução de problemas
+
+| Vê | Porque | Faça |
+|---|---|---|
+| `ports must be numbers between 1024 and 65535`  `the server and studio ports must differ` | uma porta de `install_cm5.sh` está fora do intervalo ou repetida | use portas diferentes entre 1024 e 65535 (nunca a padrão 1883) |
+| `--also-reach must look like http://HOST:PORT=http://HOST:PORT` | o endereço adicional não está escrito como endereço do Studio = endereço do servidor | escreva `--also-reach http://<anfitrião>:<porta-studio>=http://<anfitrião>:<porta-servidor>` |
+| `FIREWALL_CHECK=SKIP nft is not installed here` | falta `nft`, por isso `firewall_core.sh check` não pode verificar a tabela | instale o nftables na máquina e verifique outra vez |
+| `AttributeError: module 'socketserver' has no attribute 'UnixStreamServer'` | os testes dos dois ajudantes estão a correr no Windows | execute-os em Linux (ou WSL) |
+
 ## 📂 Estrutura do repositório
+
+<p align="center">
+  <img src="images/repository-structure.svg" alt="Repository structure of ARMOR-DEVOPS" width="100%">
+</p>
+
+<details>
+<summary>Versão em texto da árvore</summary>
 
 ```text
 ARMOR-DEVOPS/
-├── docker-compose.yml, docker-compose.tls.yml, .env.example
-├── mosquitto/ mosquitto.conf, mosquitto-tls.conf (the TLS profile), acl.example
-├── caddy/     Caddyfile (TLS)
-├── scripts/   deploy_cm5, install_cm5, package_component, armor_admin_agent, armor_maintenance_agent, generate_secrets, check-required-env, backup_data, restore_data, firewall_core, mqtt_identity, armor_mqtt_tls (the optional encrypted door of the broker), armor_ddns, armor_wireguard, armor_tls_check (remote access), tests of the agents, the backup, the firewall and the Compose topology
-│   └── (package_component.py packs a program the way the maintenance helper installs it; the packages are assets of the GitHub releases, not files of this repository)
-├── tools/     the shared CI checks (armor_ci_validate.py, armor_project_tool.py, _armor_readme_parity.py)
-└── docs/      DEPLOYMENT_BOUNDARY, CM5_TEST_BENCH, BENCH_TESTS, BACKUP_AND_TLS, MQTT_TLS, HTTPS_PAIRING, REMOTE_ACCESS, SIGNED_PACKAGES (the last four also in eight languages)
+├── scripts/
+│   ├── deploy_cm5.sh install_cm5.sh                      implanta na bancada, instala-o
+│   ├── package_component.py                              o pacote de cada versão
+│   ├── armor_admin_agent.py armor_maintenance_agent.py   os dois ajudantes do Studio
+│   ├── generate_secrets.sh check-required-env.sh         segredos aleatórios; recusa os fracos
+│   ├── backup_data.sh restore_data.sh                    cópia cifrada e restauro
+│   ├── firewall_core.sh mqtt_identity.sh                 firewall e identidades do broker
+│   ├── armor_mqtt_tls.sh armor_tls_check.sh              MQTT sobre TLS e a sua verificação
+│   ├── armor_ddns.sh armor_wireguard.sh                  um nome para a casa e uma VPN
+│   └── test_*.py test_*.sh validate-compose.sh           os testes dos ajudantes e scripts
+├── docker-compose.yml docker-compose.tls.yml             broker, servidor, Studio; perfil TLS
+├── mosquitto/                                            mosquitto.conf, config TLS, acl.example
+├── caddy/                                                Caddyfile: HTTPS à frente do Studio
+├── docs/                                                 DEPLOYMENT_BOUNDARY, CM5_TEST_BENCH, BENCH_TESTS, BACKUP_AND_TLS, MQTT_TLS, HTTPS_PAIRING, REMOTE_ACCESS, SIGNED_PACKAGES (as últimas quatro também em oito idiomas)
+├── tools/                                                as verificações de CI e as ferramentas partilhadas
+├── images/                                               faixa, ícone e as imagens do README
+├── .github/                                              fluxo de CI, aviso ao painel, modelos de issues e pull requests
+├── armor.project.json                                    manifesto: versão, função, maturidade
+├── CHANGELOG.md                                          o que mudou em cada versão
+├── run.sh run.bat                                        arrancar, fluxo partilhado
+├── build.sh build.bat                                    compilar e testar, fluxo partilhado
+├── build-test.sh build-test.bat                          compilar, testar e empacotar
+├── test.sh test.bat                                      só os testes, nunca a versão
+└── SECURITY.md SUPPORT.md CONTRIBUTING.md CODE_OF_CONDUCT.md LICENSE
 ```
 
-## 🛠️ Ambiente de desenvolvimento
+</details>
 
-**Requisitos:** Docker Engine com Compose (para a topologia de contentores), um CM5 ou qualquer máquina baseada em Debian acessível por SSH (para a bancada de testes), Bash, `ssh` e `tar` na máquina que faz a instalação
+## 🗺️ Roteiro e limites conhecidos
 
-```bash
-scripts/generate_secrets.sh          # .env and secrets/ (Git-ignored)
-scripts/check-required-env.sh
-docker compose config --quiet && docker compose up --build
-scripts/deploy_cm5.sh --host <cm5> --user <user> --key <key> --apply   # the test bench
-scripts/backup_data.sh --data-dir <data> --out-dir <backups> --passphrase-file <file>
-```
+**Limites conhecidos hoje**
 
-Veja a [fronteira de implementação](docs/DEPLOYMENT_BOUNDARY.md).
+* Uma instalação limpa numa máquina que nunca viu o projeto não está provada.
+* A topologia Docker completa foi construída e executada com Docker Engine no WSL, mas não no seu destino, o Jetson.
+* Não há um número único de testes, e os testes dos dois ajudantes precisam de Linux.
+* Sem revisão de segurança independente.
+
+**A seguir**
+
+* Uma instalação limpa numa máquina nova e a topologia Docker no Jetson.
+
+## 🌍 Idiomas
+
+O README e os textos existem em inglês, espanhol, francês, italiano, alemão, chinês, japonês e português europeu.
 
 ## 🔗 Projetos relacionados
 
@@ -108,33 +241,45 @@ O **A.R.M.O.R.** (Autonomous Radar & Multimodal Observation Range) é um sistema
 
 * **[ARMOR-COMMON](https://github.com/JuanenRac/ARMOR-COMMON)** - Contratos de mensagens, validadores, vetores de conformidade e tipos gerados
 * **[ARMOR-NODE-RADAR](https://github.com/JuanenRac/ARMOR-NODE-RADAR)** - Firmware de nó de campo para ESP32-S3 com três radares e o seu próprio painel web
-* **[ARMOR-NODE-SOLAR](https://github.com/JuanenRac/ARMOR-NODE-SOLAR)** - Protocolos de inversores e baterias solares e as mensagens de um nó de ligação
+* **[ARMOR-NODE-SOLAR](https://github.com/JuanenRac/ARMOR-NODE-SOLAR)** - Protocolos de inversores e baterias solares e as mensagens de um nó porta de ligação
 * **[ARMOR-NODE-ELECTRICAL](https://github.com/JuanenRac/ARMOR-NODE-ELECTRICAL)** - Nó elétrico: contadores, a mensagem das leituras da rede e as regras de comutação
-* **[ARMOR-NODE-ALARM](https://github.com/JuanenRac/ARMOR-NODE-ALARM)** - Nó e central de alarme: zonas, armar, atrasos, sirene e PIN, com o servidor ou sem ele
+* **[ARMOR-NODE-ALARM](https://github.com/JuanenRac/ARMOR-NODE-ALARM)** - Nó e painel de alarme: zonas, armar, atrasos, sirene e PIN, com o servidor ou sem ele
 * **[ARMOR-NODE-HMI](https://github.com/JuanenRac/ARMOR-NODE-HMI)** - Painel tátil: o estado do sistema num ecrã de parede, armar e reconhecer, e a casa do assistente de voz
 * **[ARMOR-NETWORK](https://github.com/JuanenRac/ARMOR-NETWORK)** - A rede local: os seus dispositivos, a internet e o que muda
 * **[ARMOR-SERVER](https://github.com/JuanenRac/ARMOR-SERVER)** - Coordenador central: telemetria, alarmes, dispositivos, leituras solares e câmaras
-* **[ARMOR-STUDIO](https://github.com/JuanenRac/ARMOR-STUDIO)** - Consola web: câmaras, radar, alarmes, energia solar e o desenhador de local 2D/3D
-* **[ARMOR-ANDROID-CONTROL](https://github.com/JuanenRac/ARMOR-ANDROID-CONTROL)** - Cliente Android de operador com um radar 2D/3D em direto
+* **[ARMOR-STUDIO](https://github.com/JuanenRac/ARMOR-STUDIO)** - Consola web: câmaras, radar, alarmes, energia solar e o desenhador 2D/3D do local
+* **[ARMOR-ANDROID-CONTROL](https://github.com/JuanenRac/ARMOR-ANDROID-CONTROL)** - Cliente de operador Android com radar 2D/3D em direto
 * **[ARMOR-IOS-CONTROL](https://github.com/JuanenRac/ARMOR-IOS-CONTROL)** - Cliente de operador para iPhone
 * **[ARMOR-SERVER-AI](https://github.com/JuanenRac/ARMOR-SERVER-AI)** - Política de inferência visual que explica as suas decisões e nunca atua
 * **[ARMOR-VISION](https://github.com/JuanenRac/ARMOR-VISION)** - Zonas de câmara, máscaras e regras de deteção para o Jetson Orin NX
-* **[ARMOR-VOICE-AI](https://github.com/JuanenRac/ARMOR-VOICE-AI)** - Intenções de voz offline com uma confirmação que não se pode falsificar
-* **[ARMOR-HARDWARE](https://github.com/JuanenRac/ARMOR-HARDWARE)** - Caixas, eletrónica e a matriz de aceitação de bancada
-* **ARMOR-DEVOPS** (este repositório) - Implementação, a bancada de testes CM5, cópias de segurança e TLS
+* **[ARMOR-VOICE-AI](https://github.com/JuanenRac/ARMOR-VOICE-AI)** - Intenções de voz offline com uma confirmação que não pode ser falsificada
+* **[ARMOR-HARDWARE](https://github.com/JuanenRac/ARMOR-HARDWARE)** - Caixas, eletrónica e a matriz de aceitação em bancada
+* **ARMOR-DEVOPS** (este repositório) - Implantação, a bancada de testes do CM5, cópias de segurança e TLS
 * **[ARMOR-SIMULATOR](https://github.com/JuanenRac/ARMOR-SIMULATOR)** - Simulador de telemetria offline com falhas repetíveis
-* **[ARMOR-UPDATER](https://github.com/JuanenRac/ARMOR-UPDATER)** - Deteta, instala e atualiza os próprios repositórios do ecossistema
-* **[ARMOR-DOCS](https://github.com/JuanenRac/ARMOR-DOCS)** - Arquitetura, linha de base de segurança e a matriz de capacidades
+* **[ARMOR-UPDATER](https://github.com/JuanenRac/ARMOR-UPDATER)** - Deteta, instala e atualiza os repositórios do próprio ecossistema
+* **[ARMOR-DOCS](https://github.com/JuanenRac/ARMOR-DOCS)** - Arquitetura, base de segurança e a matriz de capacidades
 
-## 📚 Documentação e comunidade
+## 📚 Documentação
 
-Onde ler mais:
-
-* [Matriz de capacidades: o que está provado e o que não](https://github.com/JuanenRac/ARMOR-DOCS/blob/main/docs/CAPABILITY_MATRIX.md)
+* [DEPLOYMENT_BOUNDARY](docs/DEPLOYMENT_BOUNDARY.md): o que este repositório implanta e o que não
+* [CM5_TEST_BENCH](docs/CM5_TEST_BENCH.md): o instalador, as unidades, as portas e os ajudantes da bancada
+* [BENCH_TESTS](docs/BENCH_TESTS.md): como a bancada é testada
+* [BACKUP_AND_TLS](docs/BACKUP_AND_TLS.md): cópia e restauro, e o perfil TLS do Compose
+* [MQTT_TLS](docs/MQTT_TLS.md): a porta cifrada do broker (também em oito idiomas)
+* [HTTPS_PAIRING](docs/HTTPS_PAIRING.md): confiar no certificado de um nó (também em oito idiomas)
+* [REMOTE_ACCESS](docs/REMOTE_ACCESS.md): VPN, um nome para a casa e o router, passo a passo (também em oito idiomas)
+* [SIGNED_PACKAGES](docs/SIGNED_PACKAGES.md): a assinatura dos pacotes (também em oito idiomas)
+* [Matriz de capacidades: o que está demonstrado e o que não está](https://github.com/JuanenRac/ARMOR-DOCS/blob/main/docs/CAPABILITY_MATRIX.md)
 * [Catálogo de projetos: versões e como os repositórios dependem uns dos outros](https://github.com/JuanenRac/ARMOR-DOCS/blob/main/docs/PROJECT_CATALOG.md)
 * [Registo de alterações deste repositório](CHANGELOG.md)
-* [Licença (GPL-3.0-or-later)](LICENSE)
-* Perguntas, ideias e relatórios: electrohobby3d@gmail.com
+
+## 🤝 Contribuir e comunidade
+
+* Antes de um pull request execute `python -I tools/armor_ci_validate.py` e os testes: ambos têm de passar. Consulte [CONTRIBUTING.md](CONTRIBUTING.md) e o [código de conduta](CODE_OF_CONDUCT.md).
+* O README existe em oito idiomas e é gerado a partir das fontes do ARMOR-DOCS: uma alteração ao texto faz-se lá.
+* Uma alteração a uma mensagem entre componentes começa no ARMOR-COMMON.
+* Não descreva como a funcionar numa placa aquilo que só foi compilado.
+* Comunique uma vulnerabilidade em privado: [SECURITY.md](SECURITY.md). Perguntas, ideias e relatórios: electrohobby3d@gmail.com ([SUPPORT.md](SUPPORT.md)).
 
 ## 👤 AUTOR
 
@@ -142,4 +287,4 @@ Onde ler mais:
 
 ## 📜 LICENÇA
 
-GPL-3.0-or-later - veja [LICENSE](LICENSE).
+GPL-3.0-or-later - consulte [LICENSE](LICENSE).

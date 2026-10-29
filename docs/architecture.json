@@ -1,0 +1,214 @@
+{
+  "repo": "ARMOR-DEVOPS",
+  "ecosystem": "armor",
+  "tagline": "How everything else gets onto a machine and stays up to date.",
+  "description": "ARMOR-DEVOPS installs the server, Studio, the network node, the observation and voice services and the broker on the CM5 test bench with a user, a directory and ports of their own, builds and publishes the signed package of each release, keeps two helpers (an administration agent with a closed list and a maintenance agent that updates components from GitHub with a rollback), and holds the Docker Compose topology with its optional TLS profile, the broker rules, the firewall, the backup and restore and the VPN and dynamic-name helpers.",
+  "columns": [
+    "WHERE IT COMES FROM",
+    "THE DEPLOYMENT KIT",
+    "WHERE IT LANDS"
+  ],
+  "nodes": [
+    {
+      "id": "pc",
+      "column": 0,
+      "level": "external",
+      "title": "Your PC",
+      "lines": [
+        "deploy_cm5.sh builds in a clean",
+        "copy and sends one archive",
+        "over SSH"
+      ],
+      "code": [
+        "scripts/deploy_cm5.sh"
+      ]
+    },
+    {
+      "id": "github",
+      "column": 0,
+      "level": "external",
+      "title": "GitHub Releases",
+      "lines": [
+        "the package of each component",
+        "with its SHA-256 and its",
+        "Ed25519 signature"
+      ]
+    },
+    {
+      "id": "install",
+      "column": 1,
+      "level": "tested",
+      "title": "install_cm5.sh",
+      "lines": [
+        "its own user, directory and",
+        "systemd units on ports 18080,",
+        "18081, 18883 and 18090"
+      ],
+      "code": [
+        "scripts/install_cm5.sh"
+      ]
+    },
+    {
+      "id": "package",
+      "column": 1,
+      "level": "contract",
+      "title": "package_component.py",
+      "lines": [
+        "packs a program the way the",
+        "maintenance helper installs it,",
+        "with its SHA-256 beside it"
+      ],
+      "code": [
+        "scripts/package_component.py"
+      ]
+    },
+    {
+      "id": "admin",
+      "column": 1,
+      "level": "contract",
+      "title": "armor_admin_agent.py",
+      "lines": [
+        "the one privileged part: a",
+        "closed list of services, files",
+        "and broker accounts"
+      ],
+      "code": [
+        "scripts/armor_admin_agent.py"
+      ]
+    },
+    {
+      "id": "maint",
+      "column": 1,
+      "level": "contract",
+      "title": "armor_maintenance_agent.py",
+      "lines": [
+        "updates from GitHub with a",
+        "rollback; the root console is",
+        "off unless turned on"
+      ],
+      "code": [
+        "scripts/armor_maintenance_agent.py"
+      ],
+      "title_size": 12
+    },
+    {
+      "id": "broker",
+      "column": 1,
+      "level": "tested",
+      "title": "Compose, broker, firewall",
+      "lines": [
+        "Mosquitto with one identity",
+        "per node and an ACL, Caddy TLS,",
+        "a firewall table of its own"
+      ],
+      "code": [
+        "docker-compose.yml",
+        "mosquitto/mosquitto.conf",
+        "scripts/firewall_core.sh"
+      ],
+      "title_size": 13
+    },
+    {
+      "id": "backup",
+      "column": 1,
+      "level": "tested",
+      "title": "backup and restore",
+      "lines": [
+        "AES-256 encrypted, verified",
+        "archives; a restore never",
+        "overwrites existing data"
+      ],
+      "code": [
+        "scripts/backup_data.sh",
+        "scripts/restore_data.sh"
+      ]
+    },
+    {
+      "id": "services",
+      "column": 2,
+      "level": "tested",
+      "title": "The CM5 test bench",
+      "lines": [
+        "the server, Studio, the network",
+        "node, the observation and voice",
+        "services, the broker, the helpers"
+      ]
+    },
+    {
+      "id": "mqtt",
+      "column": 2,
+      "level": "tested",
+      "title": "MQTT broker 18883",
+      "lines": [
+        "never the standard 1883; a",
+        "non-anonymous listener and an",
+        "optional one over TLS on 8883"
+      ]
+    },
+    {
+      "id": "jetson",
+      "column": 2,
+      "level": "untested",
+      "title": "Jetson, clean install",
+      "lines": [
+        "the whole Docker topology on",
+        "its target and a clean install on",
+        "a machine that never saw it"
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "from": "pc",
+      "to": "install",
+      "level": "tested",
+      "label": "one archive"
+    },
+    {
+      "from": "github",
+      "to": "maint",
+      "level": "contract",
+      "label": "packages"
+    },
+    {
+      "from": "package",
+      "to": "github",
+      "level": "contract",
+      "label": "publishes"
+    },
+    {
+      "from": "install",
+      "to": "admin",
+      "level": "tested"
+    },
+    {
+      "from": "package",
+      "to": "maint",
+      "level": "contract"
+    },
+    {
+      "from": "admin",
+      "to": "maint",
+      "level": "contract"
+    },
+    {
+      "from": "install",
+      "to": "services",
+      "level": "tested",
+      "label": "systemd"
+    },
+    {
+      "from": "broker",
+      "to": "mqtt",
+      "level": "tested",
+      "label": "ACL, TLS"
+    },
+    {
+      "from": "broker",
+      "to": "jetson",
+      "level": "untested",
+      "label": "Compose"
+    }
+  ],
+  "footer": "The root console is off unless it is turned on; a clean install on a new machine is not proven."
+}
