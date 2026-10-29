@@ -950,6 +950,7 @@ def system_upgrade_job(mode: str = "upgrade") -> Job:
                 os.close(write_end)
 
                 def follow_status() -> None:
+                    said = -10   # the last multiple of ten the log has said about the download
                     with os.fdopen(read_end, "r") as status:
                         for line in status:
                             parts = line.strip().split(":", 3)
@@ -959,6 +960,9 @@ def system_upgrade_job(mode: str = "upgrade") -> Job:
                                 except ValueError:
                                     continue
                                 job.step("download" if parts[0] == "dlstatus" else "install", "running", percent)
+                                if parts[0] == "dlstatus" and percent >= said + 10:
+                                    said = percent - percent % 10
+                                    job.say(f"downloading: {percent}%")   # the log shows the download moving, not only the first line
                                 if parts[0] == "pmstatus" and percent == 0:
                                     job.step("download", "done")
 
