@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [0.6.8] - Download progress in the log of a system update and the universal README
+
 - **The log of a system update shows the download moving:** besides the bar of the step, the log says `downloading: N%` every ten percent, so a slow link (a Wi-Fi connection) does not look like a stuck update.
 - **The README follows the universal layout in the eight languages:** a threat and defence table, every script with its options, the ports and variables, the tests by part, troubleshooting, the Architecture picture drawn from `docs/architecture.json` and the Repository Structure drawn from `docs/structure.json`.
 - **The layout of the README is checked in the CI:** the validator runs the shared `tools/universal_readme_check.py` and lists, as a warning, what differs from the universal layout of the README.
