@@ -14,6 +14,7 @@
   ],
   "deployment_target": "CM5 test bench (systemd) and any Docker host",
   "maturity": "established",
+  "evidence": "bench",
   "family": "Operations",
   "parent": "ARMOR-SERVER",
   "native_version": "0.6.8",

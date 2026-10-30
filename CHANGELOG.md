@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+- **The lights of Project status follow the evidence of the manifest:** the manifest says how far the repository has been shown to work (`evidence`: `host-test`, `simulator`, `bench` or `field`) and the validator fails when a light is above what that evidence and the maturity allow (`tools/status_lights.py`), so a green that never ran on real hardware cannot come back.
+
 ## [0.6.8] - Download progress in the log of a system update and the universal README
 
 - **The log of a system update shows the download moving:** besides the bar of the step, the log says `downloading: N%` every ten percent, so a slow link (a Wi-Fi connection) does not look like a stuck update.
