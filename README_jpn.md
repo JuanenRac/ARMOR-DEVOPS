@@ -125,7 +125,7 @@ ARMOR-DEVOPS は、他のすべてがマシンに載り、最新に保たれる�
 | `scripts/mqtt_identity.sh add`  `health-report <role> <node>`  `node-control` | - | 各種ノードのブローカー行を書き込み、以前入れたノードに健康レポートと制御を追加（冪等） |
 | `scripts/armor_mqtt_tls.sh`  `armor_wireguard.sh`  `armor_ddns.sh`  `armor_tls_check.sh` | - | ブローカーの暗号化された入口（`status`、`export-ca`、`server-tls` など）、スマホごとの QR 付き WireGuard VPN、家の DuckDNS・Cloudflare などの名前、リモートアクセスの確認。Studio からコマンドなしで使えます |
 
-2 つのヘルパー（`armor_admin_agent.py`、`armor_maintenance_agent.py`）はローカルの Unix ソケットで待ち受けるため、Windows では動きません。Compose ファイルはブローカー（Mosquitto）、サーバー、Studio（`/api/` を中継する nginx）を起動し、`tls` プロファイルで Caddy を追加します。公開されるのは Studio だけで、既定ではループバック（`127.0.0.1:8088`、TLS は 8443）です。各リリースのパッケージは GitHub リリースのアセットで、このリポジトリのファイルではありません。
+2 つのヘルパー（`armor_admin_agent.py`、`armor_maintenance_agent.py`）はローカルの Unix ソケットで待ち受けるため、Windows では動きません。Compose ファイルはブローカー（Mosquitto）、サーバー、Studio（`/api/` を中継する nginx）を起動し、`tls` プロファイルで Caddy を追加します。公開されるのは Studio だけで、既定ではループバック（`127.0.0.1:8088`、TLS は 8443）です。各リリースのパッケージは GitHub リリースのアセットで、このリポジトリのファイルではありません。 システム更新のログは 10% ごとに `downloading: N%` と表示するため、遅い回線でも更新が止まったように見えません。依存関係の再インストール（`npm ci`）は、プロジェクトの新バージョンだけでは行わず、ロックファイルが依存関係について述べる内容が変わったときだけ行います。
 
 ## ⚙️ 設定
 

@@ -125,7 +125,7 @@ ARMOR-DEVOPS 是其他一切到达机器并保持最新的途径。它在 CM5 �
 | `scripts/mqtt_identity.sh add`  `health-report <role> <node>`  `node-control` | - | 写入每种节点的代理条目；给早先安装的节点补上健康报告和控制（幂等） |
 | `scripts/armor_mqtt_tls.sh`  `armor_wireguard.sh`  `armor_ddns.sh`  `armor_tls_check.sh` | - | 代理的加密入口（`status`、`export-ca`、`server-tls` 等）、每部手机一个二维码的 WireGuard VPN、家的 DuckDNS、Cloudflare 或其他域名，以及远程访问检查；Studio 无需输入命令即可提供 |
 
-两个助手（`armor_admin_agent.py`、`armor_maintenance_agent.py`）监听本地 Unix 套接字，因此不能在 Windows 上运行。Compose 文件启动代理（Mosquitto）、服务器和 Studio（转发 `/api/` 的 nginx），`tls` 配置再加入 Caddy；只发布 Studio，默认在回环地址上（`127.0.0.1:8088`，TLS 在 8443）。每个版本的包是 GitHub 发布版本的附件，不是本仓库的文件。
+两个助手（`armor_admin_agent.py`、`armor_maintenance_agent.py`）监听本地 Unix 套接字，因此不能在 Windows 上运行。Compose 文件启动代理（Mosquitto）、服务器和 Studio（转发 `/api/` 的 nginx），`tls` 配置再加入 Caddy；只发布 Studio，默认在回环地址上（`127.0.0.1:8088`，TLS 在 8443）。每个版本的包是 GitHub 发布版本的附件，不是本仓库的文件。 系统更新的日志每 10% 显示一次 `downloading: N%`，因此慢速链路不会让更新看起来像卡住；只有锁文件中关于依赖项的内容发生变化时才会重新安装依赖项（`npm ci`），而不是仅仅因为项目有了新版本。
 
 ## ⚙️ 配置
 
