@@ -272,7 +272,7 @@ def clear_history() -> int:
     try:
         history_path().unlink(missing_ok=True)
     except OSError:
-        raise Refused(500, "history_not_cleared")
+        raise Refused(500, "history_not_cleared") from None
     return count
 
 
@@ -945,7 +945,7 @@ def system_upgrade_job(mode: str = "upgrade") -> Job:
                 before = upgradable()
                 job.say(f"{len(before)} packages to upgrade")
                 read_end, write_end = os.pipe()
-                command = [APT_GET, "-y", "-o", "Dpkg::Options::=--force-confold", "-o", "Dpkg::Options::=--force-confdef", f"-o", f"APT::Status-Fd={write_end}", "full-upgrade" if mode == "full" else "upgrade"]
+                command = [APT_GET, "-y", "-o", "Dpkg::Options::=--force-confold", "-o", "Dpkg::Options::=--force-confdef", "-o", f"APT::Status-Fd={write_end}", "full-upgrade" if mode == "full" else "upgrade"]
                 process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=apt_environment(), pass_fds=(write_end,))
                 os.close(write_end)
 
