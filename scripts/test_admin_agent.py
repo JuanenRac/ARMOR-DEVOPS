@@ -4,6 +4,8 @@
 # Nothing real is touched: a temporary prefix, a stand-in systemctl and a stand-in identity script. Needs a system with Unix sockets (Linux, macOS, WSL).
 from __future__ import annotations
 
+from typing import Any
+
 import contextlib
 import http.client
 import importlib.util
@@ -34,6 +36,11 @@ class UnixConnection(http.client.HTTPConnection):
 
 
 class AgentTest(unittest.TestCase):
+    agent: Any
+    calls: Any
+    prefix: Any
+    sock: Any
+    tmp: Any
     @classmethod
     def setUpClass(cls) -> None:
         cls.tmp = tempfile.TemporaryDirectory()

@@ -4,6 +4,8 @@
 # Copyright (C) 2026 JuanenRac (Electro Hobby 3D). GPL-3.0-or-later.
 from __future__ import annotations
 
+from typing import Any
+
 import http.client
 import importlib.util
 import json
@@ -36,6 +38,11 @@ def script(path: Path, text: str) -> None:
 
 
 class RemoteAccessTest(unittest.TestCase):
+    agent: Any
+    prefix: Any
+    server: Any
+    socket_path: Any
+    tmp: Any
     @classmethod
     def setUpClass(cls) -> None:
         cls.tmp = tempfile.TemporaryDirectory()
@@ -95,7 +102,7 @@ class RemoteAccessTest(unittest.TestCase):
         # the VPN
         status, state = self.call("POST", "/v1/remote/wireguard/setup", {"endpoint": "casa.example.org:51999", "lan": "192.168.1.0/24"})
         self.assertEqual(status, 200)
-        vpn = state["wireguard"]                                 # type: ignore[index]
+        vpn: Any = state["wireguard"]                                 # type: ignore[index]
         self.assertTrue(vpn["configured"])
         self.assertEqual((vpn["endpoint"], vpn["subnet"], vpn["lan"]), ("casa.example.org:51999", "10.66.0.0/24", "192.168.1.0/24"))
         status, made = self.call("POST", "/v1/remote/wireguard/peers", {"name": "phone-juan"})
@@ -117,7 +124,7 @@ class RemoteAccessTest(unittest.TestCase):
         self.assertEqual(self.call("POST", "/v1/remote/ddns/setup", {"provider": "duckdns", "domain": "bad name", "token": "abcdefgh1234"})[0], 422)
         status, state = self.call("POST", "/v1/remote/ddns/setup", {"provider": "duckdns", "domain": "casa-armor", "token": "abcdef-1234-5678"})
         self.assertEqual(status, 200)
-        dynamic = state["ddns"]                                  # type: ignore[index]
+        dynamic: Any = state["ddns"]                                  # type: ignore[index]
         self.assertEqual((dynamic["provider"], dynamic["name"], dynamic["last_address"]), ("duckdns", "casa-armor", "203.0.113.9"))
         self.assertNotIn("abcdef-1234-5678", json.dumps(state), "the state never carries a token")
         self.assertEqual(self.call("POST", "/v1/remote/ddns/update")[0], 200)

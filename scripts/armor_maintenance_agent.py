@@ -215,7 +215,7 @@ class Job:
                         item["percent"] = percent
                     elif state == "done":
                         item["percent"] = 100
-            done = sum(100 if item["state"] in ("done", "skipped") else int(item["percent"]) if item["state"] == "running" else 0 for item in self.steps)
+            done = sum(100 if item["state"] in ("done", "skipped") else int(item["percent"]) if item["state"] == "running" else 0 for item in self.steps)  # type: ignore[misc,call-overload]
             self.percent = int(done / max(1, len(self.steps)))
 
     def finish(self, error: str = "") -> None:
@@ -304,7 +304,7 @@ def download(job: Job, step: str, url: str, destination: Path) -> str:
 
 def expected_hash(release: dict[str, object], asset: str) -> str:
     assets = release.get("assets") or {}
-    url = assets.get(asset + ".sha256")                                       # type: ignore[union-attr]
+    url = assets.get(asset + ".sha256")                                       # type: ignore[union-attr,attr-defined]
     if not url:
         raise Refused(422, "no_checksum")
     text = http_get(str(url), accept="application/octet-stream").decode("utf-8", "replace")
@@ -835,8 +835,8 @@ def system_attention() -> dict[str, list[str]]:
     """What a plain upgrade cannot settle: the packages it keeps back (a new kernel, for one, needs others installed or removed) and the packages left half-installed or half-configured.
     Reading the first one simulates an upgrade (a second or two), so the answer is kept for a minute."""
     import time as _time
-    if float(_ATTENTION["at"]) and _time.monotonic() - float(_ATTENTION["at"]) < 60:
-        return {"kept_back": list(_ATTENTION["kept_back"]), "broken": list(_ATTENTION["broken"])}  # type: ignore[arg-type]
+    if float(_ATTENTION["at"]) and _time.monotonic() - float(_ATTENTION["at"]) < 60:  # type: ignore[arg-type]
+        return {"kept_back": list(_ATTENTION["kept_back"]), "broken": list(_ATTENTION["broken"])}  # type: ignore[arg-type,call-overload]
     kept: list[str] = []
     try:
         simulated = subprocess.run([APT_GET, "-s", "upgrade"], capture_output=True, text=True, timeout=120, env=apt_environment(), check=False)
@@ -1372,17 +1372,17 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 self.reply(200, job.view(int(arguments.get("since", "0") or 0)))
             elif method == "POST" and parts == ["console", "run"]:
                 data = self.body()
-                self.reply(202, console_run(str(data.get("command", "")), str(data.get("cwd", "/root")), float(data.get("timeout", 120) or 120)))
+                self.reply(202, console_run(str(data.get("command", "")), str(data.get("cwd", "/root")), float(data.get("timeout", 120) or 120)))  # type: ignore[arg-type]
             elif method == "GET" and len(parts) == 3 and parts[:2] == ["console", "jobs"]:
-                job = CONSOLE_JOBS.get(parts[2])
-                if not job:
+                console_job = CONSOLE_JOBS.get(parts[2])
+                if not console_job:
                     raise Refused(404, "no_such_job")
-                self.reply(200, job.view(int(arguments.get("since", "0") or 0)))
+                self.reply(200, console_job.view(int(arguments.get("since", "0") or 0)))
             elif method == "POST" and len(parts) == 4 and parts[:2] == ["console", "jobs"] and parts[3] == "cancel":
-                job = CONSOLE_JOBS.get(parts[2])
-                if not job:
+                console_job = CONSOLE_JOBS.get(parts[2])
+                if not console_job:
                     raise Refused(404, "no_such_job")
-                job.cancel()
+                console_job.cancel()
                 self.reply(200, {"ok": True})
             elif method == "GET" and parts == ["remote"]:
                 self.reply(200, remote_state())

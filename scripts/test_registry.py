@@ -3,6 +3,8 @@
 # Copyright (C) 2026 JuanenRac (Electro Hobby 3D). GPL-3.0-or-later.
 from __future__ import annotations
 
+from typing import Any
+
 import ast
 import json
 import unittest
@@ -18,12 +20,14 @@ def constant(file: str, name: str):
     for node in tree.body:
         targets = node.targets if isinstance(node, ast.Assign) else [node.target] if isinstance(node, ast.AnnAssign) else []
         if any(isinstance(target, ast.Name) and target.id == name for target in targets):
-            return ast.literal_eval(node.value)
+            return ast.literal_eval(node.value)  # type: ignore[attr-defined]
     raise AssertionError(f"{file} has no constant {name}")
 
 
 @unittest.skipUnless(REGISTRY.is_file(), "ARMOR-COMMON is not next to this repository")
 class RegistryTests(unittest.TestCase):
+    components: Any
+    repositories: Any
     @classmethod
     def setUpClass(cls) -> None:
         cls.repositories = json.loads(REGISTRY.read_text(encoding="utf-8"))["repositories"]

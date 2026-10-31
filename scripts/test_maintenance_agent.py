@@ -4,6 +4,8 @@
 # Nothing real is touched: a temporary prefix, a stand-in GitHub on the loopback, a stand-in systemctl and a stand-in health address. Needs Linux, macOS or WSL.
 from __future__ import annotations
 
+from typing import Any
+
 import hashlib
 import http.client
 import http.server
@@ -94,6 +96,16 @@ class UnixConnection(http.client.HTTPConnection):
 
 
 class MaintenanceTest(unittest.TestCase):
+    agent: Any
+    base: Any
+    calls: Any
+    httpd: Any
+    key: Any
+    maint_env: Any
+    other_key: Any
+    prefix: Any
+    real_key: Any
+    tmp: Any
     @classmethod
     def setUpClass(cls) -> None:
         cls.tmp = tempfile.TemporaryDirectory()
