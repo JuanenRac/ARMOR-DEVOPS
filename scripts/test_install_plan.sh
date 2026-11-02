@@ -8,7 +8,7 @@ WORK="$(mktemp -d)"
 trap 'rm -rf -- "$WORK"' EXIT
 RELEASE="$WORK/release"
 mkdir -p "$RELEASE/scripts" "$RELEASE/server/dist" "$RELEASE/studio/dist"
-cp "$HERE/install_cm5.sh" "$HERE/mqtt_identity.sh" "$RELEASE/scripts/"
+cp "$HERE/install_cm5.sh" "$HERE/mqtt_identity.sh" "$HERE/armor_server.acl" "$RELEASE/scripts/"
 : >"$RELEASE/server/dist/server.mjs"
 : >"$RELEASE/studio/dist/index.html"
 PREFIX="/opt/armor-plan-test-$$"

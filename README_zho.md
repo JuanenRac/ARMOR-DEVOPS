@@ -71,6 +71,7 @@
 * **TLS：**可选的 `tls` Compose 配置在 Studio 前放置带自有本地证书颁发机构的 Caddy，并提供基于 TLS 的 Mosquitto 配置（[详情](docs/BACKUP_AND_TLS.md)）。
 * **核心机器的主机防火墙**（`scripts/firewall_core.sh`）：代理端口只对现场网络开放，服务器和 Studio 端口只对客户端网络开放（如果给出），放在不提及其他任何内容的独立表中。
 * **密钥：**`scripts/generate_secrets.sh` 创建随机密钥且不打印任何一个；`scripts/check-required-env.sh` 拒绝缺失、占位、过短或重复的值。
+* **服务器代理规则只有一个来源，服务器更新前先试运行：**代理访问列表中服务器的那一段就是文件 `scripts/armor_server.acl`；安装器、`generate_secrets.sh` 以及一项将其与 ARMOR-SERVER 实际发布和订阅的主题进行比较的测试都使用它。`mqtt_identity.sh battery-write 节点 on|off` 和 `alarm-state-relay on|off` 仅在需要时才打开电池写入和面板签名状态所需的两条路径。设置 `ARMOR_MAINT_STAGING=on` 后，维护助手会在回环地址的空闲端口上用空数据目录、不连代理地从新版本目录启动新服务器，只有 `/healthz` 应答才会切换（默认关闭）。
 * **ドクター：** `scripts/armor_doctor.py` は読み取り専用で、設備の整合性を確認します。`etc/armor*.env` の各秘密のモードと長さ、秘密の重複がないこと、インジェストトークンから導出されたネットワークノードのトークン、ブローカーのポートと `mosquitto.conf` の一致、ディスクの空き。値は一切表示しません（`--json`、`--strict`）。
 * **動的セキュリティプラグインでのブローカーID:** `scripts/armor_dynsec.py convert` はブローカーのパスワードファイルと ACL を Mosquitto 2 プラグインの `dynamic-security.json` に変換します(`$7$` ハッシュは引き継ぎ、IDごとに1つのロール、既定は拒否、`mosquitto_ctrl` 用の管理者のパスワードは非公開ファイルにのみ書き込み)。`check` は結果が ACL の許可と完全に一致することを確認し、`conf` は `mosquitto.conf` の2行を出力します。稼働中のブローカーには触れません。
 * **备份与恢复：**`scripts/backup_data.sh` 生成服务器数据的 AES-256 加密、经验证并带校验和的归档（除非要求否则不含证据）；`scripts/restore_data.sh` 列出或恢复它，且从不覆盖已有数据。
@@ -137,6 +138,7 @@ ARMOR-DEVOPS 是其他一切到达机器并保持最新的途径。它在 CM5 �
 | `ARMOR_MQTT_BIND`  `ARMOR_STUDIO_BIND` | 127.0.0.1 | Compose 发布代理和 Studio 的位置 |
 | `ARMOR_PUBLIC_ORIGIN` | http://127.0.0.1:8088 | 访问 Studio 所用的来源 |
 | `ARMOR_TLS_BIND`  `ARMOR_TLS_PORT`  `ARMOR_TLS_HTTP_PORT` | 8443 | `tls` 配置的 Caddy |
+| `ARMOR_MAINT_STAGING`  `ARMOR_MAINT_STAGING_WAIT_S` | off  30 | `armor.maint.env` 内：`on` 让维护助手在切换前，于回环地址的空闲端口上以空数据目录且不连代理的方式试运行新服务器（等待 5 至 120 秒） |
 | `.env`  `.env.example` | - | 由 `generate_secrets.sh` 创建，Git 忽略；示例列出每个变量 |
 
 维护助手的 root 控制台是机器自身文件中的设置，默认关闭；防火墙和 TLS 是安装器的选项而非默认值。详见 [docs/CM5_TEST_BENCH.md](docs/CM5_TEST_BENCH.md)。
@@ -163,6 +165,7 @@ scripts/backup_data.sh --data-dir <data> --out-dir <backups> --passphrase-file <
 | `test_maintenance_agent.py`  `.sh` | 维护助手：下载、SHA-256、签名、替换和回滚（需要 Linux） |
 | `test_package_component.py`  `test_registry.py`  `test_remote_access.py` | 包、组件列表和远程访问助手 |
 | `test_backup.sh`  `test_env_and_restore.sh` | 备份与恢复的往返、密钥和环境检查 |
+| `test_acl_single_source.py` | 服务器的代理规则：示例、安装器和 ARMOR-SERVER 实际使用的主题都出自同一来源 |
 | `test_compose.sh`  `validate-compose.sh` | Compose 拓扑及其 TLS 配置，在 WSL 的 Docker Engine 中构建并运行 |
 | `test_firewall.sh`  `test_install_plan.sh`  `test_mqtt_identity.sh`  `test_mqtt_tls.sh`  `test_tls_check.sh`  `test_wireguard.sh`  `test_ddns.sh` | 防火墙、安装器的计划、代理身份、TLS 上的 MQTT、TLS 检查、VPN 和动态域名 |
 

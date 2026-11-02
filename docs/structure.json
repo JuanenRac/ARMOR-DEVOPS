@@ -90,30 +90,30 @@
     {
      "name": "armor_doctor.py  armor_dynsec.py",
      "desc": {
-      "en": "check an installation; move the broker identities to dynamic security",
-      "es": "comprueba una instalación; pasa las identidades del broker a seguridad dinámica",
-      "de": "prüft eine Installation; überführt die Broker-Identitäten in die dynamische Sicherheit",
-      "fr": "vérifie une installation ; passe les identités du broker à la sécurité dynamique",
-      "it": "controlla un'installazione; porta le identità del broker alla sicurezza dinamica",
-      "ja": "インストールの点検、ブローカーのIDを動的セキュリティへ移行",
-      "zh": "检查安装；将代理身份迁移到动态安全",
-      "pt": "verifica uma instalação; passa as identidades do broker para a segurança dinâmica"
+      "en": "install check; dynamic security",
+      "es": "revisa la instalación; seguridad dinámica",
+      "de": "Installationsprüfung; dyn. Sicherheit",
+      "fr": "vérifie l'installation ; sécurité dynamique",
+      "it": "controlla l'installazione; sicurezza dinamica",
+      "ja": "インストール点検、ブローカーを動的セキュリティへ",
+      "zh": "检查安装；代理迁移到动态安全",
+      "pt": "verifica a instalação; segurança dinâmica"
      },
      "tree_name": "armor_doctor.py armor_dynsec.py"
     },
     {
-     "name": "firewall_core.sh  mqtt_identity.sh",
+     "name": "firewall_core.sh  mqtt_identity.sh  armor_server.acl",
      "desc": {
-      "en": "firewall and broker identities",
-      "es": "cortafuegos e identidades del broker",
-      "de": "Firewall und Broker-Identitäten",
-      "fr": "pare-feu et identités du broker",
-      "it": "firewall e identità del broker",
-      "ja": "ファイアウォールとブローカー ID",
-      "zh": "防火墙与代理身份",
-      "pt": "firewall e identidades do broker"
+      "en": "firewall, broker identities, server rules",
+      "es": "cortafuegos, identidades y reglas del servidor",
+      "de": "Firewall, Identitäten, Serverregeln",
+      "fr": "pare-feu, identités, règles du serveur",
+      "it": "firewall, identità, regole del server",
+      "ja": "ファイアウォール、ID、サーバー規則",
+      "zh": "防火墙、身份、服务器规则",
+      "pt": "firewall, identidades, regras do servidor"
      },
-     "tree_name": "firewall_core.sh mqtt_identity.sh"
+     "tree_name": "firewall_core.sh mqtt_identity.sh armor_server.acl"
     },
     {
      "name": "armor_mqtt_tls.sh  armor_tls_check.sh",

@@ -71,6 +71,7 @@ Each line is one part of this repository and the light says how far it is today.
 * **TLS:** an optional `tls` Compose profile puts Caddy, with its own local certificate authority, in front of Studio, and a Mosquitto configuration over TLS is provided ([details](docs/BACKUP_AND_TLS.md)).
 * **A host firewall for the core machine** (`scripts/firewall_core.sh`): the broker's port only from the field network, the server's and Studio's ports only from the clients' network (when it is given), in a table of its own that mentions nothing else.
 * **Secrets:** `scripts/generate_secrets.sh` creates random secrets and prints none; `scripts/check-required-env.sh` refuses missing, placeholder, short or repeated values.
+* **One source for the server's broker rules, and a trial before a server update:** the server's block of the broker's access list is the file `scripts/armor_server.acl`; the installer, `generate_secrets.sh` and a test that compares it with the topics ARMOR-SERVER really publishes and listens to all use it. `mqtt_identity.sh battery-write NODE on|off` and `alarm-state-relay on|off` open, only on request, the two paths that the battery writes and the signed state of the panels need. With `ARMOR_MAINT_STAGING=on` the maintenance helper starts the new server from its release folder on a free port of the loopback, with an empty data folder and no broker, and switches only if `/healthz` answers (off by default).
 * **Doctor:** `scripts/armor_doctor.py` checks, read only, that an installation hangs together: the mode and the length of every secret in `etc/armor*.env`, no secret repeated, the token of the network node derived from the ingest token, the broker port against `mosquitto.conf` and the free disk; it prints no value (`--json`, `--strict`).
 * **Broker identities in the dynamic-security plugin:** `scripts/armor_dynsec.py convert` turns the broker's password file and ACL file into the `dynamic-security.json` of the Mosquitto 2 plugin (the `$7$` password hashes are carried over, one role per identity, default access denied, an administrator for `mosquitto_ctrl` whose password goes only to a private file), `check` proves the result allows exactly what the ACL allows and `conf` prints the two lines for `mosquitto.conf`; the running broker is not touched.
 * **Backup and restore:** `scripts/backup_data.sh` makes an AES-256 encrypted, verified and checksummed archive of the server data (evidence excluded unless asked); `scripts/restore_data.sh` lists it or restores it without ever overwriting existing data.
@@ -137,6 +138,7 @@ The two helpers (`armor_admin_agent.py`, `armor_maintenance_agent.py`) listen on
 | `ARMOR_MQTT_BIND`  `ARMOR_STUDIO_BIND` | 127.0.0.1 | where Compose publishes the broker and Studio |
 | `ARMOR_PUBLIC_ORIGIN` | http://127.0.0.1:8088 | the origin Studio is reached by |
 | `ARMOR_TLS_BIND`  `ARMOR_TLS_PORT`  `ARMOR_TLS_HTTP_PORT` | 8443 | Caddy of the `tls` profile |
+| `ARMOR_MAINT_STAGING`  `ARMOR_MAINT_STAGING_WAIT_S` | off  30 | in `armor.maint.env`: `on` makes the maintenance helper try the new server on a free loopback port, with an empty data folder and no broker, before it switches (the wait is 5 to 120 seconds) |
 | `.env`  `.env.example` | - | created by `generate_secrets.sh`, ignored by Git; the example lists every variable |
 
 The root console of the maintenance helper is a setting of the machine's own file and is off by default; the firewall and TLS are options of the installer, not defaults. Details in [docs/CM5_TEST_BENCH.md](docs/CM5_TEST_BENCH.md).
@@ -163,6 +165,7 @@ See the [deployment boundary](docs/DEPLOYMENT_BOUNDARY.md) and the [test bench](
 | `test_maintenance_agent.py`  `.sh` | the maintenance helper: download, SHA-256, signature, swap and rollback (needs Linux) |
 | `test_package_component.py`  `test_registry.py`  `test_remote_access.py` | the packages, the list of components and the remote-access helpers |
 | `test_backup.sh`  `test_env_and_restore.sh` | the backup and restore round trip, the secrets and the environment check |
+| `test_acl_single_source.py` | the server's broker rules: one source, the same in the example, the installer and the topics ARMOR-SERVER really uses |
 | `test_compose.sh`  `validate-compose.sh` | the Compose topology and its TLS profile, built and run with Docker Engine in WSL |
 | `test_firewall.sh`  `test_install_plan.sh`  `test_mqtt_identity.sh`  `test_mqtt_tls.sh`  `test_tls_check.sh`  `test_wireguard.sh`  `test_ddns.sh` | the firewall, the installer's plan, the broker identities, MQTT over TLS, the TLS check, the VPN and the dynamic name |
 

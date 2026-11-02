@@ -43,7 +43,6 @@ topic write armor/alarm/+/zigbee
 topic write armor/alarm/+/policy
 # What the network nodes see on the local network.
 topic read armor/network/#
-topic write armor/node/+/command
 # Remote control of the nodes: ONLY the server publishes an order (armor/control/<node>/command and armor/control/all/command) and it reads the answers and the maintenance signals. No node block has a write on an order topic.
 topic write armor/control/+/command
 topic read armor/control/+/result

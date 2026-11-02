@@ -8,3 +8,4 @@
 # Files that the shell scripts read line by line (grep -x) must not turn into CRLF on Windows checkouts.
 mosquitto/* text eol=lf
 caddy/* text eol=lf
+scripts/*.acl text eol=lf

@@ -34,7 +34,13 @@ ENV
 # they are world-readable on purpose (a salted hash and an access list, no plaintext secret; .env stays private).
 docker run --rm --entrypoint sh -v "$PWD/secrets:/out" eclipse-mosquitto:2.0.21 \
   -c 'mosquitto_passwd -b -c /out/mqtt.password armor-server "$1" >/dev/null && chmod 0644 /out/mqtt.password' _ "${broker_password}"
-cp mosquitto/acl.example secrets/mqtt.acl
+# The access list is the example with the server's block taken from scripts/armor_server.acl, the one source of what the server may do (the installer uses the same file).
+[[ -f scripts/armor_server.acl ]] || { echo "ERROR: scripts/armor_server.acl is missing" >&2; exit 1; }
+awk -v rules="scripts/armor_server.acl" '
+  $0 == "user armor-server" { print; while ((getline line < rules) > 0) if (line ~ /^(topic |#)/) print line; skip = 1; next }
+  skip && /^$/ { skip = 0 }
+  !skip { print }
+' mosquitto/acl.example >secrets/mqtt.acl
 chmod 0644 secrets/mqtt.acl 2>/dev/null || true
 
 echo "ARMOR_SECRETS=CREATED .env, secrets/mqtt.password and secrets/mqtt.acl (all Git-ignored)"

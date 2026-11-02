@@ -1,0 +1,29 @@
+# The rules of the central service (the identity armor-server), the ONE source of its block of the broker's access list.
+# install_cm5.sh writes them after "user armor-server", generate_secrets.sh builds secrets/mqtt.acl with them, and scripts/test_acl_single_source.py checks that
+# mosquitto/acl.example says the same and that the topics ARMOR-SERVER publishes and subscribes to are covered (or are one of the opt-in lines of mqtt_identity.sh).
+# Only topic lines and comments: no "user" line and no blank line (a blank line ends a block).
+topic read armor/node/+/telemetry
+topic read armor/node/+/health
+topic read armor/node/+/info
+# The health report of every kind of node (radar, solar, electrical, alarm, hmi).
+topic read armor/health/#
+# The events of the perimeter engine of the radar nodes (a zone, a line crossed, a covered sensor, a sensor whose own Bluetooth is open ...).
+topic read armor/radar/+/events
+# What the solar gateway nodes and the electrical nodes measure (each node writes only its own subtree, see scripts/mqtt_identity.sh).
+topic read armor/solar/#
+topic read armor/electrical/#
+# What the alarm nodes say about their panels and their answers, and the state of the Zigbee zones the server tells them while it holds the radio (information, never a command).
+topic read armor/alarm/#
+topic write armor/alarm/+/zigbee
+# The security policy the server keeps for the panels (restore check, zone feed signature): information the panel applies, never a command.
+topic write armor/alarm/+/policy
+# What the network nodes see on the local network.
+topic read armor/network/#
+# Remote control of the nodes: ONLY the server publishes an order (armor/control/<node>/command and armor/control/all/command) and it reads the answers and the maintenance signals. No node block has a write on an order topic.
+topic write armor/control/+/command
+topic read armor/control/+/result
+topic read armor/control/+/maintenance
+# Alarm output: the server publishes alert.raised / alert.cleared / node.offline / node.stale here.
+topic write armor/server/alert
+# Smart devices (smoke, door, plug, light ...): the server listens on their state and commands them.
+topic readwrite armor/device/#

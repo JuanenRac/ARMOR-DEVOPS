@@ -130,7 +130,8 @@ if grep -v '^user ' <<<"$AL" | grep -v 'topic read armor/alarm/alarm-1/zigbee' |
 if grep -q 'armor/alarm/alarm-1/command' "$ACL"; then fail "an alarm command is reachable before it was turned on"; fi
 # Only the server may write the policy: its rule is in the example and in what the installer writes, in a new install and in an old one.
 grep -qx 'topic write armor/alarm/+/policy' "$HERE/../mosquitto/acl.example" || fail "acl.example does not let the server write the panel policy"
-test "$(grep -c "topic write armor/alarm/+/policy" "$HERE/install_cm5.sh")" -ge 2 || fail "install_cm5.sh does not write the policy rule for a new and an old install"
+grep -qx 'topic write armor/alarm/+/policy' "$HERE/armor_server.acl" || fail "armor_server.acl, the source of what the installer writes for the server, has no policy rule"
+grep -q 'armor_server.acl' "$HERE/install_cm5.sh" || fail "install_cm5.sh does not take the server's rules from armor_server.acl"
 if grep -q 'topic write armor/alarm/' <<<"$AL"; then grep 'topic write armor/alarm/' <<<"$AL" | grep -qv '/state$\|/result$' && fail "an alarm node can write something besides its state and results"; fi
 # An alarm node made before the server's options existed gets the one line it lacks, once, and only for that node.
 sed -i '/^topic read armor\/alarm\/alarm-2\/policy$/d' "$ACL"
@@ -274,5 +275,35 @@ if run rotate node nobody >/dev/null 2>&1; then fail "rotate made an identity th
 if run rotate node 'Bad Node' >/dev/null 2>&1; then fail "rotate took a bad name"; fi
 if run rotate consumer rot1 >/dev/null 2>&1; then fail "rotate took a role it does not know"; fi
 run remove field-node-rot1 >/dev/null
+
+# Writing to a battery: reachable only after `battery-write NODE on`, which gives the node a read and the server a write on that node's maintenance command topic, and nothing else.
+run add solar-node bat-1 >/dev/null
+run add solar-node bat-2 >/dev/null
+if grep -q 'maintenance/command' "$ACL"; then fail "a battery order is reachable before it was turned on"; fi
+run battery-write bat-1 on >/dev/null
+grep -qx 'topic read armor/solar/bat-1/maintenance/command' <<<"$(block solar-node-bat-1)" || fail "the solar node cannot read the battery orders after on"
+grep -qx 'topic write armor/solar/bat-1/maintenance/command' <<<"$(block armor-server)" || fail "the server cannot send the battery order after on"
+if grep -q 'bat-2/maintenance/command' "$ACL"; then fail "battery-write reached another node"; fi
+[[ -f "$WORK/prefix/etc/mosquitto/acl.before-battery-write" ]] || fail "the previous ACL was not kept"
+run battery-write bat-1 on >/dev/null
+[[ "$(grep -c 'bat-1/maintenance/command' "$ACL")" == "2" ]] || fail "battery-write on twice wrote a line twice"
+if run battery-write nobody on >/dev/null 2>&1; then fail "battery-write took a node that does not exist"; fi
+if run battery-write bat-1 maybe >/dev/null 2>&1; then fail "battery-write took a state that is not on or off"; fi
+run battery-write bat-1 off >/dev/null
+if grep -q 'bat-1/maintenance/command' "$ACL"; then fail "battery-write off left a line"; fi
+run battery-write bat-1 on >/dev/null
+run remove solar-node-bat-1 >/dev/null
+if grep -q 'bat-1' "$ACL"; then fail "removing the solar node left its battery line in the server's block"; fi
+run remove solar-node-bat-2 >/dev/null
+
+# The signed copy of the state of a panel: one line of the server's block, there only on request.
+if grep -qx 'topic write armor/alarm/+/state' "$ACL"; then fail "the signed copy of the panel state was reachable before it was asked for"; fi
+run alarm-state-relay on >/dev/null
+grep -qx 'topic write armor/alarm/+/state' <<<"$(block armor-server)" || fail "alarm-state-relay on did not give the server the line"
+run alarm-state-relay on >/dev/null
+[[ "$(grep -c 'topic write armor/alarm/+/state' "$ACL")" == "1" ]] || fail "alarm-state-relay on twice wrote the line twice"
+run alarm-state-relay off >/dev/null
+if grep -q 'topic write armor/alarm/+/state' "$ACL"; then fail "alarm-state-relay off left the line"; fi
+if run alarm-state-relay maybe >/dev/null 2>&1; then fail "alarm-state-relay took a state that is not on or off"; fi
 
 echo "ARMOR_MQTT_IDENTITY=PASS the switch and the relays of an electrical node and the commands of an alarm node are reachable only after an explicit on, only the server publishes control orders and each node reads only its own, and off and remove take them away"

@@ -139,7 +139,7 @@ CURL_TLS=(); [[ "$SCHEME" == "https" ]] && CURL_TLS=(-k)
 # The services listen only on --bind: the programs of this machine reach them on that address (on the loopback when they listen everywhere).
 LOCAL_HOST="127.0.0.1"; [[ "$BIND_ADDRESS" == "0.0.0.0" ]] || LOCAL_HOST="$BIND_ADDRESS"
 # Everything that is going to be copied is checked before anything is changed.
-for needed in scripts/mqtt_identity.sh; do
+for needed in scripts/mqtt_identity.sh $([[ "$WITH_MQTT" -eq 1 ]] && echo scripts/armor_server.acl); do
   [[ -f "$RELEASE_DIR/$needed" ]] || fail "the release has no $needed"
 done
 [[ "$WITH_ADMIN" -ne 1 || -f "$RELEASE_DIR/scripts/armor_admin_agent.py" ]] || fail "the release has no scripts/armor_admin_agent.py (needed by the admin agent)"
@@ -404,26 +404,8 @@ if [[ "$WITH_MQTT" -eq 1 ]]; then
     SERVER_MQTT_PASSWORD="$(random 48 32)"
     ( umask 0177; : >"$MQ/passwd"; )
     mosquitto_passwd -b "$MQ/passwd" armor-server "$SERVER_MQTT_PASSWORD" >/dev/null
-    cat >"$MQ/acl" <<'ACL'
-# Managed by scripts/mqtt_identity.sh; one block per identity.
-user armor-server
-topic read armor/node/+/telemetry
-topic read armor/node/+/health
-topic read armor/node/+/info
-topic read armor/health/#
-topic read armor/solar/#
-topic read armor/electrical/#
-topic read armor/alarm/#
-topic read armor/network/#
-topic write armor/alarm/+/zigbee
-topic write armor/alarm/+/policy
-topic write armor/control/+/command
-topic read armor/control/+/result
-topic read armor/control/+/maintenance
-topic read armor/radar/+/events
-topic write armor/server/alert
-topic readwrite armor/device/#
-ACL
+    # The server's block is the one file scripts/armor_server.acl (its topic lines only), the same one generate_secrets.sh and the tests use.
+    { echo "# Managed by scripts/mqtt_identity.sh; one block per identity."; echo "user armor-server"; grep '^topic ' "$RELEASE_DIR/scripts/armor_server.acl"; } >"$MQ/acl"
     chown "root:$SERVICE_USER" "$MQ/passwd" "$MQ/acl"; chmod 0640 "$MQ/passwd" "$MQ/acl"
     ( umask 0137; printf 'ARMOR_MQTT_URL=mqtt://%s:%s\nARMOR_MQTT_USERNAME=armor-server\nARMOR_MQTT_PASSWORD=%s\n' "$LOCAL_HOST" "$MQTT_PORT" "$SERVER_MQTT_PASSWORD" >"$PREFIX/etc/armor.mqtt.env" )
     chown "root:$SERVICE_USER" "$PREFIX/etc/armor.mqtt.env"; chmod 0640 "$PREFIX/etc/armor.mqtt.env"
@@ -433,9 +415,9 @@ ACL
   sed -i "s#^ARMOR_MQTT_URL=mqtt://.*#ARMOR_MQTT_URL=mqtt://$LOCAL_HOST:$MQTT_PORT#" "$PREFIX/etc/armor.mqtt.env"
   # An install made before devices existed: let the server listen on, and command, the devices' topics too.
   # An install made before the nodes said where their panel is, or before solar gateways or electrical nodes existed: let the server read those topics too (each line added once).
-  for ACL_LINE in 'topic read armor/node/+/info' 'topic read armor/solar/#' 'topic read armor/electrical/#' 'topic read armor/alarm/#' 'topic read armor/network/#' 'topic read armor/health/#' 'topic write armor/alarm/+/zigbee' 'topic write armor/alarm/+/policy' 'topic write armor/control/+/command' 'topic read armor/control/+/result' 'topic read armor/control/+/maintenance' 'topic read armor/radar/+/events'; do
+  while IFS= read -r ACL_LINE; do
     grep -qxF "$ACL_LINE" "$MQ/acl" || sed -i "/^topic write armor\/server\/alert\$/a $ACL_LINE" "$MQ/acl"
-  done
+  done < <(grep '^topic ' "$RELEASE_DIR/scripts/armor_server.acl")
   grep -qx 'topic readwrite armor/device/#' "$MQ/acl" || sed -i '0,/^topic write armor\/server\/alert$/s//topic write armor\/server\/alert\ntopic readwrite armor\/device\/#/' "$MQ/acl"
   cat >"$MQ/mosquitto.conf" <<EOF
 # A.R.M.O.R. broker: authenticated only, its own port, its own files.

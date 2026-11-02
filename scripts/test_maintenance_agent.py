@@ -397,6 +397,108 @@ class MaintenanceTest(unittest.TestCase):
         self.assertIn("unhealthy_rolled_back", view["error"])
         self.assertEqual(os.readlink(self.prefix / "current"), before)
 
+    # ---- trying the new server before the switch (blue/green) ----
+    def stand_in_node(self) -> Path:
+        """A stand-in for `node`: it answers /healthz on ARMOR_PORT when the server file says `ok`, exits when it says `crash`, and never answers when it says `hang`; it writes down what it was given."""
+        script = self.prefix.parent / "fake-node"
+        report = self.prefix.parent / "staging-report.json"
+        source = """#!/usr/bin/env python3
+import http.server, json, os, sys, time
+mode = open(sys.argv[1]).read().strip()
+keys = ("ARMOR_PORT", "ARMOR_HOST", "ARMOR_DATA_DIR", "ARMOR_MQTT_URL", "ARMOR_SECRET", "TLS_CERT_PATH")
+seen = {key: os.environ.get(key) for key in keys}
+seen.update({"empty": os.listdir(os.environ["ARMOR_DATA_DIR"]), "mode": mode, "cwd": os.getcwd()})
+json.dump(seen, open(REPORT, "w"))
+if mode == "crash":
+    print("boom: the new server cannot start")
+    sys.exit(1)
+if mode == "hang":
+    time.sleep(60)
+
+
+class H(http.server.BaseHTTPRequestHandler):
+    def log_message(self, *args):
+        pass
+
+    def do_GET(self):
+        body = b'{"ok":true}'
+        self.send_response(200)
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+
+http.server.HTTPServer(("127.0.0.1", int(os.environ["ARMOR_PORT"])), H).serve_forever()
+"""
+        script.write_text(source.replace("REPORT", repr(str(report))), encoding="utf-8")
+        script.chmod(0o755)
+        report.unlink(missing_ok=True)
+        return script
+
+    def with_staging(self, mode: str, setting: str = "on"):
+        node = self.stand_in_node()
+        (self.prefix / "etc").mkdir(parents=True, exist_ok=True)
+        (self.prefix / "etc" / "armor.env").write_text("ARMOR_SECRET=s3cret\nARMOR_PORT=18080\nTLS_CERT_PATH=/x/cert.pem\nARMOR_MQTT_URL=mqtt://127.0.0.1:18883\n", encoding="utf-8")
+        self.maint_env.write_text(f"ARMOR_MAINT_STAGING={setting}\nARMOR_MAINT_STAGING_WAIT_S=5\n", encoding="utf-8")
+        self.publish("ARMOR-SERVER", "0.5.7", {"server/dist/server.mjs": mode.encode(), "server/package.json": b'{"version":"0.5.7"}'}, "server")
+        original = self.agent.NODE_BINARY
+        self.agent.NODE_BINARY = str(node)
+        try:
+            return self.wait(self.agent.update_job(["server"], False))
+        finally:
+            self.agent.NODE_BINARY = original
+
+    def test_a_server_that_answers_on_the_side_is_switched_to(self) -> None:
+        before = os.readlink(self.prefix / "current")
+        view = self.with_staging("ok")
+        self.assertEqual(view["state"], "done", view["log"])
+        self.assertNotEqual(os.readlink(self.prefix / "current"), before)
+        report = json.loads((self.prefix.parent / "staging-report.json").read_text(encoding="utf-8"))
+        self.assertNotEqual(report["ARMOR_PORT"], "18080")                          # its own port, not the one in use
+        self.assertEqual(report["ARMOR_HOST"], "127.0.0.1")
+        self.assertEqual(report["ARMOR_SECRET"], "s3cret")                          # the settings of the real server came along
+        self.assertIsNone(report["ARMOR_MQTT_URL"])                                  # but not the broker (a second client of the same name would throw the real one out)
+        self.assertIsNone(report["TLS_CERT_PATH"])                                   # plain http on the loopback
+        self.assertEqual(report["empty"], [])                                        # an empty data folder, never the real one
+        self.assertNotIn(str(self.prefix / "data"), str(report["ARMOR_DATA_DIR"]))
+        steps = {item["id"]: item["state"] for item in view["steps"]}
+        self.assertEqual(steps["server.stage"], "done")
+        self.assertIn("trying the new server", "\n".join(view["log"]))
+
+    def test_a_server_that_does_not_start_on_the_side_never_replaces_the_running_one(self) -> None:
+        before = os.readlink(self.prefix / "current")
+        folders = sorted(path.name for path in (self.prefix / "releases").iterdir())
+        view = self.with_staging("crash")
+        self.assertEqual(view["state"], "failed")
+        self.assertIn("staging_failed", view["error"])
+        self.assertEqual(os.readlink(self.prefix / "current"), before)              # nothing was switched
+        self.assertEqual(sorted(path.name for path in (self.prefix / "releases").iterdir()), folders)   # the useless folder is gone
+        self.assertNotIn("restart armor-server", self.calls.read_text(encoding="utf-8"))   # and the running server was not even restarted: no cut
+        self.assertIn("boom: the new server cannot start", "\n".join(view["log"]))
+        self.assertIn("nothing was switched", "\n".join(view["log"]))
+
+    def test_a_server_that_never_answers_on_the_side_is_stopped_and_refused(self) -> None:
+        before = os.readlink(self.prefix / "current")
+        started = time.time()
+        view = self.with_staging("hang")
+        self.assertEqual(view["state"], "failed")
+        self.assertIn("staging_failed", view["error"])
+        self.assertLess(time.time() - started, 30)                                   # the wait of the setting (5 s), not the 60 s of the stand-in
+        self.assertEqual(os.readlink(self.prefix / "current"), before)
+
+    def test_without_the_setting_the_server_is_switched_as_before_and_never_tried(self) -> None:
+        for setting in ("off", "maybe", "1"):                          # off, a word that is not `on`, and a number: all keep the old behaviour
+            self.setUp()
+            view = self.with_staging("crash", setting)                               # a server that would fail the trial passes, because the trial is not made
+            self.assertEqual(view["state"], "done", (setting, view["log"]))
+            self.assertEqual({item["id"]: item["state"] for item in view["steps"]}["server.stage"], "skipped")
+            self.assertFalse((self.prefix.parent / "staging-report.json").exists(), setting)
+
+    def test_the_wait_of_the_trial_is_limited(self) -> None:
+        for text, wanted in (("", 30.0), ("1", 5.0), ("45", 45.0), ("9999", 120.0), ("abc", 30.0)):
+            self.maint_env.write_text(f"ARMOR_MAINT_STAGING_WAIT_S={text}\n", encoding="utf-8")
+            self.assertEqual(self.agent.staging_wait(), wanted, text)
+
     def unhealthy_update(self, component: str):
         """Runs an update after which the health check says no: the server's address answers not-ok, and for the others systemctl reports the unit failed (three seconds of waiting, not forty)."""
         failing = self.prefix.parent / "systemctl-failed"

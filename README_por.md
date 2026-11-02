@@ -71,6 +71,7 @@ Cada linha é uma parte deste repositório e a luz diz até onde chega hoje. É 
 * **TLS:** um perfil `tls` opcional do Compose põe o Caddy, com a sua própria autoridade certificadora local, à frente do Studio, e é fornecida uma configuração do Mosquitto sobre TLS ([detalhes](docs/BACKUP_AND_TLS.md)).
 * **Uma firewall de anfitrião para a máquina central** (`scripts/firewall_core.sh`): a porta do broker só a partir da rede de campo, as do servidor e do Studio só a partir da rede dos clientes (quando indicada), numa tabela própria que não menciona mais nada.
 * **Segredos:** `scripts/generate_secrets.sh` cria segredos aleatórios e não imprime nenhum; `scripts/check-required-env.sh` recusa valores em falta, de exemplo, curtos ou repetidos.
+* **Uma só fonte para as regras do broker do servidor e um ensaio antes de atualizar o servidor:** o bloco do servidor na lista de acesso do broker é o ficheiro `scripts/armor_server.acl`; usam-no o instalador, o `generate_secrets.sh` e um teste que o compara com os tópicos que o ARMOR-SERVER publica e escuta de facto. `mqtt_identity.sh battery-write NÓ on|off` e `alarm-state-relay on|off` abrem, só a pedido, os dois caminhos de que precisam as escritas nas baterias e o estado assinado dos painéis. Com `ARMOR_MAINT_STAGING=on`, o ajudante de manutenção arranca o servidor novo a partir da sua pasta de versão numa porta livre do loopback, com uma pasta de dados vazia e sem broker, e só muda se o `/healthz` responder (desligado por omissão).
 * **Doutor:** `scripts/armor_doctor.py` verifica, só em leitura, que uma instalação é coerente: o modo e o comprimento de cada segredo em `etc/armor*.env`, nenhum segredo repetido, o token do nó de rede derivado do de ingestão, a porta do broker face a `mosquitto.conf` e o disco livre; não imprime nenhum valor (`--json`, `--strict`).
 * **Identidades do broker no plugin de segurança dinâmica:** `scripts/armor_dynsec.py convert` converte o ficheiro de palavras-passe e o de ACL do broker no `dynamic-security.json` do plugin do Mosquitto 2 (os hashes `$7$` são mantidos, uma função por identidade, acesso por omissão negado, um administrador para `mosquitto_ctrl` cuja palavra-passe vai apenas para um ficheiro privado), `check` comprova que o resultado permite exatamente o que o ACL permite e `conf` imprime as duas linhas de `mosquitto.conf`; o broker em execução não é tocado.
 * **Cópia de segurança e restauro:** `scripts/backup_data.sh` faz um ficheiro cifrado com AES-256, verificado e com soma de verificação dos dados do servidor (sem provas salvo se pedidas); `scripts/restore_data.sh` lista-o ou restaura-o sem nunca sobrescrever dados existentes.
@@ -137,6 +138,7 @@ Os dois ajudantes (`armor_admin_agent.py`, `armor_maintenance_agent.py`) escutam
 | `ARMOR_MQTT_BIND`  `ARMOR_STUDIO_BIND` | 127.0.0.1 | onde o Compose publica o broker e o Studio |
 | `ARMOR_PUBLIC_ORIGIN` | http://127.0.0.1:8088 | a origem pela qual se chega ao Studio |
 | `ARMOR_TLS_BIND`  `ARMOR_TLS_PORT`  `ARMOR_TLS_HTTP_PORT` | 8443 | Caddy do perfil `tls` |
+| `ARMOR_MAINT_STAGING`  `ARMOR_MAINT_STAGING_WAIT_S` | off  30 | em `armor.maint.env`: `on` faz o ajudante de manutenção testar o servidor novo numa porta livre do loopback, com pasta de dados vazia e sem broker, antes de mudar (a espera é de 5 a 120 segundos) |
 | `.env`  `.env.example` | - | criado por `generate_secrets.sh`, ignorado pelo Git; o exemplo lista cada variável |
 
 A consola de root do ajudante de manutenção é uma definição do próprio ficheiro da máquina e está desligada por predefinição; a firewall e o TLS são opções do instalador, não predefinições. Detalhes em [docs/CM5_TEST_BENCH.md](docs/CM5_TEST_BENCH.md).
@@ -163,6 +165,7 @@ Consulte o [limite da implantação](docs/DEPLOYMENT_BOUNDARY.md) e a [bancada d
 | `test_maintenance_agent.py`  `.sh` | o ajudante de manutenção: descarga, SHA-256, assinatura, troca e reversão (precisa de Linux) |
 | `test_package_component.py`  `test_registry.py`  `test_remote_access.py` | os pacotes, a lista de componentes e os ajudantes de acesso remoto |
 | `test_backup.sh`  `test_env_and_restore.sh` | a ida e volta de cópia e restauro, os segredos e a verificação do ambiente |
+| `test_acl_single_source.py` | as regras do broker do servidor: uma só fonte, a mesma no exemplo, no instalador e nos tópicos que o ARMOR-SERVER usa de facto |
 | `test_compose.sh`  `validate-compose.sh` | a topologia Compose e o seu perfil TLS, construídos e executados com Docker Engine no WSL |
 | `test_firewall.sh`  `test_install_plan.sh`  `test_mqtt_identity.sh`  `test_mqtt_tls.sh`  `test_tls_check.sh`  `test_wireguard.sh`  `test_ddns.sh` | a firewall, o plano do instalador, as identidades do broker, MQTT sobre TLS, a verificação TLS, a VPN e o nome dinâmico |
 

@@ -30,6 +30,7 @@ import os
 import re
 import shutil
 import signal
+import socket
 import socketserver
 import ssl
 import subprocess
@@ -42,7 +43,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-AGENT_VERSION = "0.1.5"
+AGENT_VERSION = "0.1.6"
 PREFIX = Path(os.environ.get("ARMOR_PREFIX", "/opt/armor"))
 SYSTEMCTL = os.environ.get("ARMOR_SYSTEMCTL", "systemctl")
 APT_GET = os.environ.get("ARMOR_APT_GET", "apt-get")
@@ -64,6 +65,10 @@ KEEP_OLD = 6
 MIN_FREE_MB_DEFAULT = 500
 DISK_USAGE = shutil.disk_usage
 MAINT_ENV = Path(os.environ.get("ARMOR_MAINT_ENV", str(PREFIX / "etc" / "armor.maint.env")))
+# Trying a new server before it replaces the running one (blue/green): ARMOR_MAINT_STAGING=on in armor.maint.env starts it from its new release folder on a free port of the loopback, with an empty data
+# folder and without the broker, and asks /healthz before `current` is switched; off (the default) switches and checks afterwards, as always. ARMOR_MAINT_STAGING_WAIT_S is how long it may take (5 to 120, 30 by default).
+STAGING_WAIT_DEFAULT = 30
+NODE_BINARY = os.environ.get("ARMOR_NODE", "node")
 
 # id -> what it is. `kind` says how it is put in; `service` is restarted afterwards (None: nothing to restart).
 COMPONENTS: dict[str, dict[str, object]] = {
@@ -552,6 +557,86 @@ def min_free_bytes() -> int:
     return megabytes * 1024 * 1024
 
 
+def staging_enabled() -> bool:
+    """Is the new server tried out before the switch? Only the exact word `on` turns it on; anything else keeps the old behaviour."""
+    return read_settings(MAINT_ENV).get("ARMOR_MAINT_STAGING", "off").strip().lower() == "on"
+
+
+def staging_wait() -> float:
+    value = read_settings(MAINT_ENV).get("ARMOR_MAINT_STAGING_WAIT_S", "")
+    return float(min(120, max(5, int(value)))) if re.fullmatch(r"\d{1,4}", value) else float(STAGING_WAIT_DEFAULT)
+
+
+def free_loopback_port() -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        probe.bind(("127.0.0.1", 0))
+        return int(probe.getsockname()[1])
+
+
+def staging_environment(data_dir: Path, port: int) -> dict[str, str]:
+    """What the server being tried gets: the settings of the real one (secrets, limits), but its own port on the loopback over plain http, an empty data folder and no broker, so it can
+    neither touch the data nor take the place of the running server on the broker (two clients with the same name would throw each other out)."""
+    env = {key: os.environ[key] for key in ("PATH", "LANG", "TZ") if key in os.environ}
+    for name in ("armor.env", "armor.network.env"):
+        env.update(read_settings(PREFIX / "etc" / name))
+    for key in ("TLS_CERT_PATH", "TLS_KEY_PATH", "ARMOR_COOKIE_SECURE", "ARMOR_MQTT_URL", "ARMOR_MQTT_USERNAME", "ARMOR_MQTT_PASSWORD", "ARMOR_MQTT_CA_FILE", "ARMOR_MQTT_CLIENT_ID",
+                "ARMOR_ADMIN_URL", "ARMOR_ADMIN_TOKEN", "ARMOR_MAINT_TOKEN", "ARMOR_MAINT_SOCKET"):
+        env.pop(key, None)
+    env.update({"ARMOR_PORT": str(port), "ARMOR_HOST": "127.0.0.1", "ARMOR_DATA_DIR": str(data_dir), "HOME": str(data_dir)})
+    return env
+
+
+def stage_server(job: Job, release_folder: Path) -> None:
+    """Start the server of the new release folder next to the running one and ask it whether it is well; the running one is not touched. Raises Refused when it is not."""
+    job.step("stage", "running", 5)
+    port = free_loopback_port()
+    wait = staging_wait()
+    with tempfile.TemporaryDirectory(prefix="armor-staging-") as scratch:
+        data_dir = Path(scratch) / "data"
+        data_dir.mkdir()
+        log_path = Path(scratch) / "staging.log"
+        extra: dict[str, object] = {}
+        if hasattr(os, "geteuid") and os.geteuid() == 0:
+            extra["user"] = "armor"                                          # the same account the real server runs as, never root
+            os.chmod(scratch, 0o755)
+            own(data_dir, "armor")
+            os.chmod(log_path.parent, 0o777)
+        job.say(f"trying the new server on 127.0.0.1:{port} before switching (up to {int(wait)} s)")
+        try:
+            with log_path.open("wb") as log:
+                process = subprocess.Popen([NODE_BINARY, str(release_folder / "server" / "dist" / "server.mjs")], cwd=release_folder / "server", env=staging_environment(data_dir, port),
+                                           stdout=log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, **extra)  # type: ignore[call-overload]
+        except OSError as error:
+            job.say(f"the new server could not be started: {error.strerror or type(error).__name__}")
+            raise Refused(500, "staging_failed") from error
+        ok = False
+        try:
+            deadline = time.time() + wait
+            while time.time() < deadline and process.poll() is None:
+                try:
+                    if b'"ok":true' in http_get(f"http://127.0.0.1:{port}/healthz", accept="application/json", timeout=2.0).replace(b" ", b""):
+                        ok = True
+                        break
+                except (urllib.error.URLError, OSError, TimeoutError):
+                    pass
+                time.sleep(0.5)
+        finally:
+            if process.poll() is None:
+                process.terminate()
+                try:
+                    process.wait(timeout=10)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait(timeout=10)
+        if not ok:
+            tail = [line for line in log_path.read_text(encoding="utf-8", errors="replace").splitlines() if line.strip()][-3:]
+            for line in tail:
+                job.say("server: " + line[:200])
+            job.say("the new server did not answer: the running one stays, nothing was switched")
+            raise Refused(500, "staging_failed")
+    job.step("stage", "done")
+
+
 def install_release_dir(job: Job, component: str, staged: Path, version: str) -> dict[str, object]:
     """Server or Studio: a new release folder is made from the current one with that one part replaced; `current` points to it once it is ready."""
     part = str(COMPONENTS[component]["part"])
@@ -593,6 +678,15 @@ def install_release_dir(job: Job, component: str, staged: Path, version: str) ->
             put_file(source / "tools" / "serve.mjs", target / "studio" / "tools" / "serve.mjs")
     own(target, "armor")
     job.step("install", "done")
+    if part == "server":
+        if staging_enabled():
+            try:
+                stage_server(job, target)
+            except Refused:
+                shutil.rmtree(target, ignore_errors=True)               # the new folder is of no use, and `current` was never touched
+                raise
+        else:
+            job.step("stage", "skipped")
     job.step("restart", "running", 10)
     previous = os.readlink(PREFIX / "current")
     job.say("switching `current` and restarting " + unit)
@@ -652,7 +746,7 @@ def replace_tree(job: Job, component: str, staged: Path) -> dict[str, object]:
         scripts = staged / "scripts"
         if not scripts.is_dir():
             raise Refused(422, "bad_archive")
-        for name in ("armor_admin_agent.py", "armor_maintenance_agent.py", "mqtt_identity.sh", "backup_data.sh", "armor_wireguard.sh", "armor_ddns.sh", "armor_mqtt_tls.sh", "VERSION"):
+        for name in ("armor_admin_agent.py", "armor_maintenance_agent.py", "mqtt_identity.sh", "armor_server.acl", "backup_data.sh", "armor_wireguard.sh", "armor_ddns.sh", "armor_mqtt_tls.sh", "VERSION"):
             source = scripts / name
             if not source.exists():
                 continue
@@ -693,7 +787,8 @@ def replace_tree(job: Job, component: str, staged: Path) -> dict[str, object]:
 
 def update_job(components: list[str], force: bool) -> Job:
     steps = [(f"{component}.{part}", f"{component}: {text}") for component in components for part, text in
-             (("download", "download"), ("verify", "check the hash"), ("install", "install"), ("restart", "restart"), ("check", "check it works"))]
+             (("download", "download"), ("verify", "check the hash"), ("install", "install"), *((("stage", "try it before switching"),) if component == "server" else ()),
+              ("restart", "restart"), ("check", "check it works"))]
     job = Job("update", steps, label=", ".join(components))
     remember(job)
 
@@ -711,7 +806,7 @@ def update_job(components: list[str], force: bool) -> Job:
                     installed = installed_version(component)
                     if installed and version_key(str(release["version"])) <= version_key(installed) and not force:
                         job.say(f"{component} is already at {installed}")
-                        for part in ("download", "verify", "install", "restart", "check"):
+                        for part in ("download", "verify", "install", *(("stage",) if component == "server" else ()), "restart", "check"):
                             job.step(prefix + part, "skipped")
                         continue
                     with tempfile.TemporaryDirectory(prefix="armor-maint-") as work_dir:

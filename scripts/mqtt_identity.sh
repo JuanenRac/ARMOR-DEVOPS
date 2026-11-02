@@ -10,6 +10,8 @@
 #   sudo mqtt_identity.sh electrical-relays electrical-1 on     # lets that node's relays be devices of the house (armor/device/electrical-1/#): it publishes their state and reads their commands (off again with `off`): NOT part of any install
 #   sudo mqtt_identity.sh alarm-commands alarm-1 on   # lets the server arm and disarm that alarm node, and the node read the commands (off again with `off`): NOT part of any install
 #   sudo mqtt_identity.sh electrical-switching electrical-1 on   # lets the server send commands to that node's switch, and the node read them (off again with `off`): NOT part of any install
+#   sudo mqtt_identity.sh battery-write solar-1 on   # lets the server send an order to write to the batteries of that solar node, and the node read it (off again with `off`): NOT part of any install
+#   sudo mqtt_identity.sh alarm-state-relay on   # lets the server publish again, signed, the state of the alarm panels (the option "alarm state signature"; off again with `off`): NOT part of any install
 #   sudo mqtt_identity.sh add consumer siren   # an alarm consumer: reads armor/server/alert only
 #   sudo mqtt_identity.sh add device kitchen   # one smart device (a plug, a sensor): reads and writes armor/device/kitchen/# only
 #   sudo mqtt_identity.sh add bridge zigbee    # a bridge to many devices (Zigbee2MQTT, a Shelly gateway): all of armor/device/#
@@ -28,7 +30,7 @@ MQ="$PREFIX/etc/mosquitto"
 [[ "$(id -u)" -eq 0 ]] || { echo "run as root" >&2; exit 1; }
 [[ -f "$MQ/passwd" && -f "$MQ/acl" ]] || { echo "the A.R.M.O.R. broker is not installed (install_cm5.sh --with-mqtt)" >&2; exit 1; }
 
-usage() { echo "Usage: mqtt_identity.sh add node ID | add solar-node ID | add electrical-node ID | add network-node ID | add alarm-node ID | add hmi-node ID | add consumer NAME | add device NAME | add bridge NAME | upgrade-node NODE_ID | health-report ROLE NODE_ID | alarm-policy NODE_ID | node-control ROLE NODE_ID | electrical-switching NODE_ID on|off | alarm-commands NODE_ID on|off | electrical-relays NODE_ID on|off | alarm-relays NODE_ID on|off | ha-discovery on|off [PREFIX] | remove USER" >&2; exit 2; }
+usage() { echo "Usage: mqtt_identity.sh add node ID | add solar-node ID | add electrical-node ID | add network-node ID | add alarm-node ID | add hmi-node ID | add consumer NAME | add device NAME | add bridge NAME | upgrade-node NODE_ID | health-report ROLE NODE_ID | alarm-policy NODE_ID | node-control ROLE NODE_ID | electrical-switching NODE_ID on|off | alarm-commands NODE_ID on|off | electrical-relays NODE_ID on|off | alarm-relays NODE_ID on|off | battery-write NODE_ID on|off | alarm-state-relay on|off | ha-discovery on|off [PREFIX] | remove USER" >&2; exit 2; }
 ACTION="${1:-}"
 # Removes one line from the block of ONE identity ("user NAME" up to the next blank line), never from the others: the same line (topic readwrite armor/device/garage/#) can be in the
 # blocks of a device and of a node with the same name.
@@ -358,6 +360,58 @@ case "$ACTION" in
       echo "the previous ACL is kept as acl.before-switching; the server also needs ARMOR_ELECTRICAL_SWITCHING=1 to send anything, and the node has to allow it"
     fi
     ;;
+  battery-write)
+    # An order to write to a battery (the server's battery maintenance) is reachable only with two lines, and this is the only thing that writes them: the solar gateway node may READ its own
+    # maintenance command topic, and the server may WRITE it (the node already writes its answer under armor/solar/<node>/#). Without both the broker itself refuses the order. Idempotent; the
+    # previous ACL is kept. The server also needs its own switch for battery writes and the node has to allow it.
+    NAME="${2:-}"; STATE="${3:-}"; USER_NAME="solar-node-$NAME"
+    [[ "$NAME" =~ ^[a-z0-9][a-z0-9_-]{0,63}$ ]] || { echo "the node id must match ^[a-z0-9][a-z0-9_-]{0,63}\$" >&2; exit 2; }
+    [[ "$STATE" == "on" || "$STATE" == "off" ]] || usage
+    grep -qx "user $USER_NAME" "$MQ/acl" || { echo "$USER_NAME does not exist (add solar-node $NAME first)" >&2; exit 1; }
+    grep -qx "user armor-server" "$MQ/acl" || { echo "the server's identity (armor-server) is not in the ACL" >&2; exit 1; }
+    COMMAND="armor/solar/$NAME/maintenance/command"
+    has_line() { awk -v u="user $1" -v l="$2" 'BEGIN{inb=0; found=0} $0==u{inb=1; next} inb && /^$/{inb=0} inb && $0==l{found=1} END{exit found?0:1}' "$MQ/acl"; }
+    CHANGED=0
+    for PAIR in "$USER_NAME|topic read $COMMAND" "armor-server|topic write $COMMAND"; do
+      WHO="${PAIR%%|*}"; LINE="${PAIR#*|}"
+      if [[ "$STATE" == "on" ]]; then
+        if has_line "$WHO" "$LINE"; then echo "$WHO already has: $LINE"; continue; fi
+        [[ "$CHANGED" -eq 1 ]] || cp -p "$MQ/acl" "$MQ/acl.before-battery-write"
+        sed -i "/^user $WHO\$/a $LINE" "$MQ/acl"; CHANGED=1; echo "$WHO now has: $LINE"
+      else
+        if ! has_line "$WHO" "$LINE"; then echo "$WHO does not have: $LINE"; continue; fi
+        [[ "$CHANGED" -eq 1 ]] || cp -p "$MQ/acl" "$MQ/acl.before-battery-write"
+        drop_line "$WHO" "$LINE"; CHANGED=1; echo "$WHO no longer has: $LINE"
+      fi
+    done
+    if [[ "$CHANGED" -eq 1 ]]; then
+      chown root:armor "$MQ/acl"; chmod 0640 "$MQ/acl"
+      reload_broker
+      echo "the previous ACL is kept as acl.before-battery-write; the server also needs its battery-write switch on to send anything, and the node has to allow it"
+    fi
+    ;;
+  alarm-state-relay)
+    # With the server's option "alarm state signature" on, the server publishes again, signed, the state it heard from a panel (armor/alarm/<node>/state). Without this line the broker drops that copy
+    # in silence. Not part of any install; idempotent; `off` takes only that line away from the server's block.
+    STATE="${2:-}"
+    [[ "$STATE" == "on" || "$STATE" == "off" ]] || usage
+    grep -qx "user armor-server" "$MQ/acl" || { echo "the server's identity (armor-server) is not in the ACL" >&2; exit 1; }
+    LINE="topic write armor/alarm/+/state"
+    HAS="$(awk -v u="user armor-server" -v l="$LINE" 'BEGIN{inb=0; found=0} $0==u{inb=1; next} inb && /^$/{inb=0} inb && $0==l{found=1} END{print found}' "$MQ/acl")"
+    if [[ "$STATE" == "on" ]]; then
+      if [[ "$HAS" == "1" ]]; then echo "armor-server already has: $LINE"; else
+        cp -p "$MQ/acl" "$MQ/acl.before-alarm-state-relay"
+        sed -i "/^user armor-server\$/a $LINE" "$MQ/acl"; echo "armor-server now has: $LINE"
+        chown root:armor "$MQ/acl"; chmod 0640 "$MQ/acl"; reload_broker
+      fi
+    else
+      if [[ "$HAS" != "1" ]]; then echo "armor-server does not have: $LINE"; else
+        cp -p "$MQ/acl" "$MQ/acl.before-alarm-state-relay"
+        drop_line "armor-server" "$LINE"; echo "armor-server no longer has: $LINE"
+        chown root:armor "$MQ/acl"; chmod 0640 "$MQ/acl"; reload_broker
+      fi
+    fi
+    ;;
   remove)
     USER_NAME="${2:-}"
     [[ "$USER_NAME" =~ ^(field-node|solar-node|electrical-node|network-node|alarm-node|alarm|device|bridge)-[a-z0-9][a-z0-9_-]{0,63}$ ]] || { echo "only field-node-*, solar-node-*, electrical-node-*, network-node-*, alarm-*, device-* and bridge-* identities can be removed" >&2; exit 2; }
@@ -368,6 +422,7 @@ case "$ACTION" in
     # An electrical node that goes leaves no way for the server to command it: its line in the server's block goes too.
     if [[ "$USER_NAME" == electrical-node-* ]]; then sed -i "\#^topic write armor/electrical/${USER_NAME#electrical-node-}/command\$#d" "$MQ/acl"; fi
     if [[ "$USER_NAME" == alarm-node-* ]]; then sed -i "\#^topic write armor/alarm/${USER_NAME#alarm-node-}/command\$#d" "$MQ/acl"; fi
+    if [[ "$USER_NAME" == solar-node-* ]]; then sed -i "\#^topic write armor/solar/${USER_NAME#solar-node-}/maintenance/command\$#d" "$MQ/acl"; fi
     chown root:armor "$MQ/passwd" "$MQ/acl"; chmod 0640 "$MQ/passwd" "$MQ/acl"
     reload_broker
     echo "removed $USER_NAME (the previous ACL is kept as acl.before-remove)"
