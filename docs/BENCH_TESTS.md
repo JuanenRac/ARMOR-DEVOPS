@@ -8,3 +8,4 @@ The software of these checks is done and tested on a computer; what is left need
 | Server health | the CM5 | `docker compose build server`, `docker compose up -d`, then `docker inspect` the health state | `healthy` |
 | Pinned images | the CM5 | build once, then pin the Caddy and base image digests | the same build repeats with the pinned digests |
 | Remote mode | the CM5 | try the VPN and DNS rules of the remote mode | each rule behaves as documented |
+| Virtual bench | a Docker host | `docker compose --profile bench up -d --build`, then watch the nodes `bench-1` to `bench-3` in Studio | the three nodes appear and report every second; the image has not been built on a real host yet |

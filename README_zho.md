@@ -196,28 +196,29 @@ Python 测试用 `python -m unittest discover -s scripts -p "test_*.py"` 运行�
 ```text
 ARMOR-DEVOPS/
 ├── scripts/
-│   ├── deploy_cm5.sh install_cm5.sh                      部署到测试台并安装
-│   ├── package_component.py                              每个版本的包
-│   ├── armor_admin_agent.py armor_maintenance_agent.py   Studio 的两个助手
-│   ├── generate_secrets.sh check-required-env.sh         随机密钥；拒绝弱密钥
-│   ├── backup_data.sh restore_data.sh                    加密备份与恢复
-│   ├── firewall_core.sh mqtt_identity.sh                 防火墙与代理身份
-│   ├── armor_mqtt_tls.sh armor_tls_check.sh              TLS 上的 MQTT 及其检查
-│   ├── armor_ddns.sh armor_wireguard.sh                  房子的域名和 VPN
-│   └── test_*.py test_*.sh validate-compose.sh           助手与脚本的测试
-├── docker-compose.yml docker-compose.tls.yml             代理、服务器、Studio；TLS 配置
-├── mosquitto/                                            mosquitto.conf、TLS 配置、acl.example
-├── caddy/                                                Caddyfile：Studio 前的 HTTPS
-├── docs/                                                 DEPLOYMENT_BOUNDARY、CM5_TEST_BENCH、BENCH_TESTS、BACKUP_AND_TLS、MQTT_TLS、HTTPS_PAIRING、REMOTE_ACCESS、SIGNED_PACKAGES（后四篇另有八种语言版）
-├── tools/                                                共用的 CI 检查和工具
-├── images/                                               横幅图、图标和 README 的图片
-├── .github/                                              CI 工作流、仪表板通知、议题和 pull request 模板
-├── armor.project.json                                    清单：版本、角色、成熟度
-├── CHANGELOG.md                                          每个版本的变化
-├── run.sh run.bat                                        启动（共用流程）
-├── build.sh build.bat                                    构建并测试（共用流程）
-├── build-test.sh build-test.bat                          构建、测试并打包
-├── test.sh test.bat                                      只运行测试，不改版本
+│   ├── deploy_cm5.sh install_cm5.sh                         部署到测试台并安装
+│   ├── package_component.py                                 每个版本的包
+│   ├── armor_admin_agent.py armor_maintenance_agent.py      Studio 的两个助手
+│   ├── generate_secrets.sh check-required-env.sh            随机密钥；拒绝弱密钥
+│   ├── backup_data.sh restore_data.sh                       加密备份与恢复
+│   ├── armor_doctor.py armor_dynsec.py                      检查安装；代理迁移到动态安全
+│   ├── firewall_core.sh mqtt_identity.sh armor_server.acl   防火墙、身份、服务器规则
+│   ├── armor_mqtt_tls.sh armor_tls_check.sh                 TLS 上的 MQTT 及其检查
+│   ├── armor_ddns.sh armor_wireguard.sh                     房子的域名和 VPN
+│   └── test_*.py test_*.sh validate-compose.sh              助手与脚本的测试
+├── docker-compose.yml docker-compose.tls.yml                代理、服务器、Studio;TLS 与虚拟测试台配置
+├── mosquitto/                                               mosquitto.conf、TLS 配置、acl.example
+├── caddy/                                                   Caddyfile：Studio 前的 HTTPS
+├── docs/                                                    DEPLOYMENT_BOUNDARY、CM5_TEST_BENCH、BENCH_TESTS、BACKUP_AND_TLS、MQTT_TLS、HTTPS_PAIRING、REMOTE_ACCESS、SIGNED_PACKAGES（后四篇另有八种语言版）
+├── tools/                                                   共用的 CI 检查和工具
+├── images/                                                  横幅图、图标和 README 的图片
+├── .github/                                                 CI 工作流、仪表板通知、议题和 pull request 模板
+├── armor.project.json                                       清单：版本、角色、成熟度
+├── CHANGELOG.md                                             每个版本的变化
+├── run.sh run.bat                                           启动（共用流程）
+├── build.sh build.bat                                       构建并测试（共用流程）
+├── build-test.sh build-test.bat                             构建、测试并打包
+├── test.sh test.bat                                         只运行测试，不改版本
 └── SECURITY.md SUPPORT.md CONTRIBUTING.md CODE_OF_CONDUCT.md LICENSE
 ```
 

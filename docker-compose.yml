@@ -99,6 +99,29 @@ services:
       server: { condition: service_healthy }
     networks: [armor_core, armor_edge]
 
+  # The virtual bench: `docker compose --profile bench up -d --build` adds simulated nodes that deliver to the server in real time, for demonstrations and for end-to-end
+  # runs of Studio and the apps with no hardware. Off by default; it only reaches the server over the core network and holds no secret but the ingest token the server has.
+  simulator:
+    <<: *hardened
+    profiles: [bench]
+    build: ../ARMOR-SIMULATOR
+    user: "10001:10001"
+    tmpfs: ["/tmp"]
+    environment:
+      ARMOR_SIM_SERVER_URL: http://server:8080
+      ARMOR_INGEST_TOKEN: ${ARMOR_INGEST_TOKEN:?run scripts/generate_secrets.sh}
+      ARMOR_INGEST_STRICT: ${ARMOR_INGEST_STRICT:-}
+      ARMOR_SIM_NODES: ${ARMOR_SIM_NODES:-3}
+      ARMOR_SIM_SCENARIO: ${ARMOR_SIM_SCENARIO:-patrol}
+      ARMOR_SIM_LIGHT: ${ARMOR_SIM_LIGHT:-cycle}
+      ARMOR_SIM_INTERVAL_MS: ${ARMOR_SIM_INTERVAL_MS:-1000}
+      ARMOR_SIM_SOLAR: ${ARMOR_SIM_SOLAR:-}
+      ARMOR_SIM_ELECTRICAL: ${ARMOR_SIM_ELECTRICAL:-}
+      ARMOR_SIM_FAULT: ${ARMOR_SIM_FAULT:-none}
+      ARMOR_SIM_ALLOW_INVALID: ${ARMOR_SIM_ALLOW_INVALID:-}
+    depends_on:
+      server: { condition: service_healthy }
+    networks: [armor_core]
   # Optional TLS in front of Studio: `docker compose --profile tls up`. Caddy issues a
   # certificate from its own local authority (see docs/BACKUP_AND_TLS.md).
   proxy:

@@ -196,28 +196,29 @@ Non si compila nulla: sono script, un file Compose e assistenti Python. `scripts
 ```text
 ARMOR-DEVOPS/
 ├── scripts/
-│   ├── deploy_cm5.sh install_cm5.sh                      distribuisce sul banco, lo installa
-│   ├── package_component.py                              il pacchetto di ogni rilascio
-│   ├── armor_admin_agent.py armor_maintenance_agent.py   i due assistenti di Studio
-│   ├── generate_secrets.sh check-required-env.sh         segreti casuali; rifiuta i deboli
-│   ├── backup_data.sh restore_data.sh                    backup cifrato e ripristino
-│   ├── firewall_core.sh mqtt_identity.sh                 firewall e identità del broker
-│   ├── armor_mqtt_tls.sh armor_tls_check.sh              MQTT su TLS e il suo controllo
-│   ├── armor_ddns.sh armor_wireguard.sh                  un nome per la casa e una VPN
-│   └── test_*.py test_*.sh validate-compose.sh           i test degli assistenti e degli script
-├── docker-compose.yml docker-compose.tls.yml             broker, server, Studio; profilo TLS
-├── mosquitto/                                            mosquitto.conf, config TLS, acl.example
-├── caddy/                                                Caddyfile: HTTPS davanti a Studio
-├── docs/                                                 DEPLOYMENT_BOUNDARY, CM5_TEST_BENCH, BENCH_TESTS, BACKUP_AND_TLS, MQTT_TLS, HTTPS_PAIRING, REMOTE_ACCESS, SIGNED_PACKAGES (quattro anche in otto lingue)
-├── tools/                                                i controlli CI e gli strumenti condivisi
-├── images/                                               banner, icona e immagini del README
-├── .github/                                              workflow CI, avviso alla dashboard, modelli per issue e pull request
-├── armor.project.json                                    manifesto: versione, ruolo, maturità
-├── CHANGELOG.md                                          cosa è cambiato in ogni versione
-├── run.sh run.bat                                        avvio, flusso condiviso
-├── build.sh build.bat                                    compila e prova, flusso condiviso
-├── build-test.sh build-test.bat                          compila, prova e impacchetta
-├── test.sh test.bat                                      solo i test, mai la versione
+│   ├── deploy_cm5.sh install_cm5.sh                         distribuisce sul banco, lo installa
+│   ├── package_component.py                                 il pacchetto di ogni rilascio
+│   ├── armor_admin_agent.py armor_maintenance_agent.py      i due assistenti di Studio
+│   ├── generate_secrets.sh check-required-env.sh            segreti casuali; rifiuta i deboli
+│   ├── backup_data.sh restore_data.sh                       backup cifrato e ripristino
+│   ├── armor_doctor.py armor_dynsec.py                      controlla l'installazione; sicurezza dinamica
+│   ├── firewall_core.sh mqtt_identity.sh armor_server.acl   firewall, identità, regole del server
+│   ├── armor_mqtt_tls.sh armor_tls_check.sh                 MQTT su TLS e il suo controllo
+│   ├── armor_ddns.sh armor_wireguard.sh                     un nome per la casa e una VPN
+│   └── test_*.py test_*.sh validate-compose.sh              i test degli assistenti e degli script
+├── docker-compose.yml docker-compose.tls.yml                broker, server, Studio; profili TLS e banco virtuale
+├── mosquitto/                                               mosquitto.conf, config TLS, acl.example
+├── caddy/                                                   Caddyfile: HTTPS davanti a Studio
+├── docs/                                                    DEPLOYMENT_BOUNDARY, CM5_TEST_BENCH, BENCH_TESTS, BACKUP_AND_TLS, MQTT_TLS, HTTPS_PAIRING, REMOTE_ACCESS, SIGNED_PACKAGES (quattro anche in otto lingue)
+├── tools/                                                   i controlli CI e gli strumenti condivisi
+├── images/                                                  banner, icona e immagini del README
+├── .github/                                                 workflow CI, avviso alla dashboard, modelli per issue e pull request
+├── armor.project.json                                       manifesto: versione, ruolo, maturità
+├── CHANGELOG.md                                             cosa è cambiato in ogni versione
+├── run.sh run.bat                                           avvio, flusso condiviso
+├── build.sh build.bat                                       compila e prova, flusso condiviso
+├── build-test.sh build-test.bat                             compila, prova e impacchetta
+├── test.sh test.bat                                         solo i test, mai la versione
 └── SECURITY.md SUPPORT.md CONTRIBUTING.md CODE_OF_CONDUCT.md LICENSE
 ```
 

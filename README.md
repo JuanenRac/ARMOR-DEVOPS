@@ -196,28 +196,29 @@ Nothing is compiled: it is scripts, a Compose file and Python helpers. `scripts/
 ```text
 ARMOR-DEVOPS/
 ├── scripts/
-│   ├── deploy_cm5.sh install_cm5.sh                      deploy to the bench, install it
-│   ├── package_component.py                              the package of each release
-│   ├── armor_admin_agent.py armor_maintenance_agent.py   the two helpers of Studio
-│   ├── generate_secrets.sh check-required-env.sh         random secrets; refuse weak ones
-│   ├── backup_data.sh restore_data.sh                    encrypted backup and restore
-│   ├── firewall_core.sh mqtt_identity.sh                 firewall and broker identities
-│   ├── armor_mqtt_tls.sh armor_tls_check.sh              MQTT over TLS and its check
-│   ├── armor_ddns.sh armor_wireguard.sh                  a name for the house and a VPN
-│   └── test_*.py test_*.sh validate-compose.sh           the tests of the helpers and scripts
-├── docker-compose.yml docker-compose.tls.yml             broker, server, Studio; TLS profile
-├── mosquitto/                                            mosquitto.conf, TLS config, acl.example
-├── caddy/                                                Caddyfile: HTTPS in front of Studio
-├── docs/                                                 DEPLOYMENT_BOUNDARY, CM5_TEST_BENCH, BENCH_TESTS, BACKUP_AND_TLS, MQTT_TLS, HTTPS_PAIRING, REMOTE_ACCESS, SIGNED_PACKAGES (the last four also in eight languages)
-├── tools/                                                the shared CI checks and project tooling
-├── images/                                               banner, icon and the pictures of the README
-├── .github/                                              CI workflow, dashboard notice, issue and pull-request templates
-├── armor.project.json                                    manifest: version, role, maturity
-├── CHANGELOG.md                                          what changed in each version
-├── run.sh run.bat                                        start, shared workflow
-├── build.sh build.bat                                    build and test, shared workflow
-├── build-test.sh build-test.bat                          build, test and package
-├── test.sh test.bat                                      only the tests, never the version
+│   ├── deploy_cm5.sh install_cm5.sh                         deploy to the bench, install it
+│   ├── package_component.py                                 the package of each release
+│   ├── armor_admin_agent.py armor_maintenance_agent.py      the two helpers of Studio
+│   ├── generate_secrets.sh check-required-env.sh            random secrets; refuse weak ones
+│   ├── backup_data.sh restore_data.sh                       encrypted backup and restore
+│   ├── armor_doctor.py armor_dynsec.py                      install check; dynamic security
+│   ├── firewall_core.sh mqtt_identity.sh armor_server.acl   firewall, broker identities, server rules
+│   ├── armor_mqtt_tls.sh armor_tls_check.sh                 MQTT over TLS and its check
+│   ├── armor_ddns.sh armor_wireguard.sh                     a name for the house and a VPN
+│   └── test_*.py test_*.sh validate-compose.sh              the tests of the helpers and scripts
+├── docker-compose.yml docker-compose.tls.yml                broker, server, Studio; TLS and virtual bench profiles
+├── mosquitto/                                               mosquitto.conf, TLS config, acl.example
+├── caddy/                                                   Caddyfile: HTTPS in front of Studio
+├── docs/                                                    DEPLOYMENT_BOUNDARY, CM5_TEST_BENCH, BENCH_TESTS, BACKUP_AND_TLS, MQTT_TLS, HTTPS_PAIRING, REMOTE_ACCESS, SIGNED_PACKAGES (the last four also in eight languages)
+├── tools/                                                   the shared CI checks and project tooling
+├── images/                                                  banner, icon and the pictures of the README
+├── .github/                                                 CI workflow, dashboard notice, issue and pull-request templates
+├── armor.project.json                                       manifest: version, role, maturity
+├── CHANGELOG.md                                             what changed in each version
+├── run.sh run.bat                                           start, shared workflow
+├── build.sh build.bat                                       build and test, shared workflow
+├── build-test.sh build-test.bat                             build, test and package
+├── test.sh test.bat                                         only the tests, never the version
 └── SECURITY.md SUPPORT.md CONTRIBUTING.md CODE_OF_CONDUCT.md LICENSE
 ```
 

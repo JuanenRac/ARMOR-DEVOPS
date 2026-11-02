@@ -188,14 +188,14 @@
     {
      "name": "docker-compose.yml  docker-compose.tls.yml",
      "desc": {
-      "en": "broker, server, Studio; TLS profile",
-      "es": "broker, servidor, Studio; perfil TLS",
-      "de": "Broker, Server, Studio; TLS-Profil",
-      "fr": "broker, serveur, Studio ; profil TLS",
-      "it": "broker, server, Studio; profilo TLS",
-      "ja": "ブローカー、サーバー、Studio、TLS プロファイル",
-      "zh": "代理、服务器、Studio；TLS 配置",
-      "pt": "broker, servidor, Studio; perfil TLS"
+      "en": "broker, server, Studio; TLS and virtual bench profiles",
+      "es": "broker, servidor, Studio; perfiles TLS y banco virtual",
+      "de": "Broker, Server, Studio; TLS- und Prüfstand-Profile",
+      "fr": "broker, serveur, Studio ; profils TLS et banc virtuel",
+      "it": "broker, server, Studio; profili TLS e banco virtuale",
+      "ja": "ブローカー、サーバー、Studio、TLS と仮想ベンチのプロファイル",
+      "zh": "代理、服务器、Studio;TLS 与虚拟测试台配置",
+      "pt": "broker, servidor, Studio; perfis TLS e banco virtual"
      },
      "tree_name": "docker-compose.yml docker-compose.tls.yml"
     },

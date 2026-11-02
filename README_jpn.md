@@ -196,28 +196,29 @@ Python のテストは `python -m unittest discover -s scripts -p "test_*.py"` �
 ```text
 ARMOR-DEVOPS/
 ├── scripts/
-│   ├── deploy_cm5.sh install_cm5.sh                      ベンチへデプロイしてインストール
-│   ├── package_component.py                              各リリースのパッケージ
-│   ├── armor_admin_agent.py armor_maintenance_agent.py   Studio の 2 つのヘルパー
-│   ├── generate_secrets.sh check-required-env.sh         ランダムな秘密、弱いものは拒否
-│   ├── backup_data.sh restore_data.sh                    暗号化バックアップと復元
-│   ├── firewall_core.sh mqtt_identity.sh                 ファイアウォールとブローカー ID
-│   ├── armor_mqtt_tls.sh armor_tls_check.sh              TLS 上の MQTT とその確認
-│   ├── armor_ddns.sh armor_wireguard.sh                  家の名前と VPN
-│   └── test_*.py test_*.sh validate-compose.sh           ヘルパーとスクリプトのテスト
-├── docker-compose.yml docker-compose.tls.yml             ブローカー、サーバー、Studio、TLS プロファイル
-├── mosquitto/                                            mosquitto.conf、TLS 設定、acl.example
-├── caddy/                                                Caddyfile：Studio の前段の HTTPS
-├── docs/                                                 DEPLOYMENT_BOUNDARY、CM5_TEST_BENCH、BENCH_TESTS、BACKUP_AND_TLS、MQTT_TLS、HTTPS_PAIRING、REMOTE_ACCESS、SIGNED_PACKAGES（後ろ 4 つは 8 言語版あり）
-├── tools/                                                共通の CI 検査とツール
-├── images/                                               バナー、アイコン、README の画像
-├── .github/                                              CI ワークフロー、ダッシュボード通知、Issue と Pull Request のテンプレート
-├── armor.project.json                                    マニフェスト：版・役割・成熟度
-├── CHANGELOG.md                                          各バージョンの変更点
-├── run.sh run.bat                                        起動（共通フロー）
-├── build.sh build.bat                                    ビルドとテスト（共通フロー）
-├── build-test.sh build-test.bat                          ビルド、テスト、パッケージ化
-├── test.sh test.bat                                      テストのみ（版は変えません）
+│   ├── deploy_cm5.sh install_cm5.sh                         ベンチへデプロイしてインストール
+│   ├── package_component.py                                 各リリースのパッケージ
+│   ├── armor_admin_agent.py armor_maintenance_agent.py      Studio の 2 つのヘルパー
+│   ├── generate_secrets.sh check-required-env.sh            ランダムな秘密、弱いものは拒否
+│   ├── backup_data.sh restore_data.sh                       暗号化バックアップと復元
+│   ├── armor_doctor.py armor_dynsec.py                      インストール点検、ブローカーを動的セキュリティへ
+│   ├── firewall_core.sh mqtt_identity.sh armor_server.acl   ファイアウォール、ID、サーバー規則
+│   ├── armor_mqtt_tls.sh armor_tls_check.sh                 TLS 上の MQTT とその確認
+│   ├── armor_ddns.sh armor_wireguard.sh                     家の名前と VPN
+│   └── test_*.py test_*.sh validate-compose.sh              ヘルパーとスクリプトのテスト
+├── docker-compose.yml docker-compose.tls.yml                ブローカー、サーバー、Studio、TLS と仮想ベンチのプロファイル
+├── mosquitto/                                               mosquitto.conf、TLS 設定、acl.example
+├── caddy/                                                   Caddyfile：Studio の前段の HTTPS
+├── docs/                                                    DEPLOYMENT_BOUNDARY、CM5_TEST_BENCH、BENCH_TESTS、BACKUP_AND_TLS、MQTT_TLS、HTTPS_PAIRING、REMOTE_ACCESS、SIGNED_PACKAGES（後ろ 4 つは 8 言語版あり）
+├── tools/                                                   共通の CI 検査とツール
+├── images/                                                  バナー、アイコン、README の画像
+├── .github/                                                 CI ワークフロー、ダッシュボード通知、Issue と Pull Request のテンプレート
+├── armor.project.json                                       マニフェスト：版・役割・成熟度
+├── CHANGELOG.md                                             各バージョンの変更点
+├── run.sh run.bat                                           起動（共通フロー）
+├── build.sh build.bat                                       ビルドとテスト（共通フロー）
+├── build-test.sh build-test.bat                             ビルド、テスト、パッケージ化
+├── test.sh test.bat                                         テストのみ（版は変えません）
 └── SECURITY.md SUPPORT.md CONTRIBUTING.md CODE_OF_CONDUCT.md LICENSE
 ```
 
