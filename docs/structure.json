@@ -88,6 +88,20 @@
      "tree_name": "backup_data.sh restore_data.sh"
     },
     {
+     "name": "armor_doctor.py  armor_dynsec.py",
+     "desc": {
+      "en": "check an installation; move the broker identities to dynamic security",
+      "es": "comprueba una instalación; pasa las identidades del broker a seguridad dinámica",
+      "de": "prüft eine Installation; überführt die Broker-Identitäten in die dynamische Sicherheit",
+      "fr": "vérifie une installation ; passe les identités du broker à la sécurité dynamique",
+      "it": "controlla un'installazione; porta le identità del broker alla sicurezza dinamica",
+      "ja": "インストールの点検、ブローカーのIDを動的セキュリティへ移行",
+      "zh": "检查安装；将代理身份迁移到动态安全",
+      "pt": "verifica uma instalação; passa as identidades do broker para a segurança dinâmica"
+     },
+     "tree_name": "armor_doctor.py armor_dynsec.py"
+    },
+    {
      "name": "firewall_core.sh  mqtt_identity.sh",
      "desc": {
       "en": "firewall and broker identities",

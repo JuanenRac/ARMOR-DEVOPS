@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+- **The identities of the broker can move to the dynamic-security plugin of Mosquitto 2:** `scripts/armor_dynsec.py convert` writes the plugin's `dynamic-security.json` from the broker's password and ACL files (the `$7$` password hashes are carried over, one role per identity, default access denied, an administrator for `mosquitto_ctrl` whose generated password goes only to a private file and is never printed), `check` proves the converted file allows exactly what the ACL allows and `conf` prints the two lines for `mosquitto.conf`. It does not touch a running broker and the installer still uses the files. Tests in `scripts/test_armor_dynsec.py`.
+
 - **An "armor doctor" that checks an installation without printing a secret:** `scripts/armor_doctor.py [--prefix DIR]` reads `etc/armor*.env` and says, read only, whether every file can be read only by its owners, every secret is long enough (`--min-token-length`, 24 by default), no secret is repeated between files, the token of the network node is the one derived from the ingest token and its node id, the port of the broker in `armor.mqtt.env` is one that `mosquitto.conf` listens on, and the disk has room (`--min-free-mb`). It prints `ARMOR_DOCTOR=PASS` or `FAIL`, takes `--json` and `--strict` (a warning also fails), and never prints a value or its length. Tests in `scripts/test_armor_doctor.py`.
 
 ## [0.6.9] - The lights of Project status following the evidence of the manifest and the download progress and dependency check of an update in the documentation
