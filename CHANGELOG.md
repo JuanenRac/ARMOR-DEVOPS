@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+- **An "armor doctor" that checks an installation without printing a secret:** `scripts/armor_doctor.py [--prefix DIR]` reads `etc/armor*.env` and says, read only, whether every file can be read only by its owners, every secret is long enough (`--min-token-length`, 24 by default), no secret is repeated between files, the token of the network node is the one derived from the ingest token and its node id, the port of the broker in `armor.mqtt.env` is one that `mosquitto.conf` listens on, and the disk has room (`--min-free-mb`). It prints `ARMOR_DOCTOR=PASS` or `FAIL`, takes `--json` and `--strict` (a warning also fails), and never prints a value or its length. Tests in `scripts/test_armor_doctor.py`.
+
 ## [0.6.9] - The lights of Project status following the evidence of the manifest and the download progress and dependency check of an update in the documentation
 
 - **The lights of Project status follow the evidence of the manifest:** the manifest says how far the repository has been shown to work (`evidence`: `host-test`, `simulator`, `bench` or `field`) and the validator fails when a light is above what that evidence and the maturity allow (`tools/status_lights.py`), so a green that never ran on real hardware cannot come back.
