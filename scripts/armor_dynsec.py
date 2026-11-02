@@ -29,6 +29,7 @@ import re
 import secrets
 import sys
 from pathlib import Path
+from typing import Any
 
 ITERATIONS = 101  # what mosquitto_passwd writes and the plugin reads back
 ADMIN_USER = "armor-dynsec-admin"
@@ -95,8 +96,8 @@ def parse_acl(text: str) -> dict[str, list[tuple[str, str]]]:
     return blocks
 
 
-def role_for(name: str, rules: list[tuple[str, str]]) -> dict[str, object]:
-    acls: list[dict[str, object]] = []
+def role_for(name: str, rules: list[tuple[str, str]]) -> dict[str, Any]:
+    acls: list[dict[str, Any]] = []
     for side, topic in rules:
         if side == "write":
             acls.append({"acltype": "publishClientSend", "topic": topic, "allow": True})
@@ -115,7 +116,7 @@ def b64(data: bytes) -> str:
     return base64.b64encode(data).decode("ascii")
 
 
-def convert(passwd_text: str, acl_text: str, admin_password: str) -> dict[str, object]:
+def convert(passwd_text: str, acl_text: str, admin_password: str) -> dict[str, Any]:
     users = parse_passwd(passwd_text)
     blocks = parse_acl(acl_text)
     if ADMIN_USER in users or ADMIN_USER in blocks:
@@ -124,8 +125,8 @@ def convert(passwd_text: str, acl_text: str, admin_password: str) -> dict[str, o
     without_password = sorted(set(blocks) - set(users))
     if without_password:
         raise ConvertError("identities in the ACL without a password: " + ", ".join(without_password))
-    clients: list[dict[str, object]] = []
-    roles: list[dict[str, object]] = []
+    clients: list[dict[str, Any]] = []
+    roles: list[dict[str, Any]] = []
     for name in sorted(users):
         salt, digest, iterations = users[name]
         clients.append({"username": name, "textname": "", "roles": [{"rolename": name}] if name in blocks else [],
@@ -167,12 +168,12 @@ def acl_allows(blocks: dict[str, list[tuple[str, str]]], user: str, op: str, top
     return any(side == op and topic_matches(rule, topic) for side, rule in blocks.get(user, []))
 
 
-def dynsec_allows(doc: dict[str, object], user: str, op: str, topic: str) -> bool:
-    roles = {r["rolename"]: r for r in doc["roles"]}  # type: ignore[index]
-    client = next((c for c in doc["clients"] if c["username"] == user), None)  # type: ignore[union-attr]
+def dynsec_allows(doc: dict[str, Any], user: str, op: str, topic: str) -> bool:
+    roles = {r["rolename"]: r for r in doc["roles"]}
+    client = next((c for c in doc["clients"] if c["username"] == user), None)
     if client is None:
         return False
-    acls = [a for c in client["roles"] for a in roles[c["rolename"]]["acls"]]  # type: ignore[index]
+    acls = [a for c in client["roles"] for a in roles[c["rolename"]]["acls"]]
     if op == "write":
         return any(a["acltype"] == "publishClientSend" and a["allow"] and topic_matches(a["topic"], topic) for a in acls)
     # to read, a client must be allowed to subscribe to the filter and to receive the messages
@@ -191,10 +192,10 @@ def probes(blocks: dict[str, list[tuple[str, str]]]) -> list[str]:
     return sorted(found)
 
 
-def differences(blocks: dict[str, list[tuple[str, str]]], doc: dict[str, object]) -> list[str]:
+def differences(blocks: dict[str, list[tuple[str, str]]], doc: dict[str, Any]) -> list[str]:
     out: list[str] = []
     topics = probes(blocks)
-    users = sorted(set(blocks) | {c["username"] for c in doc["clients"]})  # type: ignore[union-attr]
+    users = sorted(set(blocks) | {c["username"] for c in doc["clients"]})
     for user in users:
         if user == ADMIN_USER:
             continue
@@ -245,7 +246,7 @@ def main(argv: list[str] | None = None) -> int:
             if wrong:
                 print("DYNSEC=FAIL the converted file differs from the ACL: " + "; ".join(wrong[:5]))
                 return 1
-            print(f"DYNSEC=PASS {len(doc['clients'])} identities, {len(doc['roles'])} roles written to {args.out}")  # type: ignore[arg-type]
+            print(f"DYNSEC=PASS {len(doc['clients'])} identities, {len(doc['roles'])} roles written to {args.out}")
             return 0
         doc = json.loads(read_text(args.dynsec))
         wrong = differences(parse_acl(acl_text), doc)
