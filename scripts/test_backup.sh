@@ -39,4 +39,14 @@ ls "$WORK"/live.before-restore-*/old.txt >/dev/null
 printf 'x' >>"$ARCHIVE"
 if "$HERE/restore_data.sh" --file "$ARCHIVE" --data-dir "$WORK/again" --passphrase-file "$WORK/pass" 2>/dev/null; then echo "a damaged archive was accepted" >&2; exit 1; fi
 
+# Rotation and an extra copy: only the newest N stay; the copy is checked.
+for n in 1 2 3; do
+  sleep 1
+  "$HERE/backup_data.sh" --data-dir "$WORK/data" --out-dir "$WORK/rot" --passphrase-file "$WORK/pass" --keep 2 --copy-to "$WORK/mirror" >/dev/null
+done
+[[ "$(ls "$WORK"/rot/*.enc | wc -l)" -eq 2 ]]
+[[ "$(ls "$WORK"/rot/*.sha256 | wc -l)" -eq 2 ]]
+[[ "$(ls "$WORK"/mirror/*.enc | wc -l)" -eq 3 ]]
+if "$HERE/backup_data.sh" --data-dir "$WORK/data" --out-dir "$WORK/rot" --passphrase-file "$WORK/pass" --keep x 2>/dev/null; then echo "a bad --keep was accepted" >&2; exit 1; fi
+
 echo "ARMOR_BACKUP_TEST=PASS"

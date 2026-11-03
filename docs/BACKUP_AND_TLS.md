@@ -26,8 +26,11 @@ scripts/backup_data.sh --data-dir /opt/armor/data --out-dir /var/backups/armor -
 ```
 
 The archive is AES-256 encrypted (PBKDF2), verified by decrypting it again, and accompanied by a
-`.sha256`. Add `--with-media` to include recorded evidence. The script never deletes older backups:
-rotate them yourself, for example with a cron entry that runs it nightly.
+`.sha256`. Add `--with-media` to include recorded evidence. By default the script
+never deletes older backups; `--keep N` keeps only the N newest archives of the output folder
+(and their `.sha256`) once the new one is verified, and `--copy-to DIR` also copies the archive to
+a mounted share or an external disk and checks the copy against its checksum. Run it nightly
+from a cron entry or a systemd timer.
 
 ## Restore
 

@@ -14,26 +14,34 @@ set -euo pipefail
 usage() {
   cat <<'USAGE'
 Usage: backup_data.sh --data-dir DIR --out-dir DIR --passphrase-file FILE [--with-media]
+                      [--keep N] [--copy-to DIR]
 
   --data-dir         the server data directory (ARMOR_DATA_DIR)
   --out-dir          where the .tar.gz.enc archive and its .sha256 are written
   --passphrase-file  a file whose first line is the passphrase (mode 600)
   --with-media       also include recorded evidence (can be very large)
+  --keep N           after a verified backup, keep only the N newest archives of the
+                     output folder (and their .sha256); 0 or unset keeps everything
+  --copy-to DIR      also copy the archive and its .sha256 to DIR (a mounted share or
+                     an external disk), and check the copy with sha256sum
 USAGE
 }
 
-DATA_DIR="" OUT_DIR="" PASS_FILE="" WITH_MEDIA=0
+DATA_DIR="" OUT_DIR="" PASS_FILE="" WITH_MEDIA=0 KEEP=0 COPY_TO=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --data-dir) DATA_DIR="${2:-}"; shift 2 ;;
     --out-dir) OUT_DIR="${2:-}"; shift 2 ;;
     --passphrase-file) PASS_FILE="${2:-}"; shift 2 ;;
     --with-media) WITH_MEDIA=1; shift ;;
+    --keep) KEEP="${2:-}"; shift 2 ;;
+    --copy-to) COPY_TO="${2:-}"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) echo "unknown option: $1" >&2; usage >&2; exit 2 ;;
   esac
 done
 [[ -d "$DATA_DIR" && -n "$OUT_DIR" && -f "$PASS_FILE" ]] || { usage >&2; exit 2; }
+[[ "$KEEP" =~ ^[0-9]+$ ]] || { echo "--keep needs a whole number" >&2; exit 2; }
 command -v openssl >/dev/null || { echo "openssl is required" >&2; exit 1; }
 # A native Windows openssl (Git Bash) does not translate the path inside "file:"; give it a Windows path.
 PASS_PATH="$PASS_FILE"; if command -v cygpath >/dev/null 2>&1; then PASS_PATH="$(cygpath -m "$PASS_FILE")"; fi
@@ -57,4 +65,16 @@ tar -C "$PARENT" -czf - "${EXCLUDES[@]}" "$BASE" | openssl enc -aes-256-cbc -pbk
 COUNT="$(openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -pass "file:$PASS_PATH" -in "$TARGET" | tar -tzf - | wc -l)"
 if [[ "$COUNT" -lt 1 ]]; then rm -f -- "$TARGET"; echo "verification failed: the archive is empty" >&2; exit 1; fi
 ( cd "$OUT_DIR" && sha256sum "$(basename "$TARGET")" >"$(basename "$TARGET").sha256" )
+
+if [[ -n "$COPY_TO" ]]; then
+  mkdir -p "$COPY_TO"
+  cp -- "$TARGET" "$TARGET.sha256" "$COPY_TO/"
+  ( cd "$COPY_TO" && sha256sum -c "$(basename "$TARGET").sha256" >/dev/null ) || { echo "the copy in $COPY_TO does not match its checksum" >&2; exit 1; }
+fi
+
+# Rotation: only after this backup is verified (and copied), drop the oldest ones.
+if [[ "$KEEP" -gt 0 ]]; then
+  mapfile -t OLD < <(ls -1 "$OUT_DIR"/armor-data-*.tar.gz.enc 2>/dev/null | sort -r | tail -n +"$((KEEP + 1))")
+  for f in "${OLD[@]}"; do [[ -n "$f" ]] && rm -f -- "$f" "$f.sha256"; done
+fi
 echo "ARMOR_BACKUP=PASS file=$TARGET entries=$COUNT media=$WITH_MEDIA"
