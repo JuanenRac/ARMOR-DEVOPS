@@ -209,6 +209,7 @@ for pair in "${REACH_UNIQUE[@]}"; do say "  also reachable : ${pair%%=*} (server
 [[ "$WITH_VOICE" -ne 1 ]] || say "  armor-voice    : 127.0.0.1:$VOICE_PORT (written and spoken commands: a closed list of fifteen, arm and disarm confirmed in two turns; only this machine can reach it)"
 [[ "$WITH_BACKUP" -ne 1 ]] || say "  armor-backup   : daily, encrypted, kept under $PREFIX/backups"
 [[ "$WITH_MAINT" -ne 1 ]] || say "  armor-maintenance: root helper on /run/armor-maint.sock (group $SERVICE_USER): updates from GitHub, the system's updates and, only if turned on in $PREFIX/etc/armor.maint.env, a root console"
+[[ "$WITH_MAINT" -ne 1 ]] || say "  unattended-upgrades: automatic SECURITY updates of the system (security source only, on by default, switch and reboot window in Studio; it never reboots while the system is armed)"
 [[ "$WITH_ADMIN" -ne 1 ]] || say "  armor-admin    : root agent on /run/armor-admin.sock (group $SERVICE_USER), allowed only the A.R.M.O.R. services, their settings files and the broker accounts"
 say "  other software : untouched"
 if [[ "$APPLY" -ne 1 ]]; then say "dry run only - add --apply to install"; exit 0; fi
@@ -313,6 +314,11 @@ MAINT_ENV_LINE=""
 if [[ "$WITH_MAINT" -eq 1 ]]; then
   command -v python3 >/dev/null || fail "--with-maintenance needs python3"
   say "installing the maintenance helper"
+  # The automatic security updates need the package; the helper writes its configuration (security source only) from the settings of Studio. A machine without apt, or
+  # without a network, goes on without it and Studio says that the package is missing.
+  if command -v apt-get >/dev/null && ! command -v unattended-upgrade >/dev/null; then
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends unattended-upgrades >/dev/null 2>&1 || say "  WARNING: unattended-upgrades could not be installed; the automatic security updates stay off until it is"
+  fi
   install -d -m 0755 -o root -g root "$PREFIX/bin"
   install -m 0755 -o root -g root "$RELEASE_DIR/scripts/armor_maintenance_agent.py" "$PREFIX/bin/armor_maintenance_agent.py"
   # The way in from outside the house (Studio asks the helper to set up the VPN and the dynamic DNS name with these two; they do nothing until it does).
@@ -669,6 +675,7 @@ Type=simple
 EnvironmentFile=$PREFIX/etc/armor.maint.env
 Environment=ARMOR_PREFIX=$PREFIX
 Environment=ARMOR_HEALTH_URL=$SCHEME://$LOCAL_HOST:$SERVER_PORT/healthz
+Environment=ARMOR_MAINT_ARMED_URL=$SCHEME://$LOCAL_HOST:$SERVER_PORT/api/v1/maintenance/armed
 ExecStart=$(command -v python3) $PREFIX/bin/armor_maintenance_agent.py --socket /run/armor-maint.sock --group $SERVICE_USER
 Restart=on-failure
 RestartSec=3

@@ -208,6 +208,209 @@ class MaintenanceTest(unittest.TestCase):
             time.sleep(0.1)
         self.fail("the job did not finish")
 
+    # ---- automatic security updates ----
+    originals: dict[str, Any]
+
+    def auto_setup(self) -> Any:
+        """The agent pointed at throwaway folders for the apt configuration, the log of unattended-upgrades and the file that says a reboot is needed."""
+        import datetime
+        root = Path(self.tmp.name)
+        agent = self.agent
+        names = ("reboot_machine", "check_services_after_run", "armed_state", "installed_services", "unit_active", "AUTO_NOW", "APT_CONF_DIR", "UU_LOG", "REBOOT_REQUIRED", "UU_BIN", "ARMED_URL")
+        originals = {name: getattr(agent, name) for name in names}
+        self.originals = originals
+        self.addCleanup(lambda: [setattr(agent, name, value) for name, value in originals.items()])
+        agent.APT_CONF_DIR = root / "apt.conf.d"
+        agent.APT_CONF_DIR.mkdir(exist_ok=True)
+        (agent.APT_CONF_DIR / agent.AUTO_CONF_NAME).unlink(missing_ok=True)
+        agent.UU_LOG = root / "unattended-upgrades.log"
+        agent.UU_LOG.unlink(missing_ok=True)
+        agent.REBOOT_REQUIRED = root / "reboot-required"
+        agent.REBOOT_REQUIRED.unlink(missing_ok=True)
+        agent.UU_BIN = str(root / "unattended-upgrade")
+        agent.auto_state_path().unlink(missing_ok=True)
+        agent.AUTO_NOW = lambda: datetime.datetime(2026, 1, 1, 3, 30)
+        rebooted: list[int] = []
+        agent.reboot_machine = lambda: rebooted.append(1) or {"ok": True}
+        agent.check_services_after_run = lambda: {"checked": 1, "ok": True, "restarted": [], "down": []}
+        return rebooted
+
+    def test_the_automatic_updates_are_on_by_default_security_only_and_never_reboot_by_themselves(self) -> None:
+        self.auto_setup()
+        settings = self.agent.auto_settings()
+        self.assertEqual(settings, {"enabled": True, "reboot": "disarmed", "window_start": "03:00", "window_end": "05:00"})
+        text = self.agent.render_auto_conf(settings)
+        self.assertIn('Automatic-Reboot "false"', text)
+        self.assertIn('APT::Periodic::Unattended-Upgrade "1";', text)
+        self.assertIn("#clear Unattended-Upgrade::Allowed-Origins;", text)
+        self.assertIn("#clear Unattended-Upgrade::Origins-Pattern;", text)
+        origins = re.findall(r'"origin=[^"]+"', text)
+        self.assertTrue(origins and all("security" in item.lower() or "Debian-Security" in item for item in origins), origins)
+        self.assertNotIn("-updates", text)
+        self.assertNotIn("proposed", text)
+        self.assertIn('APT::Periodic::Unattended-Upgrade "0";', self.agent.render_auto_conf({**settings, "enabled": False}))
+
+    def test_the_settings_are_validated_stored_and_written_to_apt(self) -> None:
+        self.auto_setup()
+        view = self.agent.set_auto_settings({"enabled": False, "reboot": "never", "window_start": "22:30", "window_end": "06:00"})
+        self.assertEqual(view["settings"], {"enabled": False, "reboot": "never", "window_start": "22:30", "window_end": "06:00"})
+        conf = (self.agent.APT_CONF_DIR / self.agent.AUTO_CONF_NAME).read_text(encoding="utf-8")
+        self.assertIn('APT::Periodic::Unattended-Upgrade "0";', conf)
+        self.assertEqual(self.agent.auto_settings()["window_start"], "22:30")
+        for bad in ({"enabled": "yes"}, {"enabled": 1}, {"reboot": "always"}, {"window_start": "25:00"}, {"window_end": "9:00"}, {"window_start": 3}, {"x": 1}):
+            with self.assertRaises(self.agent.Refused, msg=str(bad)) as caught:
+                self.agent.set_auto_settings(bad)
+            self.assertEqual(caught.exception.status, 422)
+        self.assertEqual(self.agent.auto_settings()["window_start"], "22:30")            # a refused change changes nothing
+        # a stored file that was damaged falls back to the defaults, key by key
+        self.agent.auto_state_path().write_text(json.dumps({"settings": {"enabled": "x", "reboot": "disarmed", "window_start": "bad"}}), encoding="utf-8")
+        self.assertEqual(self.agent.auto_settings(), {"enabled": True, "reboot": "disarmed", "window_start": "03:00", "window_end": "05:00"})
+        self.agent.auto_state_path().write_text("not json", encoding="utf-8")
+        self.assertTrue(self.agent.auto_settings()["enabled"])
+
+    def test_the_provision_writes_the_apt_file_on_a_machine_that_has_the_folder_and_only_then(self) -> None:
+        self.auto_setup()
+        self.agent.auto_provision()
+        self.assertTrue((self.agent.APT_CONF_DIR / self.agent.AUTO_CONF_NAME).is_file())
+        self.agent.APT_CONF_DIR = Path(self.tmp.name) / "no-such-folder"
+        self.agent.auto_provision()                                              # nothing to write to, nothing breaks
+        self.assertFalse(self.agent.APT_CONF_DIR.exists())
+        with self.assertRaises(self.agent.Refused) as caught:
+            self.agent.set_auto_settings({"enabled": True})
+        self.assertEqual(caught.exception.code, "apt_conf_unwritable")
+
+    def test_the_log_of_what_was_applied_is_read_and_a_package_name_is_never_trusted_blindly(self) -> None:
+        text = ("2026-01-01 03:10:01,100 INFO Starting unattended upgrades script\n"
+                "2026-01-01 03:10:02,200 INFO Packages that will be upgraded: libssl3 openssl evil;rm -rf\n"
+                "2026-01-01 03:11:00,300 INFO All upgrades installed\n"
+                "2026-01-02 03:10:02,200 INFO Packages that will be upgraded: curl\n"
+                "2026-01-02 03:11:00,300 ERROR Installing the upgrades failed!\n")
+        runs = self.agent.parse_uu_log(text)
+        self.assertEqual([item["at"] for item in runs], ["2026-01-02 03:10:02", "2026-01-01 03:10:02"])
+        self.assertEqual(runs[0]["state"], "failed")
+        self.assertEqual(runs[1]["state"], "installed")
+        self.assertEqual(runs[1]["packages"], ["libssl3", "openssl"])
+        self.assertEqual(self.agent.parse_uu_log(""), [])
+
+    def test_the_window_of_the_night_may_cross_midnight(self) -> None:
+        import datetime
+        at = lambda hour, minute: datetime.datetime(2026, 1, 1, hour, minute)
+        self.assertTrue(self.agent.in_window(at(3, 0), "03:00", "05:00"))
+        self.assertFalse(self.agent.in_window(at(5, 0), "03:00", "05:00"))
+        self.assertFalse(self.agent.in_window(at(2, 59), "03:00", "05:00"))
+        self.assertTrue(self.agent.in_window(at(23, 30), "22:00", "06:00"))
+        self.assertTrue(self.agent.in_window(at(5, 59), "22:00", "06:00"))
+        self.assertFalse(self.agent.in_window(at(12, 0), "22:00", "06:00"))
+        self.assertTrue(self.agent.in_window(at(12, 0), "00:00", "00:00"))
+
+    def tick(self, armed: bool | None) -> str:
+        self.agent.armed_state = lambda: armed
+        self.agent.auto_tick()
+        return str(self.agent.auto_view()["reboot_note"])
+
+    def test_it_reboots_only_when_disarmed_inside_the_window_and_the_policy_allows_it(self) -> None:
+        import datetime
+        rebooted = self.auto_setup()
+        self.agent.REBOOT_REQUIRED.write_text("*** System restart required ***\n", encoding="utf-8")
+        self.assertEqual(self.tick(True), "armed")
+        self.assertEqual(self.tick(None), "armed_unknown")                            # not knowing is not permission
+        self.assertEqual(rebooted, [])
+        self.agent.AUTO_NOW = lambda: datetime.datetime(2026, 1, 1, 12, 0)
+        self.assertEqual(self.tick(False), "outside_window")
+        self.assertEqual(rebooted, [])
+        self.agent.AUTO_NOW = lambda: datetime.datetime(2026, 1, 1, 3, 30)
+        self.agent.set_auto_settings({"reboot": "never"})
+        self.assertEqual(self.tick(False), "policy_never")
+        self.assertEqual(rebooted, [])
+        self.assertTrue(self.agent.auto_view()["reboot_required"])                      # Studio says a reboot is waiting
+        self.agent.set_auto_settings({"reboot": "disarmed"})
+        busy = self.agent.Job("system", [("upgrade", "Upgrade")])
+        self.agent.JOBS[busy.id] = busy
+        try:
+            self.assertEqual(self.tick(False), "busy")
+        finally:
+            del self.agent.JOBS[busy.id]
+        self.assertEqual(rebooted, [])
+        self.assertEqual(self.tick(False), "rebooting")
+        self.assertEqual(rebooted, [1])
+        self.assertGreater(self.agent.auto_view()["last_reboot"], 0)
+
+    def test_nothing_is_done_while_the_switch_is_off_or_no_reboot_is_needed(self) -> None:
+        rebooted = self.auto_setup()
+        self.assertEqual(self.tick(False), "")                                          # no reboot needed
+        self.agent.REBOOT_REQUIRED.write_text("x", encoding="utf-8")
+        self.agent.set_auto_settings({"enabled": False})
+        self.assertEqual(self.tick(False), "")
+        self.assertEqual(rebooted, [])
+
+    def test_a_new_run_of_the_updates_gets_its_services_checked_once(self) -> None:
+        self.auto_setup()
+        checks: list[int] = []
+        self.agent.check_services_after_run = lambda: checks.append(1) or {"checked": 5, "ok": False, "restarted": ["armor-server"], "down": ["armor-server"]}
+        self.agent.UU_LOG.write_text("2026-01-01 03:10:02,200 INFO Packages that will be upgraded: curl\n2026-01-01 03:11:00,300 INFO All upgrades installed\n", encoding="utf-8")
+        self.tick(False)
+        self.tick(False)
+        self.assertEqual(checks, [1])                                                   # the same run is not checked twice
+        health = self.agent.auto_view()["health"]
+        self.assertEqual((health["ok"], health["down"]), (False, ["armor-server"]))
+        self.agent.UU_LOG.write_text(self.agent.UU_LOG.read_text(encoding="utf-8") + "2026-01-02 03:10:02,200 INFO Packages that will be upgraded: wget\n", encoding="utf-8")
+        self.tick(False)
+        self.assertEqual(checks, [1, 1])
+
+    def test_a_service_that_is_down_after_the_updates_is_restarted_once_and_reported(self) -> None:
+        self.auto_setup()
+        self.agent.check_services_after_run = self.originals["check_services_after_run"]
+        answers = {"armor-server": [False, True], "armor-studio": [True], "armor-network": [False, False]}
+        self.agent.installed_services = lambda: list(answers)
+        self.agent.unit_active = lambda unit: answers[unit].pop(0) if len(answers[unit]) > 1 else answers[unit][0]
+        result = self.agent.check_services_after_run()
+        self.assertEqual(result["restarted"], ["armor-server", "armor-network"])
+        self.assertEqual(result["down"], ["armor-network"])
+        self.assertFalse(result["ok"])
+        self.assertIn("restart armor-server", self.calls.read_text(encoding="utf-8"))
+
+    def test_the_server_is_asked_whether_the_system_is_armed_and_an_unreachable_one_is_unknown(self) -> None:
+        self.auto_setup()
+        self.agent.armed_state = self.originals["armed_state"]
+        answers = [b'{"armed": true}', b'{"armed": false}', b'{"armed": "no"}', b"nonsense"]
+
+        class Armed(http.server.BaseHTTPRequestHandler):
+            seen: list[str] = []
+
+            def log_message(self, format: str, *args: object) -> None:
+                return
+
+            def do_GET(self) -> None:
+                Armed.seen.append(self.headers.get("X-Armor-Maint-Token", ""))
+                body = answers.pop(0)
+                self.send_response(200); self.send_header("Content-Length", str(len(body))); self.end_headers(); self.wfile.write(body)
+
+        server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Armed)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        old, token = self.agent.ARMED_URL, os.environ.get("ARMOR_MAINT_TOKEN")
+        os.environ["ARMOR_MAINT_TOKEN"] = TOKEN
+        try:
+            self.agent.ARMED_URL = f"http://127.0.0.1:{server.server_address[1]}/armed"
+            self.assertEqual([self.agent.armed_state() for _ in range(4)], [True, False, None, None])
+            self.assertEqual(set(Armed.seen), {TOKEN})
+        finally:
+            server.shutdown()
+            self.agent.ARMED_URL = "http://127.0.0.1:9/armed"
+            if token is None:
+                del os.environ["ARMOR_MAINT_TOKEN"]
+            else:
+                os.environ["ARMOR_MAINT_TOKEN"] = token
+        self.assertIsNone(self.agent.armed_state())
+        self.agent.ARMED_URL = old
+
+    def test_the_overview_carries_the_state_of_the_automatic_updates(self) -> None:
+        self.auto_setup()
+        view = self.agent.overview(False)["auto_updates"]
+        self.assertEqual(view["settings"]["enabled"], True)
+        self.assertEqual((view["package"], view["reboot_required"], view["applied"]), (False, False, []))
+        Path(self.agent.UU_BIN).write_text("#!/bin/sh\n", encoding="utf-8")
+        self.assertTrue(self.agent.auto_view()["package"])
+
     # ---- npm ----
     def test_npm_gets_its_own_home_because_the_unit_hides_the_home_of_root(self) -> None:
         source = Path(self.agent.__file__).read_text(encoding="utf-8")

@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import datetime
 import hashlib
 import hmac
 import http.server
@@ -1179,6 +1180,254 @@ def reboot_machine() -> dict[str, object]:
     return {"ok": True, "in_s": 5}
 
 
+# ---- automatic security updates of the system ---------------------------------------------------------------------------------------------------
+# `unattended-upgrades` limited to the security source of the distribution (nothing else: no "updates", no point releases, no Raspberry Pi archive), switched on or off and
+# tuned from Studio (GET and POST /v1/system/auto-updates). The helper writes /etc/apt/apt.conf.d/52armor-security-updates from the settings and never lets the package reboot the
+# machine by itself (`Automatic-Reboot "false"`): when a reboot is needed the HELPER decides, and by default it reboots only inside a window of the night AND only when the server
+# says that nothing is armed (an unknown answer counts as armed). It keeps a record of what was applied (read from the log of unattended-upgrades) and, after each run, checks that
+# the services of A.R.M.O.R. are still active (it restarts one that is not, once, and says so). A reboot of an alarm system that nobody asked for is a risk: docs/DEPLOYMENT_BOUNDARY.md.
+AUTO_CONF_NAME = "52armor-security-updates"
+APT_CONF_DIR = Path(os.environ.get("ARMOR_APT_CONF_DIR", "/etc/apt/apt.conf.d"))
+UU_BIN = os.environ.get("ARMOR_UU_BIN", "/usr/bin/unattended-upgrade")
+UU_LOG = Path(os.environ.get("ARMOR_UU_LOG", "/var/log/unattended-upgrades/unattended-upgrades.log"))
+REBOOT_REQUIRED = Path(os.environ.get("ARMOR_REBOOT_REQUIRED", "/var/run/reboot-required"))
+ARMED_URL = os.environ.get("ARMOR_MAINT_ARMED_URL", "http://127.0.0.1:18080/api/v1/maintenance/armed")
+AUTO_TICK_SECONDS = 300
+AUTO_REBOOT_POLICIES = ("never", "disarmed")
+AUTO_DEFAULTS: dict[str, object] = {"enabled": True, "reboot": "disarmed", "window_start": "03:00", "window_end": "05:00"}
+AUTO_NOW = datetime.datetime.now
+TIME_OF_DAY = re.compile(r"([01][0-9]|2[0-3]):[0-5][0-9]")
+
+
+def auto_state_path() -> Path:
+    return DATA_DIR / "auto_security_updates.json"
+
+
+def read_auto_file() -> dict[str, object]:
+    try:
+        data = json.loads(auto_state_path().read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def write_auto_file(data: dict[str, object]) -> None:
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    temporary = auto_state_path().with_suffix(".tmp")
+    temporary.write_text(json.dumps(data, sort_keys=True), encoding="utf-8")
+    temporary.replace(auto_state_path())
+
+
+def clean_auto_settings(candidate: object) -> dict[str, object]:
+    """The settings as they will be used: a value that is not valid falls back to the default (switched on, reboot only when disarmed, between 03:00 and 05:00)."""
+    given = candidate if isinstance(candidate, dict) else {}
+    settings = dict(AUTO_DEFAULTS)
+    if isinstance(given.get("enabled"), bool):
+        settings["enabled"] = given["enabled"]
+    if given.get("reboot") in AUTO_REBOOT_POLICIES:
+        settings["reboot"] = given["reboot"]
+    for key in ("window_start", "window_end"):
+        value = given.get(key)
+        if isinstance(value, str) and TIME_OF_DAY.fullmatch(value):
+            settings[key] = value
+    return settings
+
+
+def auto_settings() -> dict[str, object]:
+    return clean_auto_settings(read_auto_file().get("settings"))
+
+
+def render_auto_conf(settings: dict[str, object]) -> str:
+    """The apt configuration that makes unattended-upgrades install security updates and nothing else, and never reboot on its own."""
+    run = "1" if settings.get("enabled") else "0"
+    return "\n".join([
+        "// Written by the A.R.M.O.R. maintenance helper from the settings of Studio (System > Updates). Do not edit: the next change in Studio replaces it.",
+        "// Security updates only. The helper, not this package, decides when the machine reboots (never while the system is armed).",
+        "#clear Unattended-Upgrade::Allowed-Origins;",
+        "#clear Unattended-Upgrade::Origins-Pattern;",
+        "Unattended-Upgrade::Origins-Pattern {",
+        '        "origin=Debian,codename=${distro_codename}-security,label=Debian-Security";',
+        '        "origin=Debian,codename=${distro_codename},label=Debian-Security";',
+        '        "origin=Ubuntu,archive=${distro_codename}-security,label=Ubuntu";',
+        "};",
+        'Unattended-Upgrade::Automatic-Reboot "false";',
+        'Unattended-Upgrade::Remove-Unused-Kernel-Packages "false";',
+        'Unattended-Upgrade::Remove-Unused-Dependencies "false";',
+        'Unattended-Upgrade::MinimalSteps "true";',
+        'APT::Periodic::Update-Package-Lists "1";',
+        f'APT::Periodic::Unattended-Upgrade "{run}";',
+        ""])
+
+
+def write_auto_conf(settings: dict[str, object]) -> bool:
+    """Writes the apt configuration; False when the folder is not there (apt is not configured the usual way) so nothing is written."""
+    if not APT_CONF_DIR.is_dir():
+        return False
+    target = APT_CONF_DIR / AUTO_CONF_NAME
+    temporary = target.with_suffix(".tmp")
+    temporary.write_text(render_auto_conf(settings), encoding="utf-8")
+    temporary.replace(target)
+    return True
+
+
+def parse_uu_log(text: str, limit: int = 20) -> list[dict[str, object]]:
+    """What unattended-upgrades applied, newest first, from its log: `Packages that will be upgraded: a b c` is the list of a run, `All upgrades installed` says it finished."""
+    runs: list[dict[str, object]] = []
+    pending: dict[str, object] | None = None
+    for line in text.splitlines():
+        stamp = re.match(r"(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})", line)
+        listed = re.search(r"Packages that will be upgraded: (.*)$", line)
+        if stamp and listed:
+            names = [item for item in listed.group(1).split() if re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9.+:_-]{0,99}", item)]
+            pending = {"at": stamp.group(1), "packages": names[:100], "state": "started"}
+            runs.append(pending)
+        elif pending is not None and "All upgrades installed" in line:
+            pending["state"] = "installed"
+        elif pending is not None and re.search(r"(ERROR|Installing the upgrades failed|An error occurred)", line):
+            pending["state"] = "failed"
+    return runs[::-1][:limit]
+
+
+def armed_state() -> bool | None:
+    """True or False as the server says it; None when it can not be known (then the helper behaves as if the system were armed)."""
+    token = os.environ.get("ARMOR_MAINT_TOKEN", "")
+    try:
+        request = urllib.request.Request(ARMED_URL, headers={"X-Armor-Maint-Token": token, "User-Agent": "armor-maintenance"})
+        with urllib.request.urlopen(request, timeout=5) as response:          # noqa: S310 - the address is the local server (or a test server)
+            data = json.loads(response.read(4096).decode("utf-8", "replace"))
+        return data["armed"] if isinstance(data.get("armed"), bool) else None
+    except (urllib.error.URLError, TimeoutError, OSError, ValueError, KeyError, AttributeError):
+        return None
+
+
+def in_window(now: datetime.datetime, start: str, end: str) -> bool:
+    """Whether the time of day is inside the window; a window that ends before it starts goes over midnight; the same time twice is the whole day."""
+    minutes = now.hour * 60 + now.minute
+    first, last = (int(start[:2]) * 60 + int(start[3:])), (int(end[:2]) * 60 + int(end[3:]))
+    if first == last:
+        return True
+    return first <= minutes < last if first < last else (minutes >= first or minutes < last)
+
+
+def installed_services() -> list[str]:
+    return [str(COMPONENTS[key]["service"]) for key in ORDER if COMPONENTS[key].get("service") and installed_version(key)]
+
+
+def unit_active(unit: str) -> bool:
+    return subprocess.run([SYSTEMCTL, "is-active", unit], capture_output=True, text=True, check=False).stdout.strip() == "active"
+
+
+def check_services_after_run() -> dict[str, object]:
+    """After an automatic update: every installed service of A.R.M.O.R. must be active. One that is not is restarted once; what had to be restarted and what stays down is recorded."""
+    down = [unit for unit in installed_services() if not unit_active(unit)]
+    restarted: list[str] = []
+    for unit in down:
+        subprocess.run([SYSTEMCTL, "restart", unit], capture_output=True, check=False)
+        restarted.append(unit)
+    still = [unit for unit in down if not unit_active(unit)]
+    return {"checked": int(time.time()), "ok": not still, "restarted": restarted, "down": still}
+
+
+def auto_view() -> dict[str, object]:
+    """What Studio shows: the settings, whether the package is there, what was applied, how the last check went and why the machine has not rebooted."""
+    data = read_auto_file()
+    settings = auto_settings()
+    try:
+        log_text = UU_LOG.read_text(encoding="utf-8", errors="replace")[-400_000:]
+    except OSError:
+        log_text = ""
+    raw_runtime = data.get("runtime")
+    runtime: dict[str, object] = raw_runtime if isinstance(raw_runtime, dict) else {}
+    return {"settings": settings, "package": os.path.exists(UU_BIN), "applied": parse_uu_log(log_text, 10), "reboot_required": REBOOT_REQUIRED.exists(),
+            "reboot_note": runtime.get("reboot_note", ""), "last_reboot": runtime.get("last_reboot", 0), "health": runtime.get("health", {}), "conf_written": (APT_CONF_DIR / AUTO_CONF_NAME).exists()}
+
+
+def set_auto_settings(change: dict[str, object]) -> dict[str, object]:
+    """A change from Studio: only the keys it names; a value that is not valid is refused (not guessed), the apt configuration is rewritten at once."""
+    current = auto_settings()
+    for key, value in change.items():
+        if key not in AUTO_DEFAULTS:
+            raise Refused(422, "unknown_setting")
+        if key == "enabled" and not isinstance(value, bool):
+            raise Refused(422, "bad_enabled")
+        if key == "reboot" and value not in AUTO_REBOOT_POLICIES:
+            raise Refused(422, "bad_reboot")
+        if key in ("window_start", "window_end") and not (isinstance(value, str) and TIME_OF_DAY.fullmatch(value)):
+            raise Refused(422, "bad_window")
+        current[key] = value
+    data = read_auto_file()
+    data["settings"] = current
+    write_auto_file(data)
+    if not write_auto_conf(current):
+        raise Refused(500, "apt_conf_unwritable")
+    return auto_view()
+
+
+def auto_provision() -> None:
+    """At start-up: the apt configuration is written from the stored settings (the first time, from the defaults: switched on, security only), so a machine that was installed
+    with the helper is covered without anybody having to open Studio. Does nothing when apt has no configuration folder."""
+    try:
+        write_auto_conf(auto_settings())
+    except OSError as error:
+        print(f"WARNING: the automatic security updates could not be configured ({error})", file=sys.stderr, flush=True)
+
+
+def auto_tick() -> None:
+    """One look, every few minutes: what was applied since the last one gets its services checked; a pending reboot is done only when the policy, the window and the server allow it."""
+    settings = auto_settings()
+    data = read_auto_file()
+    raw_runtime = data.get("runtime")
+    runtime: dict[str, object] = dict(raw_runtime) if isinstance(raw_runtime, dict) else {}
+    if not settings["enabled"]:
+        runtime["reboot_note"] = ""
+        data["runtime"] = runtime
+        write_auto_file(data)
+        return
+    try:
+        newest = str(parse_uu_log(UU_LOG.read_text(encoding="utf-8", errors="replace")[-400_000:], 1)[0]["at"])
+    except (OSError, IndexError):
+        newest = ""
+    if newest and newest != runtime.get("seen"):
+        runtime["seen"] = newest
+        runtime["health"] = check_services_after_run()
+        if not runtime["health"]["ok"]:                                     # type: ignore[index]
+            print(f"WARNING: after the automatic security updates of {newest} these services are down: {runtime['health']['down']}", file=sys.stderr, flush=True)    # type: ignore[index]
+    note = ""
+    if REBOOT_REQUIRED.exists():
+        if settings["reboot"] == "never":
+            note = "policy_never"
+        elif not in_window(AUTO_NOW(), str(settings["window_start"]), str(settings["window_end"])):
+            note = "outside_window"
+        elif any(job.state == "running" for job in JOBS.values()):
+            note = "busy"
+        else:
+            armed = armed_state()
+            if armed is None:
+                note = "armed_unknown"
+            elif armed:
+                note = "armed"
+            else:
+                try:
+                    reboot_machine()
+                    runtime["last_reboot"] = int(time.time())
+                    note = "rebooting"
+                    print("automatic security updates: rebooting because the system is disarmed and it is the window of the night", file=sys.stderr, flush=True)
+                except Refused as refusal:
+                    note = refusal.code
+    runtime["reboot_note"] = note
+    data["runtime"] = runtime
+    write_auto_file(data)
+
+
+def auto_loop() -> None:
+    while True:
+        try:
+            auto_tick()
+        except Exception as error:                                       # a bug here must never take the helper down
+            print(f"automatic security updates: {type(error).__name__}: {error}", file=sys.stderr, flush=True)
+        time.sleep(AUTO_TICK_SECONDS)
+
+
 # ---- the console --------------------------------------------------------------------------------------------------------------------------------
 
 class ConsoleJob:
@@ -1270,7 +1519,7 @@ def console_run(command: str, cwd: str, timeout: float) -> dict[str, object]:
 
 def overview(force: bool) -> dict[str, object]:
     running = [job.view(0) for job in JOBS.values() if job.state == "running"]
-    return {"agent": AGENT_VERSION, "components": [component_state(key, force) for key in ORDER], "os": os_state(), "console": CONSOLE_ENABLED, "unsigned_allowed": unsigned_allowed(), "signature_mode": signature_mode(), "trusted_fingerprints": [key_fingerprint(key) for key in trusted_keys()], "running": [item["id"] for item in running],
+    return {"agent": AGENT_VERSION, "components": [component_state(key, force) for key in ORDER], "os": os_state(), "console": CONSOLE_ENABLED, "unsigned_allowed": unsigned_allowed(), "signature_mode": signature_mode(), "auto_updates": auto_view(), "trusted_fingerprints": [key_fingerprint(key) for key in trusted_keys()], "running": [item["id"] for item in running],
             "history": history()}
 
 
@@ -1518,6 +1767,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 self.reply(202, system_upgrade_job(str(mode)).view())
             elif method == "POST" and parts == ["system", "reboot"]:
                 self.reply(202, reboot_machine())
+            elif method == "GET" and parts == ["system", "auto-updates"]:
+                self.reply(200, auto_view())
+            elif method == "POST" and parts == ["system", "auto-updates"]:
+                self.reply(200, set_auto_settings(self.body()))
             elif method == "POST" and parts == ["history", "clear"]:
                 self.reply(200, {"ok": True, "cleared": clear_history()})
             elif method == "GET" and len(parts) == 2 and parts[0] == "jobs":
@@ -1612,6 +1865,8 @@ def serve(socket_path: str, token: str, group: str | None) -> None:
         import grp
         os.chown(socket_path, 0, grp.getgrnam(group).gr_gid)
     print(f"armor-maintenance {AGENT_VERSION} listening on {socket_path} (console {'ON' if CONSOLE_ENABLED else 'off'})", flush=True)
+    auto_provision()
+    threading.Thread(target=auto_loop, daemon=True).start()
     try:
         server.serve_forever()
     finally:

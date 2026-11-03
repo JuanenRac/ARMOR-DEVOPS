@@ -91,6 +91,8 @@ expect 0 "armor-backup   : daily, encrypted" -- --public-host 192.168.0.5 --pref
 cp "$HERE/armor_admin_agent.py" "$HERE/armor_maintenance_agent.py" "$RELEASE/scripts/"
 expect 0 "armor-admin    : root agent on /run/armor-admin.sock" -- --public-host 192.168.0.5 --prefix "$PREFIX" "${PORTS[@]}" --with-admin
 expect 0 "armor-maintenance: root helper" -- --public-host 192.168.0.5 --prefix "$PREFIX" "${PORTS[@]}" --with-maintenance
+expect 0 "automatic SECURITY updates of the system" -- --public-host 192.168.0.5 --prefix "$PREFIX" "${PORTS[@]}" --with-maintenance
+never "unattended-upgrades" -- --public-host 192.168.0.5 --prefix "$PREFIX" "${PORTS[@]}"
 never "armor-mosquitto" -- --public-host 192.168.0.5 --prefix "$PREFIX" "${PORTS[@]}"
 never "armor-voice" -- --public-host 192.168.0.5 --prefix "$PREFIX" "${PORTS[@]}"
 never "armor-admin" -- --public-host 192.168.0.5 --prefix "$PREFIX" "${PORTS[@]}"
