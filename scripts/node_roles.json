@@ -1,0 +1,96 @@
+{
+  "_about": "The ONE table of what each kind of broker identity may do: its user name and its access lines, with {name} for the node name. ARMOR-DEVOPS scripts/mqtt_identity.sh writes them and a test compares its output with this file. The lines of the server are in ARMOR-DEVOPS scripts/armor_server.acl; the opt-in lines (commands) are written only on purpose by mqtt_identity.sh.",
+  "roles": {
+    "node": {
+      "user": "field-node-{name}",
+      "topics": [
+        "topic write armor/node/{name}/telemetry",
+        "topic write armor/node/{name}/health",
+        "topic write armor/node/{name}/info",
+        "topic write armor/health/{name}",
+        "topic read armor/node/{name}/command",
+        "topic readwrite armor/device/{name}/#",
+        "topic write armor/solar/{name}/#",
+        "topic write armor/radar/{name}/events",
+        "topic read armor/radar/{name}/control/armed",
+        "topic read armor/control/{name}/command",
+        "topic read armor/control/all/command",
+        "topic write armor/control/{name}/result",
+        "topic write armor/control/{name}/maintenance"
+      ]
+    },
+    "hmi-node": {
+      "user": "hmi-node-{name}",
+      "topics": [
+        "topic write armor/node/{name}/health",
+        "topic write armor/node/{name}/info",
+        "topic write armor/health/{name}",
+        "topic read armor/control/{name}/command",
+        "topic read armor/control/all/command",
+        "topic write armor/control/{name}/result",
+        "topic write armor/control/{name}/maintenance"
+      ]
+    },
+    "solar-node": {
+      "user": "solar-node-{name}",
+      "topics": [
+        "topic write armor/solar/{name}/#",
+        "topic write armor/health/{name}",
+        "topic read armor/control/{name}/command",
+        "topic read armor/control/all/command",
+        "topic write armor/control/{name}/result",
+        "topic write armor/control/{name}/maintenance"
+      ]
+    },
+    "electrical-node": {
+      "user": "electrical-node-{name}",
+      "topics": [
+        "topic write armor/electrical/{name}/state",
+        "topic write armor/electrical/{name}/result",
+        "topic write armor/health/{name}",
+        "topic read armor/control/{name}/command",
+        "topic read armor/control/all/command",
+        "topic write armor/control/{name}/result",
+        "topic write armor/control/{name}/maintenance"
+      ]
+    },
+    "alarm-node": {
+      "user": "alarm-node-{name}",
+      "topics": [
+        "topic write armor/alarm/{name}/state",
+        "topic write armor/alarm/{name}/result",
+        "topic write armor/health/{name}",
+        "topic read armor/alarm/{name}/zigbee",
+        "topic read armor/alarm/{name}/policy",
+        "topic read armor/control/{name}/command",
+        "topic read armor/control/all/command",
+        "topic write armor/control/{name}/result",
+        "topic write armor/control/{name}/maintenance"
+      ]
+    },
+    "network-node": {
+      "user": "network-node-{name}",
+      "topics": [
+        "topic write armor/network/{name}/state"
+      ]
+    },
+    "device": {
+      "user": "device-{name}",
+      "topics": [
+        "topic readwrite armor/device/{name}/#"
+      ]
+    },
+    "bridge": {
+      "user": "bridge-{name}",
+      "topics": [
+        "topic readwrite armor/device/#"
+      ]
+    },
+    "consumer": {
+      "user": "alarm-{name}",
+      "topics": [
+        "topic read armor/server/alert"
+      ]
+    }
+  }
+}

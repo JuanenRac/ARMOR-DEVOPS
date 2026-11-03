@@ -166,6 +166,7 @@ See the [deployment boundary](docs/DEPLOYMENT_BOUNDARY.md) and the [test bench](
 | `test_package_component.py`  `test_registry.py`  `test_remote_access.py` | the packages, the list of components and the remote-access helpers |
 | `test_backup.sh`  `test_env_and_restore.sh` | the backup and restore round trip, the secrets and the environment check |
 | `test_acl_single_source.py` | the server's broker rules: one source, the same in the example, the installer and the topics ARMOR-SERVER really uses |
+| `test_node_roles.py` | what mqtt_identity.sh writes for each kind of identity is the table of ARMOR-COMMON (a copy checked against it) |
 | `test_compose.sh`  `validate-compose.sh` | the Compose topology and its TLS profile, built and run with Docker Engine in WSL |
 | `test_firewall.sh`  `test_install_plan.sh`  `test_mqtt_identity.sh`  `test_mqtt_tls.sh`  `test_tls_check.sh`  `test_wireguard.sh`  `test_ddns.sh` | the firewall, the installer's plan, the broker identities, MQTT over TLS, the TLS check, the VPN and the dynamic name |
 

@@ -166,6 +166,7 @@ scripts/backup_data.sh --data-dir <data> --out-dir <backups> --passphrase-file <
 | `test_package_component.py`  `test_registry.py`  `test_remote_access.py` | パッケージ、コンポーネント一覧、リモートアクセスヘルパー |
 | `test_backup.sh`  `test_env_and_restore.sh` | バックアップと復元の往復、秘密、環境の検査 |
 | `test_acl_single_source.py` | サーバーのブローカー規則：例、インストーラー、ARMOR-SERVER が実際に使うトピックで同じ 1 つの出典 |
+| `test_node_roles.py` | mqtt_identity.sh が各種の ID に書き込む内容は ARMOR-COMMON の表と同じ（照合されるコピー） |
 | `test_compose.sh`  `validate-compose.sh` | Compose 構成と TLS プロファイル（WSL の Docker Engine でビルドして実行） |
 | `test_firewall.sh`  `test_install_plan.sh`  `test_mqtt_identity.sh`  `test_mqtt_tls.sh`  `test_tls_check.sh`  `test_wireguard.sh`  `test_ddns.sh` | ファイアウォール、インストーラーの計画、ブローカー ID、TLS 上の MQTT、TLS 検査、VPN、動的な名前 |
 

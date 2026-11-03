@@ -166,6 +166,7 @@ scripts/backup_data.sh --data-dir <data> --out-dir <backups> --passphrase-file <
 | `test_package_component.py`  `test_registry.py`  `test_remote_access.py` | 包、组件列表和远程访问助手 |
 | `test_backup.sh`  `test_env_and_restore.sh` | 备份与恢复的往返、密钥和环境检查 |
 | `test_acl_single_source.py` | 服务器的代理规则：示例、安装器和 ARMOR-SERVER 实际使用的主题都出自同一来源 |
+| `test_node_roles.py` | mqtt_identity.sh 为每种身份写入的内容就是 ARMOR-COMMON 的表（与之核对的副本） |
 | `test_compose.sh`  `validate-compose.sh` | Compose 拓扑及其 TLS 配置，在 WSL 的 Docker Engine 中构建并运行 |
 | `test_firewall.sh`  `test_install_plan.sh`  `test_mqtt_identity.sh`  `test_mqtt_tls.sh`  `test_tls_check.sh`  `test_wireguard.sh`  `test_ddns.sh` | 防火墙、安装器的计划、代理身份、TLS 上的 MQTT、TLS 检查、VPN 和动态域名 |
 
