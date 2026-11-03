@@ -25,7 +25,7 @@ services:
     secrets: [mqtt_password_file, mqtt_acl_file]
     # The nodes are on the LAN: a port on an internal network can not be published, so the broker is on the edge network too. It listens on loopback unless ARMOR_MQTT_BIND is the
     # address of the interface of the field network (the broker is never anonymous, and the ACL gives each node only its own topics).
-    ports: ["${ARMOR_MQTT_BIND:-127.0.0.1}:1883:1883"]
+    ports: ["${ARMOR_MQTT_BIND:-127.0.0.1}:18883:18883"]
     networks: [armor_core, armor_edge]
 
   server:
@@ -36,7 +36,7 @@ services:
       - server-data:/data
     environment:
       ARMOR_HOST: 0.0.0.0
-      ARMOR_PORT: 8080
+      ARMOR_PORT: 18080
       ARMOR_DATA_DIR: /data
       ARMOR_INGEST_TOKEN: ${ARMOR_INGEST_TOKEN:?run scripts/generate_secrets.sh}
       ARMOR_CONTROL_TOKEN: ${ARMOR_CONTROL_TOKEN:?run scripts/generate_secrets.sh}
@@ -44,10 +44,10 @@ services:
       ARMOR_CAMERA_CONFIG_KEY: ${ARMOR_CAMERA_CONFIG_KEY:?run scripts/generate_secrets.sh}
       ARMOR_STUDIO_USERNAME: ${ARMOR_STUDIO_USERNAME:?run scripts/generate_secrets.sh}
       ARMOR_STUDIO_PASSWORD: ${ARMOR_STUDIO_PASSWORD:?run scripts/generate_secrets.sh}
-      ARMOR_STUDIO_ORIGIN: ${ARMOR_PUBLIC_ORIGIN:-http://127.0.0.1:8088}
+      ARMOR_STUDIO_ORIGIN: ${ARMOR_PUBLIC_ORIGIN:-http://127.0.0.1:18081}
       # The cookie is Secure whenever the address the browser uses is https (the TLS profile sets ARMOR_PUBLIC_ORIGIN=https://...): 0 or 1 in .env overrides that.
       ARMOR_COOKIE_SECURE: ${ARMOR_COOKIE_SECURE:-}
-      ARMOR_MQTT_URL: mqtt://broker:1883
+      ARMOR_MQTT_URL: mqtt://broker:18883
       ARMOR_MQTT_USERNAME: ${ARMOR_MQTT_USERNAME:-armor-server}
       ARMOR_MQTT_PASSWORD: ${ARMOR_MQTT_PASSWORD:?run scripts/generate_secrets.sh}
       ARMOR_ALERT_DWELL_MS: ${ARMOR_ALERT_DWELL_MS:-2000}
@@ -91,10 +91,10 @@ services:
     # The unprivileged nginx needs these to start; everything else stays dropped.
     cap_add: [CHOWN, SETGID, SETUID, NET_BIND_SERVICE]
     environment:
-      ARMOR_PUBLIC_ORIGIN: ${ARMOR_PUBLIC_ORIGIN:-http://127.0.0.1:8088}
-      ARMOR_SERVER_UPSTREAM: server:8080
+      ARMOR_PUBLIC_ORIGIN: ${ARMOR_PUBLIC_ORIGIN:-http://127.0.0.1:18081}
+      ARMOR_SERVER_UPSTREAM: server:18080
     # Loopback unless ARMOR_STUDIO_BIND names the address of the network the clients (the wall panel, the phones, the network node) are on: they reach the API through this port.
-    ports: ["${ARMOR_STUDIO_BIND:-127.0.0.1}:8088:80"]
+    ports: ["${ARMOR_STUDIO_BIND:-127.0.0.1}:18081:80"]
     depends_on:
       server: { condition: service_healthy }
     networks: [armor_core, armor_edge]
@@ -108,7 +108,7 @@ services:
     user: "10001:10001"
     tmpfs: ["/tmp"]
     environment:
-      ARMOR_SIM_SERVER_URL: http://server:8080
+      ARMOR_SIM_SERVER_URL: http://server:18080
       ARMOR_INGEST_TOKEN: ${ARMOR_INGEST_TOKEN:?run scripts/generate_secrets.sh}
       ARMOR_INGEST_STRICT: ${ARMOR_INGEST_STRICT:-}
       ARMOR_SIM_NODES: ${ARMOR_SIM_NODES:-3}

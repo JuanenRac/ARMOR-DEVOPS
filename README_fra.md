@@ -128,7 +128,7 @@ Les conteneurs sont durcis, les images épinglées, le réseau `core` interne et
 | `scripts/mqtt_identity.sh add`  `health-report <role> <node>`  `node-control` | - | écrit la ligne du broker de chaque type de nœud ; ajoute rapports de santé et contrôle à un nœud installé avant (idempotent) |
 | `scripts/armor_mqtt_tls.sh`  `armor_wireguard.sh`  `armor_ddns.sh`  `armor_tls_check.sh` | - | la porte chiffrée du broker (`status`, `export-ca`, `server-tls`...), le VPN WireGuard avec un QR par téléphone, un nom DuckDNS, Cloudflare ou autre pour la maison et le contrôle de l'accès à distance ; Studio les propose sans taper de commande |
 
-Les deux assistants (`armor_admin_agent.py`, `armor_maintenance_agent.py`) écoutent sur des sockets Unix locaux et ne tournent donc pas sous Windows. Le fichier Compose démarre le broker (Mosquitto), le serveur et Studio (nginx, qui relaie `/api/`), et un profil `tls` ajoute Caddy ; seul Studio est publié, en boucle locale par défaut (`127.0.0.1:8088`, TLS sur 8443). Les paquets de chaque version sont des ressources des versions GitHub, pas des fichiers de ce dépôt. Le journal d'une mise à jour du système indique `downloading: N%` tous les dix pour cent, pour qu'une liaison lente ne ressemble pas à une mise à jour bloquée, et une mise à jour ne réinstalle les dépendances (`npm ci`) que si ce que le fichier de verrouillage en dit a changé, pas simplement parce que le projet a une nouvelle version.
+Les deux assistants (`armor_admin_agent.py`, `armor_maintenance_agent.py`) écoutent sur des sockets Unix locaux et ne tournent donc pas sous Windows. Le fichier Compose démarre le broker (Mosquitto), le serveur et Studio (nginx, qui relaie `/api/`), et un profil `tls` ajoute Caddy ; seul Studio est publié, en boucle locale par défaut (`127.0.0.1:18081`, TLS sur 8443). Les paquets de chaque version sont des ressources des versions GitHub, pas des fichiers de ce dépôt. Le journal d'une mise à jour du système indique `downloading: N%` tous les dix pour cent, pour qu'une liaison lente ne ressemble pas à une mise à jour bloquée, et une mise à jour ne réinstalle les dépendances (`npm ci`) que si ce que le fichier de verrouillage en dit a changé, pas simplement parce que le projet a une nouvelle version.
 
 ## ⚙️ Configuration
 
@@ -136,7 +136,7 @@ Les deux assistants (`armor_admin_agent.py`, `armor_maintenance_agent.py`) écou
 |---|---|---|
 | `install_cm5.sh` | 18080  18081  18883  18090 | `--server-port`, `--studio-port`, `--mqtt-port` (celui installé est conservé s'il n'est pas répété) et le port voix ; tous entre 1024 et 65535 et différents ; l'adresse du broker va dans `PREFIX/etc/armor.mqtt.env` |
 | `ARMOR_MQTT_BIND`  `ARMOR_STUDIO_BIND` | 127.0.0.1 | où Compose publie le broker et Studio |
-| `ARMOR_PUBLIC_ORIGIN` | http://127.0.0.1:8088 | l'origine par laquelle on joint Studio |
+| `ARMOR_PUBLIC_ORIGIN` | http://127.0.0.1:18081 | l'origine par laquelle on joint Studio |
 | `ARMOR_TLS_BIND`  `ARMOR_TLS_PORT`  `ARMOR_TLS_HTTP_PORT` | 8443 | Caddy du profil `tls` |
 | `ARMOR_MAINT_STAGING`  `ARMOR_MAINT_STAGING_WAIT_S` | off  30 | dans `armor.maint.env` : `on` fait essayer le nouveau serveur par l'assistant de maintenance, sur un port libre du loopback, avec un dossier de données vide et sans broker, avant de basculer (l'attente va de 5 à 120 secondes) |
 | `.env`  `.env.example` | - | créé par `generate_secrets.sh`, ignoré par Git ; l'exemple liste chaque variable |

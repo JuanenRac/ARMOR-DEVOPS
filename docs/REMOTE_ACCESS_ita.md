@@ -13,7 +13,7 @@ Il tuo indirizzo pubblico è fisso o cambia ogni tanto. In entrambi i casi usa u
 
 ## 3. Nel router
 
-Inoltra **una** porta alla macchina del server: `443/TCP` per B (e `80/TCP` se il certificato è vero, per il suo controllo), oppure `51820/UDP` per WireGuard in A. Mai `1883`, `8883` né la porta di un nodo.
+Inoltra **una** porta alla macchina del server: `443/TCP` per B (e `80/TCP` se il certificato è vero, per il suo controllo), oppure `51820/UDP` per WireGuard in A. Mai `18883`, `8883` né la porta di un nodo.
 
 ## 4. Sul server (Docker)
 

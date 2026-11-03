@@ -13,7 +13,7 @@ O seu endereço público é fixo ou muda de vez em quando. Nos dois casos use um
 
 ## 3. No router
 
-Redirecione **uma** porta para a máquina do servidor: `443/TCP` para B (e `80/TCP` se o certificado for verdadeiro, para a sua verificação), ou `51820/UDP` para WireGuard em A. Nunca `1883`, `8883` nem a porta de um nó.
+Redirecione **uma** porta para a máquina do servidor: `443/TCP` para B (e `80/TCP` se o certificado for verdadeiro, para a sua verificação), ou `51820/UDP` para WireGuard em A. Nunca `18883`, `8883` nem a porta de um nó.
 
 ## 4. No servidor (Docker)
 

@@ -15,7 +15,7 @@ Your public address is either fixed or changes now and then. Either way, use a *
 
 ## 3. In the router
 
-Forward **one** port to the machine that runs the server: `443/TCP` for B (and `80/TCP` if the certificate is a real one, for its check), or `51820/UDP` for WireGuard in A. Never `1883`, `8883` or the port of a node.
+Forward **one** port to the machine that runs the server: `443/TCP` for B (and `80/TCP` if the certificate is a real one, for its check), or `51820/UDP` for WireGuard in A. Never `18883`, `8883` or the port of a node.
 
 ## 4. On the server (Docker)
 

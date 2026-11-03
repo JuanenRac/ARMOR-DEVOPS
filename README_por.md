@@ -128,7 +128,7 @@ Os contentores estão reforçados, as imagens fixadas, a rede `core` é interna 
 | `scripts/mqtt_identity.sh add`  `health-report <role> <node>`  `node-control` | - | escreve a linha do broker de cada tipo de nó; acrescenta relatórios de saúde e controlo a um nó instalado antes (idempotente) |
 | `scripts/armor_mqtt_tls.sh`  `armor_wireguard.sh`  `armor_ddns.sh`  `armor_tls_check.sh` | - | a porta cifrada do broker (`status`, `export-ca`, `server-tls`...), a VPN WireGuard com um QR por telemóvel, um nome DuckDNS, Cloudflare ou outro para a casa e a verificação do acesso remoto; o Studio oferece-os sem escrever um comando |
 
-Os dois ajudantes (`armor_admin_agent.py`, `armor_maintenance_agent.py`) escutam em sockets Unix locais e por isso não correm no Windows. O ficheiro Compose arranca o broker (Mosquitto), o servidor e o Studio (nginx, que reencaminha `/api/`), e um perfil `tls` acrescenta o Caddy; só o Studio é publicado, por predefinição em loopback (`127.0.0.1:8088`, TLS em 8443). Os pacotes de cada versão são ficheiros das versões do GitHub, não ficheiros deste repositório. O registo de uma atualização do sistema diz `downloading: N%` a cada dez por cento, para que uma ligação lenta não pareça uma atualização encravada, e uma atualização só volta a instalar as dependências (`npm ci`) quando mudou o que o ficheiro de bloqueio diz delas, não só porque o projeto tem uma versão nova.
+Os dois ajudantes (`armor_admin_agent.py`, `armor_maintenance_agent.py`) escutam em sockets Unix locais e por isso não correm no Windows. O ficheiro Compose arranca o broker (Mosquitto), o servidor e o Studio (nginx, que reencaminha `/api/`), e um perfil `tls` acrescenta o Caddy; só o Studio é publicado, por predefinição em loopback (`127.0.0.1:18081`, TLS em 8443). Os pacotes de cada versão são ficheiros das versões do GitHub, não ficheiros deste repositório. O registo de uma atualização do sistema diz `downloading: N%` a cada dez por cento, para que uma ligação lenta não pareça uma atualização encravada, e uma atualização só volta a instalar as dependências (`npm ci`) quando mudou o que o ficheiro de bloqueio diz delas, não só porque o projeto tem uma versão nova.
 
 ## ⚙️ Configuração
 
@@ -136,7 +136,7 @@ Os dois ajudantes (`armor_admin_agent.py`, `armor_maintenance_agent.py`) escutam
 |---|---|---|
 | `install_cm5.sh` | 18080  18081  18883  18090 | `--server-port`, `--studio-port`, `--mqtt-port` (mantém-se o instalado se não for repetido) e a porta de voz; todas entre 1024 e 65535 e diferentes; o endereço do broker vai para `PREFIX/etc/armor.mqtt.env` |
 | `ARMOR_MQTT_BIND`  `ARMOR_STUDIO_BIND` | 127.0.0.1 | onde o Compose publica o broker e o Studio |
-| `ARMOR_PUBLIC_ORIGIN` | http://127.0.0.1:8088 | a origem pela qual se chega ao Studio |
+| `ARMOR_PUBLIC_ORIGIN` | http://127.0.0.1:18081 | a origem pela qual se chega ao Studio |
 | `ARMOR_TLS_BIND`  `ARMOR_TLS_PORT`  `ARMOR_TLS_HTTP_PORT` | 8443 | Caddy do perfil `tls` |
 | `ARMOR_MAINT_STAGING`  `ARMOR_MAINT_STAGING_WAIT_S` | off  30 | em `armor.maint.env`: `on` faz o ajudante de manutenção testar o servidor novo numa porta livre do loopback, com pasta de dados vazia e sem broker, antes de mudar (a espera é de 5 a 120 segundos) |
 | `.env`  `.env.example` | - | criado por `generate_secrets.sh`, ignorado pelo Git; o exemplo lista cada variável |

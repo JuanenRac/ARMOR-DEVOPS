@@ -3,7 +3,7 @@
 The compose file is the topology of the whole system on one Docker host. It is
 intentionally conservative:
 
-* **Studio is published** on `127.0.0.1:8088`, and **the broker's port** on `127.0.0.1:1883` unless `ARMOR_MQTT_BIND` holds the address of the interface of the field network (set it
+* **Studio is published** on `127.0.0.1:18081`, and **the broker's port** on `127.0.0.1:18883` unless `ARMOR_MQTT_BIND` holds the address of the interface of the field network (set it
   there for the nodes to reach the broker; never `0.0.0.0` on a machine that also faces the internet). Studio's nginx proxies `/api/` to the server, so the browser only ever talks to one
   origin and the session cookie stays same-origin. Put a TLS reverse proxy or a VPN in front of it (and set `ARMOR_COOKIE_SECURE=1`) before any remote access.
 * **The server has no published port but does have a way out**: it is on the core network (where Studio and the broker reach it) and on the edge network, because it must reach Telegram,
@@ -67,3 +67,17 @@ The admin agent (`scripts/armor_admin_agent.py`) lets Studio, through the server
 - `read_only`: those writes are refused (`403 sensitive_read_only`) whoever asks; change them on the machine.
 
 Reading is not affected. A wrong value, or `second_token` without a usable second secret, stops the agent at start-up instead of falling back to `open`. `GET /v1/status` on the agent returns `{"sensitive_writes": {"mode", "protected", "files", "warning"}}` so that a console can show which of the three is in force; the server does not forward it yet.
+
+## Ports
+
+One numbering for the Docker stack and for the CM5 installer (`scripts/ports.json`, a copy of the registry of ARMOR-COMMON): the server on 18080, Studio on 18081, the plain listener of the broker on 18883 and the voice gateway on 18090, with the optional TLS ports 8883 (broker), 8443 (proxy) and 8081 (the plain port of the proxy). `scripts/firewall_core.sh` and `scripts/install_cm5.sh` default to the same numbers, and `scripts/test_ports.py` fails when the compose file, the broker configuration, `.env.example` or those scripts say otherwise.
+
+**Migrating a Docker installation that used 8080, 8088 and 1883.** The containers start on the new ports as soon as the stack is brought up again; nothing is lost, because the data is in the volumes. What has to follow:
+
+1. In `.env`, `ARMOR_PUBLIC_ORIGIN` (`http://127.0.0.1:8088` becomes `http://127.0.0.1:18081`, or the `https://` address of the proxy, which did not change): with the old value the console refuses the login. `scripts/check-required-env.sh` prints a note for every value that still names an old port.
+2. The address typed in the apps, the wall panel and the network node (`http://<host>:8088` becomes `http://<host>:18081`).
+3. The broker address of the nodes (`mqtt://<host>:1883` becomes `mqtt://<host>:18883`), by the settings page of each node or by the node's own tool; a node that is not changed keeps trying the old port.
+4. Firewall rules and port forwards of the router, if any.
+
+On a machine installed by `install_cm5.sh` nothing changes (it already used these ports); `armor_doctor.py` reports as a warning an environment file or a broker listener that still names an old number.
+

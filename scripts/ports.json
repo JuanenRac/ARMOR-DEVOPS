@@ -1,0 +1,193 @@
+{
+  "schema": 1,
+  "description": "The one numbering of the network ports of an A.R.M.O.R. installation. The CM5 installer, the Docker stack, the firewall script, the server, Studio and the apps read their ports from here (the generated files are written by tools/generate_ports.py).",
+  "ports": {
+    "server": {
+      "port": 18080,
+      "protocol": "http",
+      "env": "ARMOR_PORT",
+      "legacy": [
+        8080
+      ],
+      "note": "ARMOR-SERVER: the API and the ingest"
+    },
+    "studio": {
+      "port": 18081,
+      "protocol": "http",
+      "legacy": [
+        8088
+      ],
+      "note": "ARMOR-STUDIO: the web console (its proxy reaches the server)"
+    },
+    "mqtt": {
+      "port": 18883,
+      "protocol": "mqtt",
+      "legacy": [
+        1883
+      ],
+      "note": "the plain listener of the broker (never the standard 1883, which other software may use)"
+    },
+    "voice": {
+      "port": 18090,
+      "protocol": "http",
+      "note": "ARMOR-VOICE-AI: the gateway of the wall panel"
+    },
+    "mqtt_tls": {
+      "port": 8883,
+      "protocol": "mqtts",
+      "note": "the optional encrypted door of the broker"
+    },
+    "https": {
+      "port": 8443,
+      "protocol": "https",
+      "note": "the optional TLS proxy of the Docker stack in front of Studio"
+    },
+    "acme_http": {
+      "port": 8081,
+      "protocol": "http",
+      "note": "the plain port of the TLS proxy, for the check of a public certificate"
+    }
+  },
+  "scan": {
+    "description": "tests/test_ports.py looks for the old numbers (the ones in 'legacy') in the files of the repositories that exist next to this one, except the entries of 'allowed'.",
+    "allowed": [
+      {
+        "match": "ARMOR-SERVER/src/cameras/discovery.ts",
+        "why": "8080 is a port IP cameras answer on, not one of ours"
+      },
+      {
+        "match": "ARMOR-NETWORK/src/armor_network/",
+        "why": "the network scanner names services by their well known ports (1883 is MQTT, 8080 is an alternative web port)"
+      },
+      {
+        "match": "/mqtt_out.py",
+        "why": "the standard port of a broker address that gives none"
+      },
+      {
+        "match": "/panel_sim.py",
+        "why": "the standard port of a broker address that gives none"
+      },
+      {
+        "match": "broker_uri.hpp",
+        "why": "the standard port of a broker address that gives none"
+      },
+      {
+        "match": "test_",
+        "why": "an arbitrary origin used as a fixture of a test"
+      },
+      {
+        "match": ".test.",
+        "why": "an arbitrary origin used as a fixture of a test"
+      },
+      {
+        "match": "/tests/",
+        "why": "an arbitrary origin used as a fixture of a test"
+      },
+      {
+        "match": "/i18n/",
+        "why": "an example in the text of a field of a mobile app"
+      },
+      {
+        "match": "/conformance/",
+        "why": "generated vectors"
+      },
+      {
+        "match": "CHANGELOG",
+        "why": "history"
+      },
+      {
+        "match": "armor_project_tool.py",
+        "why": "writes a throwaway development environment for a local run"
+      },
+      {
+        "match": "ARMOR-ANDROID-CONTROL/",
+        "why": "pending: the default of the server field of the app"
+      },
+      {
+        "match": "ARMOR-IOS-CONTROL/",
+        "why": "pending: the default of the server field of the app"
+      },
+      {
+        "match": "src/armor_network/",
+        "why": "an example of the help of the watch command"
+      },
+      {
+        "match": "src/armor_simulator/publisher.py",
+        "why": "an example of the help of the command"
+      },
+      {
+        "match": "src/api/contract/",
+        "why": "the camera ports of a description"
+      },
+      {
+        "match": "src/networkOrders.ts",
+        "why": "the web ports an IP device answers on"
+      },
+      {
+        "match": "src/storageScope.ts",
+        "why": "an example in a comment"
+      },
+      {
+        "match": "node_settings.hpp",
+        "why": "the standard port in the example of a comment"
+      },
+      {
+        "match": "hmi_config.hpp",
+        "why": "the standard port in the example of a comment"
+      },
+      {
+        "match": "solar_config.hpp",
+        "why": "the standard port in the example of a comment"
+      },
+      {
+        "match": "node_config.hpp",
+        "why": "the standard port in the example of a comment"
+      },
+      {
+        "match": "armor-rest.ts",
+        "line_contains": "camera ports",
+        "why": "the ports IP cameras answer on"
+      },
+      {
+        "match": "armor-server.yaml",
+        "line_contains": "camera ports",
+        "why": "the ports IP cameras answer on"
+      },
+      {
+        "match": "Test.kt",
+        "why": "an arbitrary origin used as a fixture of a test"
+      },
+      {
+        "match": "Tests.swift",
+        "why": "an arbitrary origin used as a fixture of a test"
+      },
+      {
+        "match": "DEPLOYMENT_BOUNDARY.md",
+        "why": "names the old numbers to explain the migration"
+      },
+      {
+        "match": "docs/PORTS.md",
+        "why": "names the old numbers to explain the migration"
+      },
+      {
+        "match": "scripts/armor_doctor.py",
+        "why": "names the old numbers to find them"
+      },
+      {
+        "match": "check-required-env.sh",
+        "why": "names the old numbers to find them"
+      },
+      {
+        "match": "CAMERA_MEDIA_GATEWAY.md",
+        "line_contains": "camera ports",
+        "why": "the ports IP cameras answer on"
+      }
+    ],
+    "context_only": {
+      "numbers": [
+        1883
+      ],
+      "description": "1883 is also the standard port of MQTT, named in guards and documents ('never the standard 1883'); it counts as an old port only as an address, a setting or a listener (after ':', '=' or 'listener ')."
+    }
+  }
+}

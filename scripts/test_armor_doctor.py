@@ -36,8 +36,8 @@ def installation(folder: str) -> Path:
     etc.mkdir()
     write(etc / "armor.env", f"ARMOR_INGEST_TOKEN={INGEST}\nARMOR_CONTROL_TOKEN={'c' * 43}\nARMOR_OPERATOR_TOKEN={'o' * 43}\nARMOR_STUDIO_PASSWORD={'p' * 30}\n")
     write(etc / "armor.network-node.env", f"ARMOR_INGEST_TOKEN={derived()}\nARMOR_NETWORK_NODE_ID={NODE_ID}\n")
-    write(etc / "armor.mqtt.env", "ARMOR_MQTT_URL=mqtt://127.0.0.1:1883\nARMOR_MQTT_PASSWORD=" + "m" * 30 + "\n")
-    write(etc / "mosquitto.conf", "listener 1883\nallow_anonymous false\n")
+    write(etc / "armor.mqtt.env", "ARMOR_MQTT_URL=mqtt://127.0.0.1:18883\nARMOR_MQTT_PASSWORD=" + "m" * 30 + "\n")
+    write(etc / "mosquitto.conf", "listener 18883\nallow_anonymous false\n")
     return Path(folder)
 
 
@@ -90,6 +90,25 @@ class DoctorTests(unittest.TestCase):
             write(prefix / "etc" / "armor.mqtt.env", "ARMOR_MQTT_URL=mqtt://127.0.0.1:8883\n")
             results = armor_doctor.diagnose(prefix)
         self.assertTrue(any(lvl == "fail" and "8883" in m for lvl, _s, m in results))
+
+    def test_a_good_installation_has_no_old_port(self):
+        with tempfile.TemporaryDirectory() as folder:
+            results = armor_doctor.diagnose(installation(folder))
+        self.assertFalse([r for r in results if r[0] == "warn" and "old Docker numbering" in r[2]], results)
+
+    def test_an_old_docker_port_is_a_warning_that_names_the_new_one_and_prints_no_secret(self):
+        with tempfile.TemporaryDirectory() as folder:
+            prefix = installation(folder)
+            write(prefix / "etc" / "armor.mqtt.env", "ARMOR_MQTT_URL=mqtt://user:" + "s" * 30 + "@127.0.0.1:1883\nARMOR_MQTT_PASSWORD=" + "m" * 30 + "\n")
+            write(prefix / "etc" / "armor.studio.env", "ARMOR_PUBLIC_ORIGIN=http://127.0.0.1:8088\n")
+            write(prefix / "etc" / "mosquitto.conf", "listener 1883\nallow_anonymous false\n")
+            results = armor_doctor.diagnose(prefix)
+        old = [r for r in results if "old Docker numbering" in r[2]]
+        self.assertEqual({r[0] for r in old}, {"warn"})
+        text = "\n".join(m for _l, _s, m in old)
+        self.assertIn("1883", text); self.assertIn("18883", text); self.assertIn("8088", text); self.assertIn("18081", text)
+        self.assertNotIn("s" * 30, text)
+        self.assertFalse([r for r in results if r[0] == "fail" and "old" in r[2]])
 
     @unittest.skipUnless(os.name == "posix", "file modes are a POSIX matter")
     def test_a_world_readable_file_fails(self):

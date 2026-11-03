@@ -13,7 +13,7 @@ Votre adresse publique est fixe ou change de temps en temps. Dans les deux cas, 
 
 ## 3. Dans le routeur
 
-Redirigez **un** port vers la machine du serveur : `443/TCP` pour B (et `80/TCP` si le certificat est réel, pour sa vérification), ou `51820/UDP` pour WireGuard en A. Jamais `1883`, `8883` ni le port d'un nœud.
+Redirigez **un** port vers la machine du serveur : `443/TCP` pour B (et `80/TCP` si le certificat est réel, pour sa vérification), ou `51820/UDP` pour WireGuard en A. Jamais `18883`, `8883` ni le port d'un nœud.
 
 ## 4. Sur le serveur (Docker)
 

@@ -4,6 +4,7 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+- **One numbering for the ports, also in Docker:** the server listens on 18080, Studio is published on 18081 and the plain listener of the broker is 18883 (they were 8080, 8088 and 1883), the same numbers the CM5 installer and the firewall script use; `scripts/ports.json` is the copy of the registry of ARMOR-COMMON they are checked against (`scripts/test_ports.py`), `armor_doctor.py` warns about an environment file or a listener that still names an old number, `check-required-env.sh` prints a note for every address on an old port, and `docs/DEPLOYMENT_BOUNDARY.md` has the steps to migrate an existing Docker installation.
 - **`check-required-env.sh --remote`:** besides the usual checks it refuses what is not acceptable when the installation is reached from the Internet: an origin that is not https, an insecure cookie, a server that does not trust the proxy, a disarm that does not require the PIN, a broker published on every address or on a public one, and a short or common administrator password; with tests.
 - **A published version is never replaced with other content:** `package_component.py --publish` on a release that already exists reads the hashes of its assets, skips the ones it already has with the same content, uploads only the new ones (the signature, for instance) and refuses, telling to raise the version, when an asset of that name is there with another hash or with no hash to compare. It no longer uploads over an existing asset with `--clobber`; 3 new tests.
 

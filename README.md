@@ -128,7 +128,7 @@ Containers are hardened, images pinned, the `core` network internal and the stat
 | `scripts/mqtt_identity.sh add`  `health-report <role> <node>`  `node-control` | - | writes the broker line of every kind of node; adds health reports and node control to a node installed earlier (idempotent) |
 | `scripts/armor_mqtt_tls.sh`  `armor_wireguard.sh`  `armor_ddns.sh`  `armor_tls_check.sh` | - | the encrypted door of the broker (`status`, `export-ca`, `server-tls`...), the WireGuard VPN with a QR per phone, a DuckDNS, Cloudflare or other name for the house, and the check of remote access; Studio offers them without typing a command |
 
-The two helpers (`armor_admin_agent.py`, `armor_maintenance_agent.py`) listen on local Unix sockets and so do not run on Windows. The Compose file starts the broker (Mosquitto), the server and Studio (nginx, which proxies `/api/`), and a `tls` profile adds Caddy; only Studio is published, on loopback by default (`127.0.0.1:8088`, TLS on 8443). The packages of each release are assets of the GitHub releases, not files of this repository. The log of a system update says `downloading: N%` every ten percent, so a slow link does not look like a stuck update, and an update installs the dependencies again (`npm ci`) only when what the lock file says about them changed, not just because the project has a new version.
+The two helpers (`armor_admin_agent.py`, `armor_maintenance_agent.py`) listen on local Unix sockets and so do not run on Windows. The Compose file starts the broker (Mosquitto), the server and Studio (nginx, which proxies `/api/`), and a `tls` profile adds Caddy; only Studio is published, on loopback by default (`127.0.0.1:18081`, TLS on 8443). The packages of each release are assets of the GitHub releases, not files of this repository. The log of a system update says `downloading: N%` every ten percent, so a slow link does not look like a stuck update, and an update installs the dependencies again (`npm ci`) only when what the lock file says about them changed, not just because the project has a new version.
 
 ## ⚙️ Configuration
 
@@ -136,7 +136,7 @@ The two helpers (`armor_admin_agent.py`, `armor_maintenance_agent.py`) listen on
 |---|---|---|
 | `install_cm5.sh` | 18080  18081  18883  18090 | `--server-port`, `--studio-port`, `--mqtt-port` (the installed one is kept if it is not repeated) and the voice port; all between 1024 and 65535 and different; the broker address goes to `PREFIX/etc/armor.mqtt.env` |
 | `ARMOR_MQTT_BIND`  `ARMOR_STUDIO_BIND` | 127.0.0.1 | where Compose publishes the broker and Studio |
-| `ARMOR_PUBLIC_ORIGIN` | http://127.0.0.1:8088 | the origin Studio is reached by |
+| `ARMOR_PUBLIC_ORIGIN` | http://127.0.0.1:18081 | the origin Studio is reached by |
 | `ARMOR_TLS_BIND`  `ARMOR_TLS_PORT`  `ARMOR_TLS_HTTP_PORT` | 8443 | Caddy of the `tls` profile |
 | `ARMOR_MAINT_STAGING`  `ARMOR_MAINT_STAGING_WAIT_S` | off  30 | in `armor.maint.env`: `on` makes the maintenance helper try the new server on a free loopback port, with an empty data folder and no broker, before it switches (the wait is 5 to 120 seconds) |
 | `.env`  `.env.example` | - | created by `generate_secrets.sh`, ignored by Git; the example lists every variable |

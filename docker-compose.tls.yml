@@ -1,5 +1,5 @@
-# Adds TLS to the broker: nodes connect to mqtts://<host>:8883 (certificate files in secrets/, never committed) and the plain port 1883 stops being published. The server of this
-# installation keeps speaking plain MQTT to the broker over the internal network of the containers (mqtt://broker:1883), which nothing outside reaches.
+# Adds TLS to the broker: nodes connect to mqtts://<host>:8883 (certificate files in secrets/, never committed) and the plain port 18883 stops being published. The server of this
+# installation keeps speaking plain MQTT to the broker over the internal network of the containers (mqtt://broker:18883), which nothing outside reaches.
 #   docker compose -f docker-compose.yml -f docker-compose.tls.yml up -d
 # Needs Docker Compose 2.24 or newer (the `!override` below replaces the list of ports instead of adding to it).
 services:

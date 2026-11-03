@@ -140,7 +140,7 @@
       "level": "tested",
       "title": "MQTT broker 18883",
       "lines": [
-        "never the standard 1883; a",
+        "never the standard MQTT port; a",
         "non-anonymous listener and an",
         "optional one over TLS on 8883"
       ]

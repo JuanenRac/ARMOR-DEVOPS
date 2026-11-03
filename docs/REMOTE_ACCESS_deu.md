@@ -13,7 +13,7 @@ Ihre öffentliche Adresse ist fest oder ändert sich gelegentlich. In beiden Fä
 
 ## 3. Im Router
 
-Leiten Sie **einen** Port zum Server-Rechner weiter: `443/TCP` für B (und `80/TCP`, wenn das Zertifikat echt ist, für dessen Prüfung) oder `51820/UDP` für WireGuard bei A. Nie `1883`, `8883` oder den Port eines Knotens.
+Leiten Sie **einen** Port zum Server-Rechner weiter: `443/TCP` für B (und `80/TCP`, wenn das Zertifikat echt ist, für dessen Prüfung) oder `51820/UDP` für WireGuard bei A. Nie `18883`, `8883` oder den Port eines Knotens.
 
 ## 4. Auf dem Server (Docker)
 

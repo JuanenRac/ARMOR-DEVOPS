@@ -29,8 +29,8 @@ $DOCKER compose --profile tls config --quiet; check "compose config (tls profile
 $DOCKER compose up -d --build >/dev/null 2>&1; check "compose up" "$?" "0"
 
 wait_for() { for _ in $(seq 1 40); do [[ "$(curl -s -m 5 -o /dev/null -w '%{http_code}' "$1")" == "200" ]] && return 0; sleep 2; done; return 1; }
-wait_for http://127.0.0.1:8088/ ; check "studio answers" "$?" "0"
-info="$(curl -s -m 8 http://127.0.0.1:8088/api/v1/info)"
+wait_for http://127.0.0.1:18081/ ; check "studio answers" "$?" "0"
+info="$(curl -s -m 8 http://127.0.0.1:18081/api/v1/info)"
 check "studio reaches the server" "$(echo "$info" | grep -c '"service":"armor-server"')" "1"
 sleep 5
 check "broker running" "$($DOCKER compose ps --format '{{.Service}} {{.State}}' | grep -c '^broker running')" "1"

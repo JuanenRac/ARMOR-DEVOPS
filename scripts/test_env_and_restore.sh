@@ -71,6 +71,12 @@ expect 2 "secrets/mqtt.password and secrets/mqtt.acl are required" check "$P"
 P="$WORK/p9"; project "$P"; set_value "$P" ARMOR_MQTT_PASSWORD ""
 out="$(check "$P" 2>&1)"; ok
 grep -q "ARMOR_MQTT_PASSWORD is not set" <<<"$out" || bad "an empty broker password was accepted"
+# an address on a port of the old Docker numbering is a note that names the new one, not a failure
+P="$WORK/p9b"; project "$P"; echo "ARMOR_PUBLIC_ORIGIN=http://127.0.0.1:8088" >>"$P/.env"
+expect 0 "Studio is now on 18081" check "$P"
+expect 0 "ARMOR_DEVOPS_ENV=PASS" check "$P"
+P="$WORK/p9c"; project "$P"; echo "ARMOR_PUBLIC_ORIGIN=http://127.0.0.1:18081" >>"$P/.env"
+out="$(check "$P" 2>&1)"; ok; grep -q "old Docker numbering" <<<"$out" && bad "a current port was reported as old"
 # a problem is reported for every variable at once, and no value is ever printed
 P="$WORK/p10"; project "$P"; set_value "$P" ARMOR_INGEST_TOKEN "weak"; set_value "$P" ARMOR_CONTROL_TOKEN "weak2"
 out="$(check "$P" 2>&1)"; ok

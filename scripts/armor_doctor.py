@@ -7,6 +7,7 @@
 * no token repeated between the files (one leaked credential must not open two doors);
 * the token of the network node is the one derived from the ingest token and its node id;
 * the port of the broker in ``armor.mqtt.env`` is a port ``mosquitto.conf`` listens on, when both are found;
+* no address or listener still on a port of the old Docker numbering (8080, 8088, 1883): the installations keep working, but the numbering is now 18080, 18081 and 18883 everywhere (ports.json);
 * the free space of the disk of the prefix.
 
 It only reads. No value is printed, nor the length of one: a line says "too short", not how short. Exit 0 when nothing failed, 1 when something failed, 2 for a wrong
@@ -30,6 +31,15 @@ DEFAULT_MIN_TOKEN = 24
 DEFAULT_MIN_FREE_MB = 500
 SECRET_NAME = re.compile(r"(TOKEN|PASSWORD|KEY|SECRET)$")
 MAX_ENV_BYTES = 256 * 1024
+
+
+def old_port_map() -> dict[int, tuple[str, int]]:
+    """{old number: (service, current port)} from ports.json, the copy of the registry of ARMOR-COMMON that sits next to this script."""
+    try:
+        registry = json.loads((Path(__file__).with_name("ports.json")).read_text(encoding="utf-8"))["ports"]
+    except (OSError, ValueError, KeyError):
+        return {8080: ("server", 18080), 8088: ("studio", 18081), 1883: ("mqtt", 18883)}
+    return {int(old): (name, int(entry["port"])) for name, entry in registry.items() for old in entry.get("legacy", [])}
 
 
 def read_env(path: Path) -> dict[str, str]:
@@ -121,6 +131,18 @@ def diagnose(prefix: Path, min_token: int = DEFAULT_MIN_TOKEN, min_free_mb: int 
     elif mqtt:
         add("warn", "armor.mqtt.env", "the port of the broker could not be compared (no mosquitto.conf found or no ARMOR_MQTT_URL)")
 
+    old = old_port_map()
+    old_pattern = re.compile(r"(?::|=)(" + "|".join(str(n) for n in old) + r")(?![0-9])")
+    for name, env in sorted(envs.items()):
+        for key, value in sorted(env.items()):
+            hit = old_pattern.search(value if not value.isdigit() else "=" + value) if key.endswith(("URL", "ORIGIN", "UPSTREAM", "HOST_PORT", "_PORT")) else None
+            if hit:
+                service, current = old[int(hit.group(1))]
+                add("warn", name, f"{key} still uses port {hit.group(1)} of the old Docker numbering; the {service} is now on {current} (docs/DEPLOYMENT_BOUNDARY.md, ports): update it and the address the clients and nodes use")
+    if conf is not None:
+        stale = sorted(listener_ports(conf) & set(old))
+        for number in stale:
+            add("warn", conf.name, f"listens on port {number} of the old Docker numbering; the {old[number][0]} is now on {old[number][1]}: change the listener and the address the nodes use")
     try:
         free_mb = shutil.disk_usage(prefix).free // (1024 * 1024)
         add("ok" if free_mb >= min_free_mb else "warn", str(prefix), "enough free space" if free_mb >= min_free_mb else f"less than {min_free_mb} MB free: an update or a backup may not fit")

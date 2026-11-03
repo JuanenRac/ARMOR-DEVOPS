@@ -44,5 +44,14 @@ if [[ "$REMOTE" == 1 ]]; then
   case "${password,,}" in password*|12345*|qwerty*|admin*|letmein*|changeme*|welcome*) echo "ERROR: ARMOR_STUDIO_PASSWORD is a common password" >&2; status=2 ;; esac
   echo "NOTE: whether an administrator has a second factor is not in .env: ask the server (GET /api/v1/remote/check) after it starts"
 fi
+# The Docker stack used to publish Studio on 8088, the server on 8080 and the broker on 1883. The numbering is now the one of the CM5 (ports.json): an installation that still names
+# an old number keeps starting, but the address the browser, the apps and the nodes use has to follow. A note, never a failure.
+for variable in ARMOR_PUBLIC_ORIGIN ARMOR_MQTT_URL ARMOR_SIM_SERVER_URL; do
+  case "$(read_value "$variable")" in
+    *:8088|*:8088/*) echo "NOTE: $variable still names port 8088 of the old Docker numbering; Studio is now on 18081 (see docs/DEPLOYMENT_BOUNDARY.md, Ports)" >&2 ;;
+    *:8080|*:8080/*) echo "NOTE: $variable still names port 8080 of the old Docker numbering; the server is now on 18080 (see docs/DEPLOYMENT_BOUNDARY.md, Ports)" >&2 ;;
+    *:1883|*:1883/*) echo "NOTE: $variable still names port 1883 of the old Docker numbering; the broker is now on 18883 (see docs/DEPLOYMENT_BOUNDARY.md, Ports)" >&2 ;;
+  esac
+done
 [[ $status -eq 0 ]] && echo "ARMOR_DEVOPS_ENV=PASS"
 exit $status
