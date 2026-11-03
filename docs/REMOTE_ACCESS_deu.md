@@ -49,6 +49,11 @@ Mit installiertem Wartungsagenten (`install_cm5.sh --with-maintenance`) und Wire
 Dasselbe geht im Terminal mit `armor_wireguard.sh` und `armor_ddns.sh` (der Kopf jedes Skripts listet seine Befehle; `plan` zeigt vorab, was geschrieben würde).
 
 
+**Adressen sperren, die ständig scheitern:** Ist `fail2ban` installiert (`sudo apt install fail2ban`), schreibt `sudo scripts/armor_fail2ban.sh setup` einen Filter, der die abgelehnten Anmeldungen und abgelehnten Codes des zweiten Faktors im Audit-Protokoll des Servers liest, sowie ein Jail (5 Fehlversuche in 10 Minuten sperren die Adresse für eine Stunde; die Zahlen stehen in `jail.d/armor-studio.local`). Gib das Netz des Hauses mit `--ignoreip` an, damit es nie gesperrt wird, und lass den Server deinem Reverse-Proxy vertrauen, damit die Adresse im Protokoll die des Besuchers ist. `plan` zeigt, was geschrieben würde; `status` und `remove` tun, was sie sagen.
+
+**Kopie auf eine USB-Platte:** `backup_data.sh --copy-to /mnt/usb --require-mount` kopiert das verschlüsselte Archiv nur, wenn `/mnt/usb` eine eingehängte Platte mit genug Platz ist; eine abgezogene Platte füllt also nie die Systemkarte (siehe `docs/BACKUP_AND_TLS.md`).
+
+
 ## 7. Auf dem Handy
 
 A.R.M.O.R. Control: Geben Sie den Namen als Server ein (`https://casa.duckdns.org`), melden Sie sich an (der Code der App wird als zweiter Schritt verlangt) und prüfen Sie Mehr > Sicherheit.

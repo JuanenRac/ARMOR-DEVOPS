@@ -49,6 +49,11 @@ ARMOR_REMOTE_POLICY=operate              # 来自外部：查看并操作报警�
 同样的事也可以在终端用 `armor_wireguard.sh` 和 `armor_ddns.sh` 完成（每个脚本开头列出了命令；`plan` 会在写入任何内容前显示将要写入的内容）。
 
 
+**封禁反复失败的地址:** 安装 `fail2ban`(`sudo apt install fail2ban`)后,`sudo scripts/armor_fail2ban.sh setup` 会写入一个读取服务器审计日志中被拒绝的登录和被拒绝的第二因素验证码的过滤器,以及一个监狱规则(10 分钟内失败 5 次则封禁该地址一小时;数值在 `jail.d/armor-studio.local` 中)。用 `--ignoreip` 给出家中的网络,使其永不被封禁,并让服务器信任你的反向代理,这样日志中的地址才是访客的地址。`plan` 显示将要写入的内容;`status` 和 `remove` 如其名所示。
+
+**复制到 USB 磁盘:** 仅当 `/mnt/usb` 是空间足够的已挂载磁盘时,`backup_data.sh --copy-to /mnt/usb --require-mount` 才会复制加密归档,因此拔掉的磁盘不会填满系统卡(见 `docs/BACKUP_AND_TLS.md`)。
+
+
 ## 7. 在手机上
 
 A.R.M.O.R. Control：把名称作为服务器填入（`https://casa.duckdns.org`），登录（第二步会要求应用中的代码），并检查 更多 > 安全。

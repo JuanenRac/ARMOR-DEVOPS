@@ -29,7 +29,9 @@ The archive is AES-256 encrypted (PBKDF2), verified by decrypting it again, and 
 `.sha256`. Add `--with-media` to include recorded evidence. By default the script
 never deletes older backups; `--keep N` keeps only the N newest archives of the output folder
 (and their `.sha256`) once the new one is verified, and `--copy-to DIR` also copies the archive to
-a mounted share or an external disk and checks the copy against its checksum. Run it nightly
+a mounted share or an external disk and checks the copy against its checksum. With `--require-mount` the copy is refused (and nothing is backed up) unless `DIR` is a mounted
+disk of its own, so an unplugged USB disk never fills the system card, and it is refused when the disk
+lacks room for the archive; the copy is flushed to the disk before the script reports success. Run it nightly
 from a cron entry or a systemd timer.
 
 ## Restore

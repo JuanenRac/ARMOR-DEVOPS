@@ -14,7 +14,7 @@ set -euo pipefail
 usage() {
   cat <<'USAGE'
 Usage: backup_data.sh --data-dir DIR --out-dir DIR --passphrase-file FILE [--with-media]
-                      [--keep N] [--copy-to DIR]
+                      [--keep N] [--copy-to DIR [--require-mount]]
 
   --data-dir         the server data directory (ARMOR_DATA_DIR)
   --out-dir          where the .tar.gz.enc archive and its .sha256 are written
@@ -24,10 +24,14 @@ Usage: backup_data.sh --data-dir DIR --out-dir DIR --passphrase-file FILE [--wit
                      output folder (and their .sha256); 0 or unset keeps everything
   --copy-to DIR      also copy the archive and its .sha256 to DIR (a mounted share or
                      an external disk), and check the copy with sha256sum
+  --require-mount    with --copy-to: refuse unless DIR is a mounted device of its own (a USB
+                     disk that is plugged in), so an unplugged disk never makes the copy land
+                     on the system card; the copy is also refused when the disk lacks room
+                     for the archive, and is flushed to the disk before the script reports success
 USAGE
 }
 
-DATA_DIR="" OUT_DIR="" PASS_FILE="" WITH_MEDIA=0 KEEP=0 COPY_TO=""
+DATA_DIR="" OUT_DIR="" PASS_FILE="" WITH_MEDIA=0 KEEP=0 COPY_TO="" REQUIRE_MOUNT=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --data-dir) DATA_DIR="${2:-}"; shift 2 ;;
@@ -36,12 +40,18 @@ while [[ $# -gt 0 ]]; do
     --with-media) WITH_MEDIA=1; shift ;;
     --keep) KEEP="${2:-}"; shift 2 ;;
     --copy-to) COPY_TO="${2:-}"; shift 2 ;;
+    --require-mount) REQUIRE_MOUNT=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "unknown option: $1" >&2; usage >&2; exit 2 ;;
   esac
 done
 [[ -d "$DATA_DIR" && -n "$OUT_DIR" && -f "$PASS_FILE" ]] || { usage >&2; exit 2; }
 [[ "$KEEP" =~ ^[0-9]+$ ]] || { echo "--keep needs a whole number" >&2; exit 2; }
+if [[ "$REQUIRE_MOUNT" -eq 1 ]]; then
+  [[ -n "$COPY_TO" ]] || { echo "--require-mount needs --copy-to" >&2; exit 2; }
+  command -v mountpoint >/dev/null || { echo "mountpoint is required for --require-mount" >&2; exit 1; }
+  mountpoint -q -- "$COPY_TO" || { echo "$COPY_TO is not a mounted disk: plug the USB disk in (nothing was backed up)" >&2; exit 1; }
+fi
 command -v openssl >/dev/null || { echo "openssl is required" >&2; exit 1; }
 # A native Windows openssl (Git Bash) does not translate the path inside "file:"; give it a Windows path.
 PASS_PATH="$PASS_FILE"; if command -v cygpath >/dev/null 2>&1; then PASS_PATH="$(cygpath -m "$PASS_FILE")"; fi
@@ -68,8 +78,14 @@ if [[ "$COUNT" -lt 1 ]]; then rm -f -- "$TARGET"; echo "verification failed: the
 
 if [[ -n "$COPY_TO" ]]; then
   mkdir -p "$COPY_TO"
+  if [[ "$REQUIRE_MOUNT" -eq 1 ]]; then
+    NEED_KB="$(( ($(wc -c <"$TARGET") + 1023) / 1024 + 1 ))"
+    FREE_KB="$(df -Pk -- "$COPY_TO" | awk 'NR==2 {print $4}')"
+    if [[ ! "$FREE_KB" =~ ^[0-9]+$ || "$FREE_KB" -lt "$NEED_KB" ]]; then echo "the disk at $COPY_TO has no room for the archive (needs $NEED_KB KiB); the verified archive stays in $OUT_DIR" >&2; exit 1; fi
+  fi
   cp -- "$TARGET" "$TARGET.sha256" "$COPY_TO/"
   ( cd "$COPY_TO" && sha256sum -c "$(basename "$TARGET").sha256" >/dev/null ) || { echo "the copy in $COPY_TO does not match its checksum" >&2; exit 1; }
+  [[ "$REQUIRE_MOUNT" -ne 1 ]] || sync
 fi
 
 # Rotation: only after this backup is verified (and copied), drop the oldest ones.

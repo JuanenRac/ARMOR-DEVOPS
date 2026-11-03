@@ -49,6 +49,11 @@ Com o agente de manutenção instalado (`install_cm5.sh --with-maintenance`) e o
 O mesmo pode ser feito num terminal com `armor_wireguard.sh` e `armor_ddns.sh` (o cabeçalho de cada um lista os seus comandos; `plan` mostra o que seria escrito antes de escrever algo).
 
 
+**Bloquear os endereços que falham repetidamente:** com o `fail2ban` instalado (`sudo apt install fail2ban`), `sudo scripts/armor_fail2ban.sh setup` escreve um filtro que lê os inícios de sessão e os códigos do segundo fator recusados no registo de auditoria do servidor, e uma jaula (5 falhas em 10 minutos bloqueiam o endereço durante uma hora; os números estão em `jail.d/armor-studio.local`). Indique a rede da casa com `--ignoreip` para que nunca seja bloqueada, e faça com que o servidor confie no seu proxy inverso para que o endereço do registo seja o do visitante. `plan` mostra o que seria escrito; `status` e `remove` fazem o que dizem.
+
+**Cópia para um disco USB:** `backup_data.sh --copy-to /mnt/usb --require-mount` copia o ficheiro cifrado apenas quando `/mnt/usb` é um disco montado com espaço suficiente, para que um disco desligado nunca encha o cartão do sistema (veja `docs/BACKUP_AND_TLS.md`).
+
+
 ## 7. No telemóvel
 
 A.R.M.O.R. Control: escreva o nome como servidor (`https://casa.duckdns.org`), entre (o código da aplicação é pedido como segundo passo) e confira Mais > Segurança.

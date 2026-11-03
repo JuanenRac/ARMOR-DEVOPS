@@ -49,6 +49,11 @@ ARMOR_REMOTE_POLICY=operate              # 外部からは閲覧とアラーム�
 同じことは端末から `armor_wireguard.sh` と `armor_ddns.sh` でもできます（各スクリプトの冒頭にコマンド一覧があり、`plan` で書き込まれる内容を事前に確認できます）。
 
 
+**失敗を繰り返すアドレスを遮断する:** `fail2ban` をインストール済み(`sudo apt install fail2ban`)なら、`sudo scripts/armor_fail2ban.sh setup` が、サーバーの監査ログにある拒否されたサインインと第2要素コードを読むフィルターとジェイル(10分間に5回失敗でそのアドレスを1時間遮断。数値は `jail.d/armor-studio.local` にあります)を書き込みます。家のネットワークは `--ignoreip` で指定して遮断されないようにし、ログのアドレスが訪問者のものになるよう、サーバーがリバースプロキシを信頼するようにしてください。`plan` は書き込まれる内容を表示し、`status` と `remove` は名前どおりに動作します。
+
+**USB ディスクへのコピー:** `backup_data.sh --copy-to /mnt/usb --require-mount` は、`/mnt/usb` が十分な空きのあるマウント済みディスクである場合にのみ暗号化アーカイブをコピーします。抜かれたディスクがシステムカードを埋めることはありません(`docs/BACKUP_AND_TLS.md` を参照)。
+
+
 ## 7. スマホで
 
 A.R.M.O.R. Control：サーバーに名前（`https://casa.duckdns.org`）を入力し、サインインします（2 段階目としてアプリのコードを求められます）。その他 > セキュリティも確認してください。

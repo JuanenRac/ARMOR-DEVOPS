@@ -49,4 +49,19 @@ done
 [[ "$(ls "$WORK"/mirror/*.enc | wc -l)" -eq 3 ]]
 if "$HERE/backup_data.sh" --data-dir "$WORK/data" --out-dir "$WORK/rot" --passphrase-file "$WORK/pass" --keep x 2>/dev/null; then echo "a bad --keep was accepted" >&2; exit 1; fi
 
+# A USB copy: only onto a mounted disk (a stand-in for `mountpoint` answers for the mirror folder), and never onto the system card.
+mkdir -p "$WORK/bin" "$WORK/usb"
+cat >"$WORK/bin/mountpoint" <<'EOF'
+#!/usr/bin/env bash
+[[ "${*: -1}" == "$ARMOR_TEST_MOUNTED" ]]
+EOF
+chmod +x "$WORK/bin/mountpoint"
+export PATH="$WORK/bin:$PATH"
+export ARMOR_TEST_MOUNTED="$WORK/usb"
+if "$HERE/backup_data.sh" --data-dir "$WORK/data" --out-dir "$WORK/usbout" --passphrase-file "$WORK/pass" --copy-to "$WORK/unplugged" --require-mount 2>/dev/null; then echo "an unmounted disk was accepted" >&2; exit 1; fi
+[[ ! -e "$WORK/usbout" && ! -e "$WORK/unplugged" ]] || { echo "nothing may be written when the disk is not mounted" >&2; exit 1; }
+if "$HERE/backup_data.sh" --data-dir "$WORK/data" --out-dir "$WORK/usbout" --passphrase-file "$WORK/pass" --require-mount 2>/dev/null; then echo "--require-mount without --copy-to was accepted" >&2; exit 1; fi
+"$HERE/backup_data.sh" --data-dir "$WORK/data" --out-dir "$WORK/usbout" --passphrase-file "$WORK/pass" --copy-to "$WORK/usb" --require-mount | grep -q 'ARMOR_BACKUP=PASS'
+[[ "$(ls "$WORK"/usb/*.enc | wc -l)" -eq 1 && -f "$(ls "$WORK"/usb/*.enc)".sha256 ]]
+
 echo "ARMOR_BACKUP_TEST=PASS"
