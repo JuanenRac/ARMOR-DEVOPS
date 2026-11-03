@@ -42,6 +42,8 @@ they were, protected by the login). Nothing else is mentioned and the policy is 
 a port published by Docker is not (keep those on loopback behind Caddy). A remote way in through a router's port forwarding arrives from the router's or the Internet's address: give `--clients` only if that address is
 in it, or leave `--clients` out. **Never forward the broker's port.** The rules have been tested as text only (`scripts/test_firewall.sh`); they have not been loaded on a machine.
 
+With `--clients`, the HTTP ports of the server accept only the clients' network, so a machine in the field network that speaks HTTP to the server is refused too: the HTTP ingestion of solar, electrical and network readings from another machine, and a wall panel placed in the field network (its session and its summary). The nodes publish by MQTT, which the broker accepts from the field network; for the others, give `--clients` the address or the network of that machine, or leave `--clients` out, and keep the wall panel in a network the clients' rule lets through.
+
 ## Health reports
 
 Every kind of node writes its own `armor/health/<node>` (the same report for a radar, a solar, an electrical, an alarm node and a wall panel), and the server reads `armor/health/#`. `scripts/mqtt_identity.sh add <role> <id>` writes the line for new nodes; for a node installed before, run `scripts/mqtt_identity.sh health-report <role> <id>` (idempotent, the previous rules are kept as `acl.before-health`). On an existing server `install_cm5.sh` adds the read line once.
