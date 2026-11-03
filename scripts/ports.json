@@ -181,6 +181,10 @@
         "match": "CAMERA_MEDIA_GATEWAY.md",
         "line_contains": "camera ports",
         "why": "the ports IP cameras answer on"
+      },
+      {
+        "match": "ports.json",
+        "why": "the registry itself (and its copies) lists the old numbers"
       }
     ],
     "context_only": {
