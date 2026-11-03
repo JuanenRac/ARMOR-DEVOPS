@@ -202,7 +202,7 @@ def existing_digests(view_output: str) -> dict[str, str]:
     try:
         listed = json.loads(view_output or "{}").get("assets", [])
     except (ValueError, AttributeError):
-        raise SystemExit("could not read the assets of the existing release: refusing to change it")
+        raise SystemExit("could not read the assets of the existing release: refusing to change it") from None
     return {str(item.get("name", "")): str(item.get("digest", "")).removeprefix("sha256:").lower() for item in listed if isinstance(item, dict)}
 
 
