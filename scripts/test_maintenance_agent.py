@@ -169,7 +169,8 @@ class MaintenanceTest(unittest.TestCase):
         cls.tmp.cleanup()
 
     def publish(self, repo: str, version: str, files: dict[str, bytes] | None, component: str, good_hash: bool = True, signature: str | None = "valid") -> None:
-        """signature: "valid" (made with the key the agent trusts), "other" (another key), "garbage", or "none" (no .sig in the release)."""
+        """signature: "valid" (the manifest signature .sig2 and the older .sig, both made with the key the agent trusts), "manifest" (only the .sig2), "legacy" (only the older .sig),
+        "other" (both made with another key), "garbage", or "none" (neither in the release)."""
         assets = []
         if files is not None:
             name = f"armor-{component}-{version}.tgz"
@@ -178,11 +179,23 @@ class MaintenanceTest(unittest.TestCase):
             digest = hashlib.sha256(content).hexdigest() if good_hash else "0" * 64
             FakeGitHub.assets[name + ".sha256"] = f"{digest}  {name}\n".encode()
             assets = [{"name": name, "browser_download_url": f"{self.base}/assets/{name}"}, {"name": name + ".sha256", "browser_download_url": f"{self.base}/assets/{name}.sha256"}]
-            message = f"armor-pkg/1|{component}|{version}|{hashlib.sha256(content).hexdigest()}".encode()
-            text = {"valid": lambda: self.key.sign(message), "other": lambda: self.other_key.sign(message), "garbage": lambda: "zz", "none": lambda: None}[signature or "none"]()
-            if text is not None:
-                FakeGitHub.assets[name + ".sig"] = (text + "\n").encode()
-                assets.append({"name": name + ".sig", "browser_download_url": f"{self.base}/assets/{name}.sig"})
+            sha = hashlib.sha256(content).hexdigest()
+            older = f"armor-pkg/1|{component}|{version}|{sha}".encode()
+            manifest = f"armor-fw/1|{component}|package|{version}|{sha}".encode()
+            kind = signature or "none"
+            texts: dict[str, str | None] = {".sig": None, ".sig2": None}
+            if kind in ("valid", "legacy"):
+                texts[".sig"] = self.key.sign(older)
+            if kind in ("valid", "manifest"):
+                texts[".sig2"] = self.key.sign(manifest)
+            if kind == "other":
+                texts = {".sig": self.other_key.sign(older), ".sig2": self.other_key.sign(manifest)}
+            if kind == "garbage":
+                texts = {".sig": "zz", ".sig2": "zz"}
+            for suffix, text in texts.items():
+                if text is not None:
+                    FakeGitHub.assets[name + suffix] = (text + "\n").encode()
+                    assets.append({"name": name + suffix, "browser_download_url": f"{self.base}/assets/{name}{suffix}"})
         FakeGitHub.releases[repo] = {"tag_name": f"v{version}", "published_at": "2026-10-15T10:00:00Z", "body": "notes", "assets": assets}
         self.agent._cache.clear()
 
@@ -286,6 +299,85 @@ class MaintenanceTest(unittest.TestCase):
         # what the firmware signs (another prefix, or the bare hash) can never pass as a package signature
         self.assertFalse(self.agent.package_signature_ok("ai", "0.2.5", digest, self.key.sign(f"armor-fw/1|ai|x|0.2.5|{digest}".encode())))
         self.assertFalse(self.agent.package_signature_ok("ai", "0.2.5", digest, self.key.sign(bytes.fromhex(digest))))
+
+    def test_the_manifest_signature_binds_the_component_the_version_and_the_hash_and_is_not_a_firmware_one(self) -> None:
+        digest = "a" * 64
+        good = self.key.sign(f"armor-fw/1|ai|package|0.2.5|{digest}".encode())
+        self.assertTrue(self.agent.manifest_signature_ok("ai", "0.2.5", digest, good))
+        self.assertFalse(self.agent.manifest_signature_ok("voice", "0.2.5", digest, good))
+        self.assertFalse(self.agent.manifest_signature_ok("ai", "0.2.6", digest, good))
+        self.assertFalse(self.agent.manifest_signature_ok("ai", "0.2.5", "b" * 64, good))
+        # a firmware image of a node (its project, a real board) signed with the same key is not a package, nor is the older text, the bare hash or a garbage line
+        self.assertFalse(self.agent.manifest_signature_ok("ai", "0.2.5", digest, self.key.sign(f"armor-fw/1|ai|wifi|0.2.5|{digest}".encode())))
+        self.assertFalse(self.agent.manifest_signature_ok("ai", "0.2.5", digest, self.key.sign(f"armor-pkg/1|ai|0.2.5|{digest}".encode())))
+        self.assertFalse(self.agent.manifest_signature_ok("ai", "0.2.5", digest, self.key.sign(bytes.fromhex(digest))))
+        self.assertFalse(self.agent.manifest_signature_ok("ai", "0.2.5", digest, "zz"))
+        self.assertFalse(self.agent.manifest_signature_ok("ai", "0.2.5", digest, self.other_key.sign(f"armor-fw/1|ai|package|0.2.5|{digest}".encode())))
+        # and the manifest is not the older text
+        self.assertFalse(self.agent.package_signature_ok("ai", "0.2.5", digest, good))
+
+    def test_a_package_with_only_the_older_signature_is_refused_unless_the_file_says_either(self) -> None:
+        self.publish("ARMOR-SERVER-AI", "0.2.5", {"src/armor_server_ai/__init__.py": b'__version__ = "0.2.5"\n'}, "ai", signature="legacy")
+        self.assertEqual(self.agent.signature_mode(), "manifest")
+        self.assertEqual(self.agent.overview(False)["signature_mode"], "manifest")
+        view = self.wait(self.agent.update_job(["ai"], False))
+        self.assertEqual(view["state"], "failed")
+        self.assertIn("missing_signature", view["error"])
+        self.assertEqual(self.agent.installed_version("ai"), "0.2.4")
+        # the process environment is not the file
+        os.environ["ARMOR_MAINT_SIGNATURE"] = "either"
+        try:
+            self.assertEqual(self.agent.signature_mode(), "manifest")
+        finally:
+            del os.environ["ARMOR_MAINT_SIGNATURE"]
+        self.maint_env.write_text("ARMOR_MAINT_SIGNATURE=either\n", encoding="utf-8")
+        self.assertEqual(self.agent.overview(False)["signature_mode"], "either")
+        view = self.wait(self.agent.update_job(["ai"], False))
+        self.assertEqual(view["state"], "done", view["log"])
+        self.assertIn("older .sig", str(view["log"]))
+        self.assertEqual(self.agent.installed_version("ai"), "0.2.5")
+
+    def test_a_bad_manifest_signature_is_not_saved_by_a_good_older_one_unless_either_and_then_the_older_decides(self) -> None:
+        self.publish("ARMOR-SERVER-AI", "0.2.5", {"src/armor_server_ai/__init__.py": b'__version__ = "0.2.5"\n'}, "ai", signature="manifest")
+        name = "armor-ai-0.2.5.tgz"
+        FakeGitHub.assets[name + ".sig2"] = b"zz\n"
+        view = self.wait(self.agent.update_job(["ai"], False))
+        self.assertEqual((view["state"], "bad_signature" in view["error"]), ("failed", True))
+        self.maint_env.write_text("ARMOR_MAINT_SIGNATURE=either\n", encoding="utf-8")
+        view = self.wait(self.agent.update_job(["ai"], False))      # no .sig at all: still refused
+        self.assertEqual(view["state"], "failed")
+        self.assertEqual(self.agent.installed_version("ai"), "0.2.4")
+
+    def test_the_keys_of_a_rotation_are_two_at_most_and_only_from_the_file(self) -> None:
+        files = {"src/armor_server_ai/__init__.py": b'__version__ = "0.2.5"\n'}
+        self.publish("ARMOR-SERVER-AI", "0.2.5", files, "ai", signature="other")
+        self.assertEqual(self.agent.trusted_keys(), [self.key.public])
+        self.assertEqual(self.wait(self.agent.update_job(["ai"], False))["state"], "failed")
+        # the second key: from the file, 64 hexadecimal digits, not the process environment, not the same one twice, and not a value that is not a key
+        os.environ["ARMOR_MAINT_NEXT_KEY"] = self.other_key.public
+        try:
+            self.assertEqual(self.agent.trusted_keys(), [self.key.public])
+        finally:
+            del os.environ["ARMOR_MAINT_NEXT_KEY"]
+        for value in ("not a key", self.other_key.public[:-2], self.key.public):
+            self.maint_env.write_text(f"ARMOR_MAINT_NEXT_KEY={value}\n", encoding="utf-8")
+            self.assertEqual(self.agent.trusted_keys(), [self.key.public], value)
+        self.maint_env.write_text(f"ARMOR_MAINT_NEXT_KEY={self.other_key.public}\n", encoding="utf-8")
+        self.assertEqual(self.agent.trusted_keys(), [self.key.public, self.other_key.public])
+        prints = self.agent.overview(False)["trusted_fingerprints"]
+        self.assertEqual(prints, [self.agent.key_fingerprint(self.key.public), self.agent.key_fingerprint(self.other_key.public)])
+        self.assertTrue(all(re.fullmatch(r"[0-9a-f]{16}", item) for item in prints) and prints[0] != prints[1])
+        self.assertNotIn(self.key.public, json.dumps(self.agent.overview(False)))
+        view = self.wait(self.agent.update_job(["ai"], False))
+        self.assertEqual(view["state"], "done", view["log"])
+        self.assertEqual(self.agent.installed_version("ai"), "0.2.5")
+
+    def test_a_third_key_is_never_trusted(self) -> None:
+        third = TestKey(Path(self.tmp.name), "third")
+        self.maint_env.write_text(f"ARMOR_MAINT_NEXT_KEY={self.other_key.public}\n", encoding="utf-8")
+        digest = "c" * 64
+        self.assertFalse(self.agent.manifest_signature_ok("ai", "0.2.5", digest, third.sign(f"armor-fw/1|ai|package|0.2.5|{digest}".encode())))
+        self.assertTrue(self.agent.manifest_signature_ok("ai", "0.2.5", digest, self.other_key.sign(f"armor-fw/1|ai|package|0.2.5|{digest}".encode())))
 
     def test_a_valid_signature_installs(self) -> None:
         self.publish("ARMOR-SERVER-AI", "0.2.5", {"src/armor_server_ai/__init__.py": b'__version__ = "0.2.5"\n'}, "ai")

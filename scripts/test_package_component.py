@@ -157,7 +157,7 @@ class PackageTest(unittest.TestCase):
     def stub_signer(self, public: str) -> list[str]:
         """A stand-in signer that answers like sign.mjs (--public, --message) and records what it was asked to sign."""
         script = self.root / "signer.py"
-        lines = ["import sys", "if sys.argv[1] == '--public':", f"    print({public!r})", "else:", "    open(sys.argv[0] + '.asked', 'w').write(' '.join(sys.argv[2:]))", "    print('ab' * 64)"]
+        lines = ["import sys", "if sys.argv[1] == '--public':", f"    print({public!r})", "else:", "    open(sys.argv[0] + '.asked', 'a').write(' '.join(sys.argv[2:]) + chr(10))", "    print('ab' * 64)"]
         script.write_text("\n".join(lines) + "\n", encoding="utf-8")
         return [sys.executable, str(script)]
 
@@ -170,7 +170,11 @@ class PackageTest(unittest.TestCase):
         written = module.sign_package(package, "voice", version, digest, self.stub_signer(module.trusted_key()), True)
         self.assertEqual(written, self.root / "out" / "armor-voice-0.2.6.tgz.sig")
         self.assertEqual(written.read_text(encoding="ascii"), ("ab" * 64) + chr(10))
-        self.assertEqual((self.root / "signer.py.asked").read_text(encoding="utf-8"), f"armor-pkg/1|voice|0.2.6|{digest}")
+        # the manifest of the firmware images (with `package` where the board goes) and the older text are both signed, and both files are written
+        self.assertEqual((self.root / "signer.py.asked").read_text(encoding="utf-8").splitlines(), [f"armor-fw/1|voice|package|0.2.6|{digest}", f"armor-pkg/1|voice|0.2.6|{digest}"])
+        self.assertEqual((self.root / "out" / "armor-voice-0.2.6.tgz.sig2").read_text(encoding="ascii"), ("ab" * 64) + chr(10))
+        self.assertEqual(module.signature_files(package), [self.root / "out" / "armor-voice-0.2.6.tgz.sig2", self.root / "out" / "armor-voice-0.2.6.tgz.sig"])
+        self.assertEqual(module.manifest_text("voice", "0.2.6", digest), f"armor-fw/1|voice|package|0.2.6|{digest}")
 
     def test_asking_to_sign_without_a_signer_fails_but_the_default_just_skips(self) -> None:
         package, version, digest = self.built()
@@ -178,6 +182,8 @@ class PackageTest(unittest.TestCase):
             module.sign_package(package, "voice", version, digest, None, True)
         self.assertIsNone(module.sign_package(package, "voice", version, digest, None, False))
         self.assertFalse((self.root / "out" / "armor-voice-0.2.6.tgz.sig").exists())
+        self.assertFalse((self.root / "out" / "armor-voice-0.2.6.tgz.sig2").exists())
+        self.assertEqual(module.signature_files(package), [])
 
     def test_a_key_the_machine_does_not_trust_is_never_used(self) -> None:
         package, version, digest = self.built()
@@ -190,6 +196,7 @@ class PackageTest(unittest.TestCase):
         signer = self.stub_signer(module.trusted_key())
         self.assertEqual(module.sign_existing(package, signer, False), 0)
         self.assertTrue((self.root / "out" / "armor-voice-0.2.6.tgz.sig").exists())
+        self.assertTrue((self.root / "out" / "armor-voice-0.2.6.tgz.sig2").exists())
         (self.root / "out" / (package.name + ".sha256")).write_text("0" * 64 + "  x", encoding="utf-8")
         with self.assertRaises(SystemExit):
             module.sign_existing(package, signer, False)
@@ -424,6 +431,7 @@ class SignerAndCommandLineTest(unittest.TestCase):
         self.assertEqual(code, 0, out)
         create = [call for call in calls if call[:3] == ["gh", "release", "create"]][0]
         self.assertTrue(any(item.endswith(".tgz.sig") for item in create))
+        self.assertTrue(any(item.endswith(".tgz.sig2") for item in create))
         self.assertIn("signed", out)
 
     def test_the_options_that_need_each_other(self) -> None:

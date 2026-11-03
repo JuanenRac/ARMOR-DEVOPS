@@ -10,8 +10,10 @@
 # The package is armor-<component>-<version>.tgz and its hash is armor-<component>-<version>.tgz.sha256 (the helper looks for that name); the version is the one of the
 # repository's armor.project.json. Standard library only; --publish needs the GitHub CLI (`gh`) signed in.
 #
-# SIGNING. The helper of the machine installs nothing without armor-<component>-<version>.tgz.sig: the Ed25519 signature, by the key of the releases, of the text
-# `armor-pkg/1|<component>|<version>|<sha256>`. The key is never read here: the signer (default ~/.armor/sign.mjs, or --signer / ARMOR_PACKAGE_SIGNER) reads it from ARMOR_FIRMWARE_KEY
+# SIGNING. The helper of the machine installs nothing without a signature by the key of the releases (the one the firmware of the nodes trusts): armor-<component>-<version>.tgz.sig2 holds
+# the Ed25519 signature of the manifest `armor-fw/1|<component>|package|<version>|<sha256>` (the same manifest the firmware images use, with `package` where the board goes), and
+# armor-<component>-<version>.tgz.sig the one of the older text `armor-pkg/1|<component>|<version>|<sha256>`, which a helper that has not been updated still checks. Both are written
+# and published. The key is never read here: the signer (default ~/.armor/sign.mjs, or --signer / ARMOR_PACKAGE_SIGNER) reads it from ARMOR_FIRMWARE_KEY
 # or ~/.armor/firmware_ed25519.pem. When the signer and a key are there the .sig is written; --sign makes that mandatory (it fails without them). A signature made with a key
 # other than the one the helper trusts is never written.
 #
@@ -76,8 +78,18 @@ def run_signer(signer: list[str], arguments: list[str]) -> str:
     return result.stdout.strip()
 
 
+def manifest_text(component: str, version: str, digest: str) -> str:
+    """The manifest a package signature (.sig2) covers: the one of the firmware images, with `package` in the place of the board."""
+    return f"armor-fw/1|{component}|package|{version}|{digest}"
+
+
+def signature_files(package: Path) -> list[Path]:
+    """The signature files that exist next to a package: the manifest one (.sig2) and the older one (.sig)."""
+    return [item for item in (package.parent / (package.name + ".sig2"), package.parent / (package.name + ".sig")) if item.is_file()]
+
+
 def sign_package(package: Path, component: str, version: str, digest: str, signer: list[str] | None, required: bool) -> Path | None:
-    """Writes <package>.sig. Without a signer and a key: None, or a failure when `required`."""
+    """Writes <package>.sig2 (the manifest) and <package>.sig; returns the second. Without a signer and a key: None, or a failure when `required`."""
     if signer is None:
         if required:
             raise SystemExit("--sign needs the signer (~/.armor/sign.mjs, --signer or ARMOR_PACKAGE_SIGNER) and the key (ARMOR_FIRMWARE_KEY or ~/.armor/firmware_ed25519.pem)")
@@ -90,9 +102,11 @@ def sign_package(package: Path, component: str, version: str, digest: str, signe
         return None
     if public != trusted_key():
         raise SystemExit("the key that would sign is not the one the helper of the machine trusts: it would refuse the package")
+    manifest = run_signer(signer, ["--message", manifest_text(component, version, digest)]).lower()
     signature = run_signer(signer, ["--message", f"armor-pkg/1|{component}|{version}|{digest}"]).lower()
-    if not re.fullmatch(r"[0-9a-f]{128}", signature):
+    if not re.fullmatch(r"[0-9a-f]{128}", signature) or not re.fullmatch(r"[0-9a-f]{128}", manifest):
         raise SystemExit("the signer did not give a signature")
+    (package.parent / (package.name + ".sig2")).write_text(manifest + "\n", encoding="ascii", newline="\n")
     target = package.parent / (package.name + ".sig")
     target.write_text(signature + "\n", encoding="ascii", newline="\n")
     return target
@@ -252,7 +266,7 @@ def sign_existing(file: Path, signer: list[str] | None, upload: bool) -> int:
     signature = sign_package(file, component, version, digest, signer, True)
     print(f"{signature.name}  ({component} {version}, {digest})")            # type: ignore[union-attr]
     if upload:
-        subprocess.run(["gh", "release", "upload", f"v{version}", str(signature), "--clobber", "-R", f"{OWNER}/{LAYOUT[component][0]}"], check=True)
+        subprocess.run(["gh", "release", "upload", f"v{version}", *[str(item) for item in signature_files(file)], "--clobber", "-R", f"{OWNER}/{LAYOUT[component][0]}"], check=True)
         print(f"uploaded to {OWNER}/{LAYOUT[component][0]} v{version}")
     return 0
 
@@ -282,7 +296,7 @@ def main() -> int:
     elif arguments.publish:
         raise SystemExit("not publishing an unsigned package: the helper of the machine would refuse it (give the signer and the key)")
     if arguments.publish:
-        publish(arguments.component, repo, package, version, [signature] if signature else None)
+        publish(arguments.component, repo, package, version, signature_files(package) if signature else None)
     return 0
 
 
