@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+- **A published version is never replaced with other content:** `package_component.py --publish` on a release that already exists reads the hashes of its assets, skips the ones it already has with the same content, uploads only the new ones (the signature, for instance) and refuses, telling to raise the version, when an asset of that name is there with another hash or with no hash to compare. It no longer uploads over an existing asset with `--clobber`; 3 new tests.
+
 ## [0.7.0] - One source for the broker rules of the server, a trial of the new server before an update, a converter to the dynamic security file of the broker, and the writes the broker dropped silently opened only on request
 
 - **The compose file has an optional `bench` profile with simulated nodes:** `docker compose --profile bench up -d --build` adds a `simulator` service (the image of ARMOR-SIMULATOR, as hardened as the others: read only, no capabilities, an unprivileged user, no published port, only the core network) that starts once the server is healthy and delivers the data of 1 to 8 nodes (`ARMOR_SIM_*` in `.env.example`) for demonstrations and for end-to-end runs of Studio and the apps without hardware. A plain `docker compose up` does not start it. Tests in `scripts/test_compose_bench.py`; the image has not been built on a real Docker host yet (listed in `docs/BENCH_TESTS.md`).

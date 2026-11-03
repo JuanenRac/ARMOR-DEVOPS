@@ -272,15 +272,18 @@ class SignerAndCommandLineTest(unittest.TestCase):
         self.assertRegex(module.trusted_key(), r"^[0-9a-f]{64}$")
 
     # ---- publishing ----
-    def run_publish(self, view_exists: bool, version: str = "0.2.6", changelog: str | None = None, extra: list[Path] | None = None):
+    def run_publish(self, view_exists: bool, version: str = "0.2.6", changelog: str | None = None, extra: list[Path] | None = None, held: dict[str, str] | None = None):
+        """held: the assets the existing release already has, by name; a name maps to the content it holds ("same" = the file the packager just built)."""
         repo, (package, _version, _digest) = self.built(version)
         if changelog is not None:
             (repo / "CHANGELOG.md").write_text(changelog, encoding="utf-8")
         calls: list[list[str]] = []
+        listing = json.dumps({"assets": [{"name": name, "digest": "sha256:" + (hashlib.sha256(package.read_bytes()).hexdigest() if how == "same" else how)}
+                                         for name, how in (held or {}).items()]})
 
         def fake_run(command, **options):
             calls.append(list(command))
-            return mock.Mock(returncode=0 if (command[:3] != ["gh", "release", "view"] or view_exists) else 1)
+            return mock.Mock(returncode=0 if (command[:3] != ["gh", "release", "view"] or view_exists) else 1, stdout=listing)
 
         with mock.patch.object(module.subprocess, "run", side_effect=fake_run):
             with contextlib.redirect_stdout(io.StringIO()):
@@ -304,8 +307,26 @@ class SignerAndCommandLineTest(unittest.TestCase):
         calls, _package = self.run_publish(True, extra=[signature])
         self.assertEqual(len(calls), 2)
         self.assertEqual(calls[1][:4], ["gh", "release", "upload", "v0.2.6"])
-        self.assertIn("--clobber", calls[1])
+        self.assertNotIn("--clobber", calls[1])
         self.assertIn(str(signature), calls[1])
+
+    def test_an_asset_already_published_with_the_same_content_is_not_uploaded_again(self) -> None:
+        signature = self.root / "out" / "armor-voice-0.2.6.tgz.sig"
+        calls, package = self.run_publish(True, extra=[signature], held={"armor-voice-0.2.6.tgz": "same"})
+        self.assertNotIn(str(package), calls[1])
+        self.assertIn(str(signature), calls[1])
+        self.assertNotIn("--clobber", calls[1])
+
+    def test_a_published_version_is_never_replaced_with_other_content(self) -> None:
+        with self.assertRaises(SystemExit) as caught:
+            self.run_publish(True, held={"armor-voice-0.2.6.tgz": "0" * 64})
+        self.assertIn("raise the version", str(caught.exception))
+
+    def test_an_asset_with_no_known_hash_is_refused_not_guessed_and_an_unreadable_listing_stops_the_publication(self) -> None:
+        with self.assertRaises(SystemExit):
+            self.run_publish(True, held={"armor-voice-0.2.6.tgz": ""})
+        with self.assertRaises(SystemExit):
+            module.existing_digests("not json")
 
     def test_a_title_that_talks_about_the_process_is_never_published(self) -> None:
         repo, (package, version, _digest) = self.built()

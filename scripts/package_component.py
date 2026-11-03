@@ -197,6 +197,29 @@ def changelog_section(repo: Path, version: str) -> tuple[str, str]:
     return match.group(1).strip(), match.group(2).strip()
 
 
+def existing_digests(view_output: str) -> dict[str, str]:
+    """The sha256 of every asset a release already holds, by name (an asset the listing gives no digest for maps to an empty string)."""
+    try:
+        listed = json.loads(view_output or "{}").get("assets", [])
+    except (ValueError, AttributeError):
+        raise SystemExit("could not read the assets of the existing release: refusing to change it")
+    return {str(item.get("name", "")): str(item.get("digest", "")).removeprefix("sha256:").lower() for item in listed if isinstance(item, dict)}
+
+
+def new_assets(assets: list[str], held: dict[str, str]) -> list[str]:
+    """What still has to be uploaded to a release that exists: an asset it already holds with the same hash is skipped, one with another hash (or no known hash) is refused, because a
+    published version never changes under the same number (the signature, the hash file and the agent's cache all depend on it)."""
+    pending: list[str] = []
+    for asset in assets:
+        name = Path(asset).name
+        if name not in held:
+            pending.append(asset)
+            continue
+        if not held[name] or held[name] != hashlib.sha256(Path(asset).read_bytes()).hexdigest():
+            raise SystemExit(f"{name} is already published under this version with other content: raise the version instead of replacing it")
+    return pending
+
+
 def publish(component: str, repo: Path, package: Path, version: str, extra: list[Path] | None = None) -> None:
     name = LAYOUT[component][0]
     title, notes = changelog_section(repo, version)
@@ -206,9 +229,11 @@ def publish(component: str, repo: Path, package: Path, version: str, extra: list
     notes_file.write_text((notes or title) + "\n", encoding="utf-8")
     repo_name = f"{OWNER}/{name}"
     assets = [str(package), str(package) + ".sha256", *[str(item) for item in (extra or [])]]
-    exists = subprocess.run(["gh", "release", "view", f"v{version}", "-R", repo_name], capture_output=True, text=True, check=False).returncode == 0
-    if exists:
-        subprocess.run(["gh", "release", "upload", f"v{version}", *assets, "--clobber", "-R", repo_name], check=True)
+    view = subprocess.run(["gh", "release", "view", f"v{version}", "-R", repo_name, "--json", "assets"], capture_output=True, text=True, check=False)
+    if view.returncode == 0:
+        to_upload = new_assets(assets, existing_digests(view.stdout))
+        if to_upload:
+            subprocess.run(["gh", "release", "upload", f"v{version}", *to_upload, "-R", repo_name], check=True)
     else:
         subprocess.run(["gh", "release", "create", f"v{version}", *assets, "-R", repo_name, "--title", f"{name} {version} - {title}", "--notes-file", str(notes_file), "--target", "main"], check=True)
     notes_file.unlink(missing_ok=True)
