@@ -117,6 +117,24 @@ fi
 [[ -f "$PREFIX/etc/armor.ai.env" ]] && WITH_AI=1
 say()  { echo "[armor-install] $*"; }
 
+# Two safeguards around the switch of `current` (also loaded alone by the tests with ARMOR_INSTALL_LIB_ONLY=1).
+# Free space: an unpacked release holds its own node_modules, and a disk that fills up half way leaves a broken release folder.
+preflight_free_space() {
+  local dir="$1" min_mb="$2" free_mb
+  while [[ ! -d "$dir" && "$dir" != "/" ]]; do dir="$(dirname "$dir")"; done
+  free_mb="$(df -Pm "$dir" 2>/dev/null | awk 'NR==2 {print $4}')"
+  [[ "$min_mb" =~ ^[0-9]+$ ]] || fail "ARMOR_MIN_FREE_MB must be a number of megabytes"
+  [[ "$free_mb" =~ ^[0-9]+$ ]] || fail "cannot tell how much room $dir has"
+  [[ "$free_mb" -ge "$min_mb" ]] || fail "only ${free_mb} MB free under $dir and ${min_mb} MB are needed (ARMOR_MIN_FREE_MB changes the figure)"
+}
+# Put `current` back on the release that was running before this install; nothing happens when there was none.
+rollback_current() {
+  local prefix="$1" previous="$2"
+  [[ -n "$previous" && -d "$previous" ]] || return 1
+  ln -sfn "$previous" "$prefix/current.new" && mv -Tf "$prefix/current.new" "$prefix/current"
+}
+[[ "${ARMOR_INSTALL_LIB_ONLY:-0}" == "1" ]] && return 0 2>/dev/null
+
 [[ -n "$PUBLIC_HOST" ]] || { usage >&2; fail "--public-host is required"; }
 [[ "$PUBLIC_HOST" =~ ^[A-Za-z0-9.-]+$ ]] || fail "--public-host must be a host name or IPv4 address"
 # Other ways in (a public address behind a router): remembered in armor.reach, one "studio=server" pair per line.
@@ -198,6 +216,7 @@ if [[ "$APPLY" -ne 1 ]]; then say "dry run only - add --apply to install"; exit 
 [[ "$(id -u)" -eq 0 ]] || fail "--apply must run as root"
 command -v node >/dev/null || fail "Node.js is required"
 command -v npm >/dev/null || fail "npm is required"
+preflight_free_space "$PREFIX" "${ARMOR_MIN_FREE_MB:-300}"
 if [[ "$WITH_MQTT" -eq 1 ]]; then
   command -v mosquitto >/dev/null || fail "--with-mqtt needs the mosquitto package (its own service is not used; install it with your package manager)"
   command -v mosquitto_passwd >/dev/null || fail "--with-mqtt needs mosquitto_passwd (package mosquitto or mosquitto-clients)"
@@ -435,6 +454,7 @@ EOF
   MQTT_ENV_LINE="EnvironmentFile=$PREFIX/etc/armor.mqtt.env"
 fi
 
+PREVIOUS_RELEASE="$(readlink -f "$PREFIX/current" 2>/dev/null || true)"
 ln -sfn "$RELEASE" "$PREFIX/current.new" && mv -Tf "$PREFIX/current.new" "$PREFIX/current"
 
 HARDENING="NoNewPrivileges=true
@@ -766,6 +786,19 @@ for _ in $(seq 1 30); do
 done
 if [[ "$ok" -ne 1 ]]; then
   journalctl -u armor-server -u armor-studio -n 30 --no-pager >&2 || true
+  # An upgrade that does not come up goes back to the release that was running (a first install has none to go back to).
+  if rollback_current "$PREFIX" "$PREVIOUS_RELEASE"; then
+    say "the new release did not become healthy: going back to $PREVIOUS_RELEASE"
+    systemctl restart armor-server armor-studio || true
+    [[ "$WITH_AI" -ne 1 ]] || systemctl restart armor-server-ai || true
+    back=0
+    for _ in $(seq 1 30); do
+      if curl -fsS "${CURL_TLS[@]}" "$SCHEME://$LOCAL_HOST:$SERVER_PORT/healthz" >/dev/null 2>&1 && curl -fsS "${CURL_TLS[@]}" "$SCHEME://$LOCAL_HOST:$STUDIO_PORT/healthz" >/dev/null 2>&1; then back=1; break; fi
+      sleep 1
+    done
+    [[ "$back" -eq 1 ]] && fail "the services did not become healthy; the previous release is running again (the failed one stays in $RELEASE)"
+    fail "the services did not become healthy, and neither did the previous release after going back to it"
+  fi
   fail "the services did not become healthy"
 fi
 

@@ -188,6 +188,10 @@ expect 2 "unknown option: --nonsense" bash "$HERE/deploy_cm5.sh" --nonsense
 expect 2 "usage: deploy_cm5.sh" bash "$HERE/deploy_cm5.sh"
 expect 2 "usage: deploy_cm5.sh" bash "$HERE/deploy_cm5.sh" --host 192.0.2.1
 expect 2 "usage: deploy_cm5.sh" bash "$HERE/deploy_cm5.sh" --user someone --with-mqtt
+expect 2 "--host must be a host name or an address" bash "$HERE/deploy_cm5.sh" --host '1.2.3.4;reboot' --user someone
+expect 2 "--user must be an account name" bash "$HERE/deploy_cm5.sh" --host 192.0.2.1 --user 'a b'
+expect 2 "--public-host must be a host name" bash "$HERE/deploy_cm5.sh" --host 192.0.2.1 --user someone --public-host '$(id)'
+expect 2 "--port must be a number" bash "$HERE/deploy_cm5.sh" --host 192.0.2.1 --user someone --port 22x
 
 echo "$CHECKS checks, $FAILED failures"
 if [[ "$FAILED" -ne 0 ]]; then exit 1; fi

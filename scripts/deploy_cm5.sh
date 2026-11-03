@@ -38,6 +38,11 @@ while [[ $# -gt 0 ]]; do
 done
 [[ -n "$HOST" && -n "$USER_NAME" ]] || { echo "usage: deploy_cm5.sh --host H --user U [--key K] [--port N] [--public-host H] [--apply] [--with-mqtt] [--with-admin] [--with-voice] [--with-ai] [--with-backup] [--with-maintenance] [--with-network] [--network-node-id NAME] [--server-port N] [--studio-port N] [--mqtt-port N] [--bind ADDRESS] [--also-reach STUDIO_URL=SERVER_URL]" >&2; exit 2; }
 
+# These three words are pasted into the command the remote shell runs: only the characters of a host name, an address and an account are accepted.
+[[ "$HOST" =~ ^[A-Za-z0-9._:-]+$ ]] || { echo "--host must be a host name or an address" >&2; exit 2; }
+[[ "$USER_NAME" =~ ^[A-Za-z_][A-Za-z0-9._-]*$ ]] || { echo "--user must be an account name" >&2; exit 2; }
+[[ -z "$PUBLIC_HOST" || "$PUBLIC_HOST" =~ ^[A-Za-z0-9.-]+$ ]] || { echo "--public-host must be a host name or IPv4 address" >&2; exit 2; }
+[[ -z "$SSH_PORT" || "$SSH_PORT" =~ ^[0-9]{1,5}$ ]] || { echo "--port must be a number" >&2; exit 2; }
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 SSH_OPTS=(-o BatchMode=yes -o ConnectTimeout=10)
 [[ -n "$KEY" ]] && SSH_OPTS+=(-i "$KEY")
@@ -88,4 +93,4 @@ tar -C "$WORK" -czf "$WORK/armor-$STAMP.tar.gz" release
 
 echo "[deploy] sending the release to $USER_NAME@$HOST"
 scp "${SCP_OPTS[@]}" -q "$WORK/armor-$STAMP.tar.gz" "$USER_NAME@$HOST:/tmp/armor-$STAMP.tar.gz"
-ssh "${SSH_OPTS[@]}" "$USER_NAME@$HOST" "set -e; d=\$(mktemp -d); tar -mxzf /tmp/armor-$STAMP.tar.gz -C \$d; sudo bash \$d/release/scripts/install_cm5.sh --public-host $PUBLIC_HOST $APPLY$EXTRA; rm -rf \$d /tmp/armor-$STAMP.tar.gz"
+ssh "${SSH_OPTS[@]}" "$USER_NAME@$HOST" "set -e; d=\$(mktemp -d); trap 'rm -rf \"\$d\" /tmp/armor-$STAMP.tar.gz' EXIT; tar -mxzf /tmp/armor-$STAMP.tar.gz -C \$d; sudo bash \$d/release/scripts/install_cm5.sh --public-host $PUBLIC_HOST $APPLY$EXTRA"
