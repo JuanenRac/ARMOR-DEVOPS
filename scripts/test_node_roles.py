@@ -7,6 +7,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -54,11 +55,29 @@ class NodeRolesTests(unittest.TestCase):
                 user = entry["user"].replace("{name}", "tbl-1")
                 self.assertEqual(block((mq / "acl").read_text(encoding="utf-8"), user), [line.replace("{name}", "tbl-1") for line in entry["topics"]])
 
+    def test_the_script_is_what_the_table_generates(self):
+        done = subprocess.run([sys.executable, str(HERE / "generate_node_roles.py"), "--check"], capture_output=True, text=True, check=False)
+        self.assertEqual(done.returncode, 0, done.stderr)
+
+    def test_the_commented_examples_of_the_acl_example_follow_the_table(self):
+        example = (HERE.parent / "mosquitto" / "acl.example").read_text(encoding="utf-8").splitlines()
+        for role, name in (("solar-node", "solar-1"), ("electrical-node", "electrical-1"), ("alarm-node", "alarm-1"), ("network-node", "network-1")):
+            user = COPY["roles"][role]["user"].replace("{name}", name)
+            start = example.index(f"# user {user}")
+            found = []
+            for line in example[start + 1:]:
+                if not line.startswith("# topic "):
+                    break
+                found.append(line[2:])
+            wanted = [t.replace("{name}", name) for t in COPY["roles"][role]["topics"]]
+            self.assertEqual(sorted(set(found) - set(wanted)), [], f"the example of {role} has a line the table does not")
+            self.assertTrue(all(t in found for t in wanted if " write " in t), f"the example of {role} lacks a write line of the table")
+
     def test_the_script_has_no_role_the_table_lacks(self):
         script = (HERE / "mqtt_identity.sh").read_text(encoding="utf-8")
         for role in ("node", "solar-node", "electrical-node", "network-node", "alarm-node", "hmi-node", "consumer", "device", "bridge"):
             self.assertIn(role, COPY["roles"])
-            self.assertIn(f"      {role})", script)
+            self.assertIn(f"    {role})", script)
 
 
 if __name__ == "__main__":

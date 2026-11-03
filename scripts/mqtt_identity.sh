@@ -30,6 +30,93 @@ MQ="$PREFIX/etc/mosquitto"
 [[ "$(id -u)" -eq 0 ]] || { echo "run as root" >&2; exit 1; }
 [[ -f "$MQ/passwd" && -f "$MQ/acl" ]] || { echo "the A.R.M.O.R. broker is not installed (install_cm5.sh --with-mqtt)" >&2; exit 1; }
 
+# BEGIN GENERATED FROM scripts/node_roles.json (python3 scripts/generate_node_roles.py): the user name and the access lines of each kind of identity.
+role_user() {
+  local NAME="$2"
+  case "$1" in
+    node) echo "field-node-$NAME" ;;
+    hmi-node) echo "hmi-node-$NAME" ;;
+    solar-node) echo "solar-node-$NAME" ;;
+    electrical-node) echo "electrical-node-$NAME" ;;
+    alarm-node) echo "alarm-node-$NAME" ;;
+    network-node) echo "network-node-$NAME" ;;
+    device) echo "device-$NAME" ;;
+    bridge) echo "bridge-$NAME" ;;
+    consumer) echo "alarm-$NAME" ;;
+    *) return 1 ;;
+  esac
+}
+role_lines() {
+  local NAME="$2"
+  case "$1" in
+    node)
+      echo "topic write armor/node/$NAME/telemetry"
+      echo "topic write armor/node/$NAME/health"
+      echo "topic write armor/node/$NAME/info"
+      echo "topic write armor/health/$NAME"
+      echo "topic read armor/node/$NAME/command"
+      echo "topic readwrite armor/device/$NAME/#"
+      echo "topic write armor/solar/$NAME/#"
+      echo "topic write armor/radar/$NAME/events"
+      echo "topic read armor/radar/$NAME/control/armed"
+      echo "topic read armor/control/$NAME/command"
+      echo "topic read armor/control/all/command"
+      echo "topic write armor/control/$NAME/result"
+      echo "topic write armor/control/$NAME/maintenance"
+      ;;
+    hmi-node)
+      echo "topic write armor/node/$NAME/health"
+      echo "topic write armor/node/$NAME/info"
+      echo "topic write armor/health/$NAME"
+      echo "topic read armor/control/$NAME/command"
+      echo "topic read armor/control/all/command"
+      echo "topic write armor/control/$NAME/result"
+      echo "topic write armor/control/$NAME/maintenance"
+      ;;
+    solar-node)
+      echo "topic write armor/solar/$NAME/#"
+      echo "topic write armor/health/$NAME"
+      echo "topic read armor/control/$NAME/command"
+      echo "topic read armor/control/all/command"
+      echo "topic write armor/control/$NAME/result"
+      echo "topic write armor/control/$NAME/maintenance"
+      ;;
+    electrical-node)
+      echo "topic write armor/electrical/$NAME/state"
+      echo "topic write armor/electrical/$NAME/result"
+      echo "topic write armor/health/$NAME"
+      echo "topic read armor/control/$NAME/command"
+      echo "topic read armor/control/all/command"
+      echo "topic write armor/control/$NAME/result"
+      echo "topic write armor/control/$NAME/maintenance"
+      ;;
+    alarm-node)
+      echo "topic write armor/alarm/$NAME/state"
+      echo "topic write armor/alarm/$NAME/result"
+      echo "topic write armor/health/$NAME"
+      echo "topic read armor/alarm/$NAME/zigbee"
+      echo "topic read armor/alarm/$NAME/policy"
+      echo "topic read armor/control/$NAME/command"
+      echo "topic read armor/control/all/command"
+      echo "topic write armor/control/$NAME/result"
+      echo "topic write armor/control/$NAME/maintenance"
+      ;;
+    network-node)
+      echo "topic write armor/network/$NAME/state"
+      ;;
+    device)
+      echo "topic readwrite armor/device/$NAME/#"
+      ;;
+    bridge)
+      echo "topic readwrite armor/device/#"
+      ;;
+    consumer)
+      echo "topic read armor/server/alert"
+      ;;
+  esac
+}
+# END GENERATED
+
 usage() { echo "Usage: mqtt_identity.sh add node ID | add solar-node ID | add electrical-node ID | add network-node ID | add alarm-node ID | add hmi-node ID | add consumer NAME | add device NAME | add bridge NAME | upgrade-node NODE_ID | health-report ROLE NODE_ID | alarm-policy NODE_ID | node-control ROLE NODE_ID | electrical-switching NODE_ID on|off | alarm-commands NODE_ID on|off | electrical-relays NODE_ID on|off | alarm-relays NODE_ID on|off | battery-write NODE_ID on|off | alarm-state-relay on|off | ha-discovery on|off [PREFIX] | remove USER" >&2; exit 2; }
 ACTION="${1:-}"
 # Removes one line from the block of ONE identity ("user NAME" up to the next blank line), never from the others: the same line (topic readwrite armor/device/garage/#) can be in the
@@ -41,79 +128,14 @@ case "$ACTION" in
   add)
     ROLE="${2:-}"; NAME="${3:-}"
     [[ "$NAME" =~ ^[a-z0-9][a-z0-9_-]{0,63}$ ]] || { echo "the name must match ^[a-z0-9][a-z0-9_-]{0,63}\$" >&2; exit 2; }
-    case "$ROLE" in
-      node) USER_NAME="field-node-$NAME" ;;
-      solar-node) USER_NAME="solar-node-$NAME" ;;
-      electrical-node) USER_NAME="electrical-node-$NAME" ;;
-      network-node) USER_NAME="network-node-$NAME" ;;
-      alarm-node) USER_NAME="alarm-node-$NAME" ;;
-      hmi-node) USER_NAME="hmi-node-$NAME" ;;
-      consumer) USER_NAME="alarm-$NAME" ;;
-      device) USER_NAME="device-$NAME" ;;
-      bridge) USER_NAME="bridge-$NAME" ;;
-      *) usage ;;
-    esac
+    USER_NAME="$(role_user "$ROLE" "$NAME")" || usage
     if grep -qx "user $USER_NAME" "$MQ/acl"; then echo "$USER_NAME already exists; remove it first to change its password" >&2; exit 1; fi
     PASSWORD="$(head -c 48 /dev/urandom | base64 | tr -d '\n=+/' | head -c 32)"
     mosquitto_passwd -b "$MQ/passwd" "$USER_NAME" "$PASSWORD" >/dev/null
     {
       echo
       echo "user $USER_NAME"
-      if [[ "$ROLE" == "node" ]]; then
-        echo "topic write armor/node/$NAME/telemetry"
-        echo "topic write armor/node/$NAME/health"
-        echo "topic write armor/node/$NAME/info"   # the address of its own web panel, for a console to link to
-        echo "topic write armor/health/$NAME"      # how the node is doing (uptime, memory, link ...), the same report for every kind of node
-        echo "topic read armor/node/$NAME/command"
-        # The pins mapped in the node's own panel are devices named after the node: armor/device/<node>/<pin>/state and /set.
-        echo "topic readwrite armor/device/$NAME/#"
-        # A node that also reads solar inverters and batteries publishes them as armor/solar/<node>/<device>/state.
-        echo "topic write armor/solar/$NAME/#"
-        # The events of a radar node's own perimeter engine (a zone, a line crossed, a covered sensor, a sensor whose Bluetooth is open ...) go to its own subtree only; it reads only whether the perimeter is armed.
-        echo "topic write armor/radar/$NAME/events"
-        echo "topic read armor/radar/$NAME/control/armed"
-      elif [[ "$ROLE" == "hmi-node" ]]; then
-        # ARMOR-NODE-HMI, the touch panel: it only says that it is alive (health) and where its web page is (info). It sends no telemetry, so it cannot make up radar tracks.
-        echo "topic write armor/node/$NAME/health"
-        echo "topic write armor/node/$NAME/info"
-        echo "topic write armor/health/$NAME"
-      elif [[ "$ROLE" == "solar-node" ]]; then
-        # ARMOR-NODE-SOLAR: the readings of the inverters and batteries on its serial ports, armor/solar/<node>/<device>/state; it reads nothing.
-        echo "topic write armor/solar/$NAME/#"
-        echo "topic write armor/health/$NAME"
-      elif [[ "$ROLE" == "electrical-node" ]]; then
-        # ARMOR-NODE-ELECTRICAL: what it measures on the house's network (armor/electrical/<node>/state) and its answers to a command (.../result); it reads nothing, so no command
-        # reaches it from the broker until `electrical-switching <node> on` is run for it, on purpose.
-        echo "topic write armor/electrical/$NAME/state"
-        echo "topic write armor/electrical/$NAME/result"
-        echo "topic write armor/health/$NAME"
-      elif [[ "$ROLE" == "alarm-node" ]]; then
-        # ARMOR-NODE-ALARM: its state (armor/alarm/<node>/state) and its answers to a command (.../result). The only thing it reads is the state of the Zigbee zones the server tells it
-        # (armor/alarm/<node>/zigbee: information, never a command); no command reaches it from the broker until `alarm-commands <node> on` is run for it, on purpose.
-        echo "topic write armor/alarm/$NAME/state"
-        echo "topic write armor/alarm/$NAME/result"
-        echo "topic write armor/health/$NAME"
-        echo "topic read armor/alarm/$NAME/zigbee"
-        echo "topic read armor/alarm/$NAME/policy"      # the security policy the server keeps for this panel (information, never a command)
-      elif [[ "$ROLE" == "network-node" ]]; then
-        # ARMOR-NETWORK: what it sees on the local network (armor/network/<node>/state); it reads nothing, so nothing can be sent to it from the broker.
-        echo "topic write armor/network/$NAME/state"
-      elif [[ "$ROLE" == "device" ]]; then
-        echo "topic readwrite armor/device/$NAME/#"
-      elif [[ "$ROLE" == "bridge" ]]; then
-        echo "topic readwrite armor/device/#"
-      else
-        echo "topic read armor/server/alert"
-      fi
-      # Remote control from Studio (restart, pause, standby ...): every kind of node READS its own order topic and the broadcast one, and WRITES its own answer and its own maintenance signal. It can write no order topic,
-      # so no node can command another: only the server's identity may publish on armor/control/+/command.
-      case "$ROLE" in node|hmi-node|solar-node|electrical-node|alarm-node)
-        echo "topic read armor/control/$NAME/command"
-        echo "topic read armor/control/all/command"
-        echo "topic write armor/control/$NAME/result"
-        # Its own planned-maintenance signal (retained): the node says it is about to be quiet on purpose. Only its own topic; the server reads armor/control/+/maintenance.
-        echo "topic write armor/control/$NAME/maintenance" ;;
-      esac
+      role_lines "$ROLE" "$NAME"
     } >>"$MQ/acl"
     chown root:armor "$MQ/passwd" "$MQ/acl"; chmod 0640 "$MQ/passwd" "$MQ/acl"
     reload_broker
