@@ -219,7 +219,11 @@ class MaintenanceTest(unittest.TestCase):
         names = ("reboot_machine", "check_services_after_run", "armed_state", "installed_services", "unit_active", "AUTO_NOW", "APT_CONF_DIR", "UU_LOG", "REBOOT_REQUIRED", "UU_BIN", "ARMED_URL")
         originals = {name: getattr(agent, name) for name in names}
         self.originals = originals
-        self.addCleanup(lambda: [setattr(agent, name, value) for name, value in originals.items()])
+        def restore() -> None:
+            for name, value in originals.items():
+                setattr(agent, name, value)
+
+        self.addCleanup(restore)
         agent.APT_CONF_DIR = root / "apt.conf.d"
         agent.APT_CONF_DIR.mkdir(exist_ok=True)
         (agent.APT_CONF_DIR / agent.AUTO_CONF_NAME).unlink(missing_ok=True)
@@ -231,7 +235,11 @@ class MaintenanceTest(unittest.TestCase):
         agent.auto_state_path().unlink(missing_ok=True)
         agent.AUTO_NOW = lambda: datetime.datetime(2026, 1, 1, 3, 30)
         rebooted: list[int] = []
-        agent.reboot_machine = lambda: rebooted.append(1) or {"ok": True}
+        def reboot() -> dict[str, object]:
+            rebooted.append(1)
+            return {"ok": True}
+
+        agent.reboot_machine = reboot
         agent.check_services_after_run = lambda: {"checked": 1, "ok": True, "restarted": [], "down": []}
         return rebooted
 
@@ -346,7 +354,11 @@ class MaintenanceTest(unittest.TestCase):
     def test_a_new_run_of_the_updates_gets_its_services_checked_once(self) -> None:
         self.auto_setup()
         checks: list[int] = []
-        self.agent.check_services_after_run = lambda: checks.append(1) or {"checked": 5, "ok": False, "restarted": ["armor-server"], "down": ["armor-server"]}
+        def checked() -> dict[str, object]:
+            checks.append(1)
+            return {"checked": 5, "ok": False, "restarted": ["armor-server"], "down": ["armor-server"]}
+
+        self.agent.check_services_after_run = checked
         self.agent.UU_LOG.write_text("2026-01-01 03:10:02,200 INFO Packages that will be upgraded: curl\n2026-01-01 03:11:00,300 INFO All upgrades installed\n", encoding="utf-8")
         self.tick(False)
         self.tick(False)
