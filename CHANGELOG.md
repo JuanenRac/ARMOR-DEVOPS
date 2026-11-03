@@ -4,6 +4,7 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+- **`check-required-env.sh --remote`:** besides the usual checks it refuses what is not acceptable when the installation is reached from the Internet: an origin that is not https, an insecure cookie, a server that does not trust the proxy, a disarm that does not require the PIN, a broker published on every address or on a public one, and a short or common administrator password; with tests.
 - **A published version is never replaced with other content:** `package_component.py --publish` on a release that already exists reads the hashes of its assets, skips the ones it already has with the same content, uploads only the new ones (the signature, for instance) and refuses, telling to raise the version, when an asset of that name is there with another hash or with no hash to compare. It no longer uploads over an existing asset with `--clobber`; 3 new tests.
 
 - **Firewall page:** it now says that, with `--clients`, a machine of the field network that speaks HTTP to the server (HTTP ingestion of readings, a wall panel placed there) is refused, and how to let it in.

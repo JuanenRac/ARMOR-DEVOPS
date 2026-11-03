@@ -77,6 +77,36 @@ out="$(check "$P" 2>&1)"; ok
 [[ "$(grep -c "too short" <<<"$out")" -eq 2 ]] || bad "both short tokens should be named: $out"
 ok; if grep -q "weak" <<<"$out"; then bad "a secret value was printed"; fi
 
+# --remote: what is not acceptable when the installation is reached from the Internet
+remote_project() {
+  project "$1"
+  { echo "ARMOR_PUBLIC_ORIGIN=https://armor.example.org"; echo "ARMOR_COOKIE_SECURE="; echo "ARMOR_TRUST_PROXY=1"; echo "ARMOR_DISARM_PIN=required"; echo "ARMOR_MQTT_BIND=192.168.0.10"; } >>"$1/.env"
+  set_value "$1" ARMOR_STUDIO_PASSWORD "$(token 16)"
+}
+check_remote() { bash "$1/scripts/check-required-env.sh" --remote; }
+P="$WORK/r1"; remote_project "$P"
+expect 0 "ARMOR_DEVOPS_ENV=PASS" check_remote "$P"
+P="$WORK/r2"; remote_project "$P"; set_value "$P" ARMOR_PUBLIC_ORIGIN "http://armor.example.org"
+expect 2 "must be an https://" check_remote "$P"
+P="$WORK/r3"; remote_project "$P"; set_value "$P" ARMOR_COOKIE_SECURE "0"
+expect 2 "ARMOR_COOKIE_SECURE=0" check_remote "$P"
+P="$WORK/r4"; remote_project "$P"; set_value "$P" ARMOR_TRUST_PROXY "0"
+expect 2 "ARMOR_TRUST_PROXY must trust" check_remote "$P"
+P="$WORK/r5"; remote_project "$P"; set_value "$P" ARMOR_DISARM_PIN ""
+expect 2 "ARMOR_DISARM_PIN must be required" check_remote "$P"
+P="$WORK/r6"; remote_project "$P"; set_value "$P" ARMOR_MQTT_BIND "0.0.0.0"
+expect 2 "ARMOR_MQTT_BIND is on every address" check_remote "$P"
+P="$WORK/r7"; remote_project "$P"; set_value "$P" ARMOR_MQTT_BIND "203.0.113.5"
+expect 2 "ARMOR_MQTT_BIND is on every address" check_remote "$P"
+P="$WORK/r8"; remote_project "$P"; set_value "$P" ARMOR_STUDIO_PASSWORD "$(token 13)"
+expect 2 "at least 14 characters" check_remote "$P"
+P="$WORK/r9"; remote_project "$P"; set_value "$P" ARMOR_STUDIO_PASSWORD "Password123456789"
+expect 2 "common password" check_remote "$P"
+P="$WORK/r10"; remote_project "$P"                       # the same folder passes without --remote when it would fail with it
+set_value "$P" ARMOR_PUBLIC_ORIGIN "http://armor.example.org"
+expect 0 "ARMOR_DEVOPS_ENV=PASS" check "$P"
+expect 2 "Usage" bash "$P/scripts/check-required-env.sh" --other
+
 # ---------------------------------------------------------------- generate_secrets.sh: it never overwrites (these stop before Docker is needed)
 gen_project() {
   local folder="$1"

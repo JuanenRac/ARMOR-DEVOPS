@@ -1,7 +1,15 @@
 #!/usr/bin/env bash
 # ARMOR-DEVOPS - validate the deployment variables in .env without printing a secret.
 # Copyright (C) 2026 JuanenRac (Electro Hobby 3D). GPL-3.0-or-later.
+# With --remote it also refuses what is not acceptable when the installation is reached from the Internet: an origin that is not https, an insecure cookie, a server that does not
+# trust the proxy in front of it, a disarm without the PIN, a broker published on every address or on a public one, and a short or common administrator password.
 set -euo pipefail
+REMOTE=0
+case "${1:-}" in
+  "") ;;
+  --remote) REMOTE=1 ;;
+  *) echo "Usage: check-required-env.sh [--remote]" >&2; exit 2 ;;
+esac
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 [[ -f .env ]] || { echo "ERROR: .env is missing; run scripts/generate_secrets.sh" >&2; exit 2; }
 
@@ -19,5 +27,22 @@ done
 tokens="$(for v in ARMOR_INGEST_TOKEN ARMOR_CONTROL_TOKEN ARMOR_OPERATOR_TOKEN; do read_value "$v"; done | sort | uniq -d)"
 [[ -z "$tokens" ]] || { echo "ERROR: the ingest, control and operator tokens must all be different" >&2; status=2; }
 [[ -f secrets/mqtt.password && -f secrets/mqtt.acl ]] || { echo "ERROR: secrets/mqtt.password and secrets/mqtt.acl are required" >&2; status=2; }
+if [[ "$REMOTE" == 1 ]]; then
+  origin="$(read_value ARMOR_PUBLIC_ORIGIN)"
+  [[ "$origin" == https://* ]] || { echo "ERROR: ARMOR_PUBLIC_ORIGIN must be an https:// address for remote access" >&2; status=2; }
+  [[ "$(read_value ARMOR_COOKIE_SECURE)" != 0 ]] || { echo "ERROR: ARMOR_COOKIE_SECURE=0 sends the session cookie in clear; leave it empty or 1 for remote access" >&2; status=2; }
+  proxy="$(read_value ARMOR_TRUST_PROXY)"
+  case "$proxy" in 0|false|off|no) echo "ERROR: ARMOR_TRUST_PROXY must trust the proxy in front of the server for remote access (the real address of a client is needed to limit it)" >&2; status=2 ;; esac
+  [[ "$(read_value ARMOR_DISARM_PIN)" == required ]] || { echo "ERROR: ARMOR_DISARM_PIN must be required for remote access" >&2; status=2; }
+  bind="$(read_value ARMOR_MQTT_BIND)"
+  case "$bind" in
+    ""|127.*|10.*|192.168.*|172.1[6-9].*|172.2[0-9].*|172.3[0-1].*) ;;
+    *) echo "ERROR: ARMOR_MQTT_BIND is on every address or on a public one; the broker's port must stay on loopback or on the field network" >&2; status=2 ;;
+  esac
+  password="$(read_value ARMOR_STUDIO_PASSWORD)"
+  if [[ ${#password} -lt 14 ]]; then echo "ERROR: ARMOR_STUDIO_PASSWORD needs at least 14 characters for remote access" >&2; status=2; fi
+  case "${password,,}" in password*|12345*|qwerty*|admin*|letmein*|changeme*|welcome*) echo "ERROR: ARMOR_STUDIO_PASSWORD is a common password" >&2; status=2 ;; esac
+  echo "NOTE: whether an administrator has a second factor is not in .env: ask the server (GET /api/v1/remote/check) after it starts"
+fi
 [[ $status -eq 0 ]] && echo "ARMOR_DEVOPS_ENV=PASS"
 exit $status
