@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+- **A live bench of the REST and WebSocket contract that needs no Docker:** `scripts/bench_live.py` starts a real server on a free loopback port with throw-away tokens, plays simulated nodes into it and checks 31 things over HTTP and over the live events socket (the health and info routes, that the operator routes refuse a missing, a wrong and a control token, that the events socket refuses a caller with no token and opens for the control token, that every simulated node shows in the node list and in the panel summary, the alarm lists, the history count and that the socket mentioned every node). The workflow `bench-live.yml` runs it every night and by hand with read-only permissions. Its frame reader and counting have unit tests.
+
 ## [0.7.1] - Bans for the addresses that keep failing to sign in: scripts/armorfail2ban.sh (plan, setup, status, remove) writes a fail2ban filter that reads the refused Studio sign-ins and refused second-factor codes in the server's audit... (and 14 more changes)
 
 - **Bans for the addresses that keep failing to sign in:** `scripts/armor_fail2ban.sh` (`plan`, `setup`, `status`, `remove`) writes a `fail2ban` filter that reads the refused Studio sign-ins and refused second-factor codes in the server's audit log (a name made to look like another address cannot get that address banned; a refusal for a missing second factor is not counted) and a jail with the numbers in one file (5 failures in 10 minutes, one hour). Tests check the filter against sample lines and the refusals of bad options; it has not run on the CM5.
