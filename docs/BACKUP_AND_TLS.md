@@ -71,3 +71,9 @@ ARMOR_COOKIE_SECURE=1
 through the TLS address. The profile has been started and answered over HTTPS with `scripts/test_compose.sh`
 (Docker Engine in WSL); Caddy logs an error that it could not install its root certificate in the container's own
 trust store, which is harmless. Whether a given browser trusts the authority once you install it has not been verified.
+
+## HTTPS on the local network with a pinned authority (profile `lan-ca`)
+
+For a house network without a name on the Internet there is a second, optional profile, separate from `tls`: `docker compose --profile lan-ca up -d`. It starts `proxy_lan`, which serves Studio and the API only on port 443 (there is no port 80 and no redirect, so nothing answers in plain text) with a certificate for `ARMOR_LAN_HOST` issued by the internal authority of Caddy, kept in the volume `lan-ca-data` and never leaving the machine. It listens on `ARMOR_LAN_BIND` (loopback by default; put the address of the machine on the network when a firewall protects it).
+
+The devices do not have to trust that authority in their system. The wall panel and the phone app pin its fingerprint: `scripts/armor_ca_fingerprint.sh` prints the SHA-256 of the root certificate (64 hexadecimal digits, upper case) from the running container, or from a copy of `root.crt`. Only the public certificate is read. The profile `tls` and its port are not changed by this one. The pinning on the side of the devices is a change of the wall panel and of the phone app; this profile only provides the authority and the fingerprint.

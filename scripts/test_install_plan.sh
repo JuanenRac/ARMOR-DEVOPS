@@ -38,6 +38,16 @@ never() {
 
 # ---- the command line
 expect 0 "Usage: install_cm5.sh" -- --help
+expect 0 "--ai-ip-restrict on|off" -- --help
+# the address filter of the observation service: off unless asked, only on/off, only plain addresses, and an upgrade keeps it
+never "IPAddressDeny=any" -- --public-host 192.0.2.10 --prefix "$PREFIX" "${PORTS[@]}" --with-ai
+never "only lets its unit talk to localhost" -- --public-host 192.0.2.10 --prefix "$PREFIX" "${PORTS[@]}" --with-ai
+expect 0 "only lets its unit talk to localhost (IPAddressDeny=any)" -- --public-host 192.0.2.10 --prefix "$PREFIX" "${PORTS[@]}" --with-ai --ai-ip-restrict on
+expect 0 "localhost and 192.168.0.10,10.0.0.0/24" -- --public-host 192.0.2.10 --prefix "$PREFIX" "${PORTS[@]}" --with-ai --ai-ip-restrict on --ai-ip-allow 192.168.0.10,10.0.0.0/24
+never "only lets its unit talk to localhost" -- --public-host 192.0.2.10 --prefix "$PREFIX" "${PORTS[@]}" --with-ai --ai-ip-restrict off
+expect 2 "--ai-ip-restrict takes on or off" -- --public-host 192.0.2.10 --prefix "$PREFIX" "${PORTS[@]}" --with-ai --ai-ip-restrict maybe
+expect 2 "--ai-ip-allow takes addresses or networks" -- --public-host 192.0.2.10 --prefix "$PREFIX" "${PORTS[@]}" --with-ai --ai-ip-restrict on --ai-ip-allow 'x; rm -rf /'
+never "only lets its unit talk to localhost" -- --public-host 192.0.2.10 --prefix "$PREFIX" "${PORTS[@]}" --ai-ip-restrict on
 expect 2 "unknown option: --nonsense" -- --nonsense
 expect 1 "--public-host is required" -- "${PORTS[@]}" --prefix "$PREFIX"
 expect 1 "host name or IPv4 address" -- --public-host 'a b' --prefix "$PREFIX" "${PORTS[@]}"

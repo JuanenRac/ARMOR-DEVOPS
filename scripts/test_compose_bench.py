@@ -103,5 +103,66 @@ class BenchWithTlsTests(unittest.TestCase):
             self.assertEqual(done.returncode, 2, str(extra))
 
 
+class LanCaProfileTests(unittest.TestCase):
+    """The optional profile "lan-ca": HTTPS for the local network with the internal authority of Caddy, only port 443, and the profile "tls" untouched."""
+
+    def test_it_is_an_optional_profile_with_one_published_port_and_no_port_80(self):
+        lan = block("proxy_lan")
+        self.assertIn("profiles: [lan-ca]", lan)
+        ports = re.findall(r"ports: \[(.*?)\]", lan)
+        self.assertEqual(len(ports), 1)
+        published = re.findall(r'"([^"]+)"', ports[0])
+        self.assertEqual(len(published), 1)
+        self.assertTrue(published[0].endswith(":443:443"), published[0])
+        self.assertNotIn(":80", published[0].replace(":443:443", ""))
+        self.assertIn("${ARMOR_LAN_BIND:-127.0.0.1}", published[0])           # it listens on the network only when the administrator says so
+
+    def test_the_profile_tls_is_not_touched(self):
+        tls = block("proxy")
+        self.assertIn("profiles: [tls]", tls)
+        self.assertIn("./caddy/Caddyfile:/etc/caddy/Caddyfile:ro", tls)
+        self.assertNotIn("lan-ca", tls)
+        self.assertIn("ARMOR_TLS_PORT:-8443", tls)
+
+    def test_the_proxy_has_its_own_authority_and_serves_only_https_with_the_internal_issuer(self):
+        lan = block("proxy_lan")
+        self.assertIn("lan-ca-data:/data", lan)
+        self.assertNotIn("proxy-data", lan)                                    # not the volume of the other profile
+        text = (ROOT / "caddy" / "Caddyfile.lan").read_text(encoding="utf-8")
+        self.assertIn("tls internal", text)
+        self.assertIn("auto_https disable_redirects", text)
+        self.assertNotRegex(text, r"(?m)^\s*(http://|:80\b)")
+        self.assertIn("reverse_proxy studio:80", text)
+        self.assertNotIn("ARMOR_TLS_ISSUER", text)                             # an outside authority is not an option here
+
+    def test_it_is_hardened_like_the_other_proxy_and_reaches_only_studio(self):
+        lan = block("proxy_lan")
+        self.assertIn("<<: *hardened", lan)
+        self.assertIn("networks: [armor_edge, armor_core]", lan)
+        self.assertIn("depends_on:\n      studio:", lan)
+
+    def test_the_settings_are_in_the_example_file_and_the_fingerprint_script_reads_only_the_public_certificate(self):
+        for name in ("ARMOR_LAN_HOST", "ARMOR_LAN_BIND"):
+            self.assertRegex(ENV_EXAMPLE, rf"(?m)^{name}=")
+        script = (ROOT / "scripts" / "armor_ca_fingerprint.sh").read_text(encoding="utf-8")
+        self.assertIn("root.crt", script)
+        self.assertNotIn("root.key", script)
+        self.assertIn("-fingerprint -sha256", script)
+
+    @unittest.skipUnless(shutil.which("bash") and shutil.which("openssl"), "no bash or openssl")
+    def test_the_fingerprint_of_a_certificate_is_the_sha256_in_upper_case_without_colons(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as folder:
+            key, cert = Path(folder) / "k.pem", Path(folder) / "root.crt"
+            made = subprocess.run(["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-keyout", str(key), "-out", str(cert), "-days", "1", "-subj", "/CN=armor-test"], capture_output=True, text=True, check=False)
+            if made.returncode != 0:
+                self.skipTest("openssl could not make a certificate")
+            done = subprocess.run(["bash", str(ROOT / "scripts" / "armor_ca_fingerprint.sh"), str(cert)], capture_output=True, text=True, check=False)
+            self.assertEqual(done.returncode, 0, done.stderr)
+            self.assertRegex(done.stdout.strip(), r"^[0-9A-F]{64}$")
+            missing = subprocess.run(["bash", str(ROOT / "scripts" / "armor_ca_fingerprint.sh"), str(Path(folder) / "none.crt")], capture_output=True, text=True, check=False)
+            self.assertNotEqual(missing.returncode, 0)
+
+
 if __name__ == "__main__":
     unittest.main()

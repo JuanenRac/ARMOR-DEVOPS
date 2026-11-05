@@ -1,0 +1,23 @@
+# HTTPS for the local network with the internal authority of Caddy (compose profile "lan-ca", opt-in; the profile "tls" is not touched).
+# Copyright (C) 2026 JuanenRac (Electro Hobby 3D). GPL-3.0-or-later.
+#
+# Only port 443 is served: there is no port 80 and no redirect, so nothing answers in plain text. The certificate is issued for ARMOR_LAN_HOST (the name or the address
+# the devices of the house use, for example armor.lan or 192.168.0.180) by a local authority of its own, kept in the volume lan-ca-data and never leaving the machine.
+# A device does not have to trust that authority in its system: the wall panel and the phone app pin its fingerprint (SHA-256 of the root certificate), which
+# scripts/armor_ca_fingerprint.sh prints. Studio proxies /api/ to the server, so this one address serves the console and the API.
+{
+	auto_https disable_redirects
+	default_sni {$ARMOR_LAN_HOST:armor.lan}
+}
+
+https://{$ARMOR_LAN_HOST:armor.lan}:443 {
+	tls internal
+	encode gzip
+	header {
+		Strict-Transport-Security "max-age=300"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+		-Server
+	}
+	reverse_proxy studio:80
+}

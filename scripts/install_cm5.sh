@@ -36,6 +36,8 @@ WITH_VOICE=0
 WITH_NETWORK=0
 NETWORK_NODE_ID=""
 WITH_AI=0
+AI_IP_RESTRICT=""     # on | off | empty (an upgrade keeps what the install had)
+AI_IP_ALLOW=""
 VOICE_PORT="18090"
 BIND_ADDRESS="0.0.0.0"
 PUBLIC_HOST=""
@@ -63,6 +65,9 @@ Usage: install_cm5.sh --public-host HOST [--apply] [--server-port N] [--studio-p
                  updates and reboots the operating system, and (only if ARMOR_MAINT_CONSOLE=1 is set in its environment file) uses a root console
   --with-ai      also run the observation service (armor-server-ai): it looks at the cameras through the server, notices movement, weighs it with the radar tracks and
                  the light, and tells the server, which raises the alarm while the system is armed; it holds no camera password and its token opens four routes only
+  --ai-ip-restrict on|off  with --with-ai: on gives the unit of the observation service IPAddressDeny=any and IPAddressAllow=localhost (plus the addresses of
+                 --ai-ip-allow A,B: addresses or networks, for a server on another machine), so the kernel drops every other connection of that service; off (the default) adds
+                 nothing. An upgrade keeps what the install had.
   --with-network also run the network watcher (armor-network): it looks at the local network, tells the server what changes and changes nothing; it gets its own token
                  (--network-node-id NAME, default house-1)
   --with-voice   also run the voice gateway (armor-voice, on 127.0.0.1 only): the closed list of fifteen written and spoken commands (arm and disarm are confirmed
@@ -90,6 +95,8 @@ while [[ $# -gt 0 ]]; do
     --with-network) WITH_NETWORK=1; shift ;;
     --network-node-id) NETWORK_NODE_ID="${2:-}"; shift 2 ;;
     --with-ai) WITH_AI=1; shift ;;
+    --ai-ip-restrict) AI_IP_RESTRICT="${2:-}"; shift 2 ;;
+    --ai-ip-allow) AI_IP_ALLOW="${2:-}"; shift 2 ;;
     --bind) BIND_ADDRESS="${2:-}"; shift 2 ;;
     --prefix) PREFIX="${2:-}"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
@@ -115,6 +122,19 @@ if [[ -z "$NETWORK_NODE_ID" ]]; then   # an upgrade keeps the name the watcher w
   NETWORK_NODE_ID="${NETWORK_NODE_ID:-house-1}"
 fi
 [[ -f "$PREFIX/etc/armor.ai.env" ]] && WITH_AI=1
+case "$AI_IP_RESTRICT" in
+  ""|on|off) ;;
+  *) echo "--ai-ip-restrict takes on or off" >&2; exit 2 ;;
+esac
+if [[ -n "$AI_IP_ALLOW" ]] && ! [[ "$AI_IP_ALLOW" =~ ^[0-9A-Fa-f:.]+(/[0-9]{1,3})?(,[0-9A-Fa-f:.]+(/[0-9]{1,3})?)*$ ]]; then
+  echo "--ai-ip-allow takes addresses or networks separated by commas (for example 192.168.0.10,10.0.0.0/24)" >&2; exit 2
+fi
+# An upgrade keeps the filter of the observation service unless the option says otherwise (the file holds the extra addresses, one per line; an empty file is the filter with loopback only).
+if [[ -z "$AI_IP_RESTRICT" && -f "$PREFIX/etc/armor.ai.ip-allow" ]]; then
+  AI_IP_RESTRICT=on
+  [[ -n "$AI_IP_ALLOW" ]] || AI_IP_ALLOW="$(paste -sd, "$PREFIX/etc/armor.ai.ip-allow")"
+fi
+[[ "$WITH_AI" -eq 1 ]] || AI_IP_RESTRICT=""
 say()  { echo "[armor-install] $*"; }
 
 # Two safeguards around the switch of `current` (also loaded alone by the tests with ARMOR_INSTALL_LIB_ONLY=1).
@@ -206,6 +226,7 @@ say "  browser opens  : $SCHEME://$PUBLIC_HOST:$STUDIO_PORT"
 for pair in "${REACH_UNIQUE[@]}"; do say "  also reachable : ${pair%%=*} (server ${pair#*=})"; done
 [[ "$WITH_MQTT" -ne 1 ]] || say "  armor-mosquitto: $BIND_ADDRESS:$MQTT_PORT (own broker, own passwords)"
 [[ "$WITH_AI" -ne 1 ]] || say "  armor-server-ai: looks at the cameras through the server (movement, weighed with the radars and the light) and tells it; its own token opens only four routes of the server"
+[[ "$AI_IP_RESTRICT" != "on" ]] || say "  armor-server-ai: the kernel only lets its unit talk to localhost${AI_IP_ALLOW:+ and $AI_IP_ALLOW} (IPAddressDeny=any)"
 [[ "$WITH_VOICE" -ne 1 ]] || say "  armor-voice    : 127.0.0.1:$VOICE_PORT (written and spoken commands: a closed list of fifteen, arm and disarm confirmed in two turns; only this machine can reach it)"
 [[ "$WITH_BACKUP" -ne 1 ]] || say "  armor-backup   : daily, encrypted, kept under $PREFIX/backups"
 [[ "$WITH_MAINT" -ne 1 ]] || say "  armor-maintenance: root helper on /run/armor-maint.sock (group $SERVICE_USER): updates from GitHub, the system's updates and, only if turned on in $PREFIX/etc/armor.maint.env, a root console"
@@ -568,6 +589,19 @@ EOF
 fi
 
 if [[ "$WITH_AI" -eq 1 ]]; then
+  AI_IP_LINES=""
+  if [[ "$AI_IP_RESTRICT" == "on" ]]; then
+    AI_IP_LINES="IPAddressDeny=any
+IPAddressAllow=localhost"
+    if [[ -n "$AI_IP_ALLOW" ]]; then
+      for address in ${AI_IP_ALLOW//,/ }; do AI_IP_LINES="$AI_IP_LINES
+IPAddressAllow=$address"; done
+    fi
+    mkdir -p "$PREFIX/etc"
+    printf '%s\n' ${AI_IP_ALLOW//,/ } >"$PREFIX/etc/armor.ai.ip-allow"
+  elif [[ "$AI_IP_RESTRICT" == "off" ]]; then
+    rm -f "$PREFIX/etc/armor.ai.ip-allow"
+  fi
   cat >/etc/systemd/system/armor-server-ai.service <<EOF
 [Unit]
 Description=A.R.M.O.R. observation service (movement on the cameras, weighed with the radars; it recommends, the server decides)
@@ -587,6 +621,7 @@ RestartSec=5
 MemoryMax=96M
 TasksMax=32
 $HARDENING
+${AI_IP_LINES}
 
 [Install]
 WantedBy=multi-user.target
