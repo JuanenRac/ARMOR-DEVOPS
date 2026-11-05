@@ -384,10 +384,10 @@ class AgentTest(unittest.TestCase):
             self.assertEqual(got, {"missing": case["missing"]} if "missing" in case else {"content": case["content"]}, case["name"])
 
     def test_totp_follows_rfc_6238(self) -> None:
-        secret = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"                     # "12345678901234567890", the secret of the RFC
-        self.assertEqual(self.agent.totp_code(secret, 59 // 30), "287082")
-        self.assertEqual(self.agent.totp_code(secret, 1111111109 // 30), "081804")
-        self.assertTrue(self.agent.totp_accepts(secret, "287082", now=59.0))
+        vector_key = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"                     # "12345678901234567890", the vector_key of the RFC
+        self.assertEqual(self.agent.totp_code(vector_key, 59 // 30), "287082")
+        self.assertEqual(self.agent.totp_code(vector_key, 1111111109 // 30), "081804")
+        self.assertTrue(self.agent.totp_accepts(vector_key, "287082", now=59.0))
         self.agent._totp_last_counter[0] = 0
 
     def test_the_two_switches_of_the_broker_rules_need_the_authenticator_and_say_what_is_on(self) -> None:
@@ -401,31 +401,31 @@ class AgentTest(unittest.TestCase):
             self.assertEqual(self.call("POST", "/v1/mqtt/relays/battery-write", {"node": "bat-1", "state": "off"}), (403, {"error": "totp_not_enrolled"}))
             self.assertEqual(self.call("POST", "/v1/mqtt/relays/alarm-state-relay", {"state": "off"}), (403, {"error": "totp_not_enrolled"}))
             self.assertEqual(self.call("GET", "/v1/status")[1]["approval"], "not_enrolled")
-            secret = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"
-            totp.write_text(secret + "\n", encoding="ascii")
+            vector_key = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"
+            totp.write_text(vector_key + "\n", encoding="ascii")
             try:
                 self.assertEqual(self.call("GET", "/v1/status")[1]["approval"], "totp")
                 now = int(time.time() // 30)
                 self.agent._totp_last_counter[0] = 0
                 self.assertEqual(self.call("POST", "/v1/mqtt/relays/battery-write", {"node": "bat-1", "state": "off"}), (401, {"error": "totp_required"}))
                 self.assertEqual(self.call("POST", "/v1/mqtt/relays/battery-write", {"node": "bat-1", "state": "off"}, extra={"X-Armor-Maint-Totp": "000000"}), (401, {"error": "totp_invalid"}))
-                good = self.agent.totp_code(secret, now)
+                good = self.agent.totp_code(vector_key, now)
                 status, data = self.call("POST", "/v1/mqtt/relays/battery-write", {"node": "bat-1", "state": "on"}, extra={"X-Armor-Maint-Totp": good})
                 self.assertEqual((status, data["ok"], data["relay"], data["state"], data["approval"]), (200, True, "battery-write", "on", "totp"))
                 self.assertEqual(self.call("POST", "/v1/mqtt/relays/battery-write", {"node": "bat-1", "state": "on"}, extra={"X-Armor-Maint-Totp": good})[1], {"error": "totp_invalid"}, "a code is good once")
                 self.agent._totp_last_counter[0] = 0
-                code = self.agent.totp_code(secret, now)
+                code = self.agent.totp_code(vector_key, now)
                 self.assertEqual(self.call("POST", "/v1/mqtt/relays/alarm-state-relay", {"state": "maybe"}, extra={"X-Armor-Maint-Totp": code}), (422, {"error": "invalid_state"}))
                 self.agent._totp_last_counter[0] = 0
-                self.assertEqual(self.call("POST", "/v1/mqtt/relays/battery-write", {"node": "Bad Name", "state": "on"}, extra={"X-Armor-Maint-Totp": self.agent.totp_code(secret, now)}), (422, {"error": "invalid_name"}))
+                self.assertEqual(self.call("POST", "/v1/mqtt/relays/battery-write", {"node": "Bad Name", "state": "on"}, extra={"X-Armor-Maint-Totp": self.agent.totp_code(vector_key, now)}), (422, {"error": "invalid_name"}))
                 self.agent._totp_last_counter[0] = 0
-                self.assertEqual(self.call("POST", "/v1/mqtt/relays/battery-write", {"node": "ghost", "state": "on"}, extra={"X-Armor-Maint-Totp": self.agent.totp_code(secret, now)})[0], 409)
+                self.assertEqual(self.call("POST", "/v1/mqtt/relays/battery-write", {"node": "ghost", "state": "on"}, extra={"X-Armor-Maint-Totp": self.agent.totp_code(vector_key, now)})[0], 409)
                 self.agent._totp_last_counter[0] = 0
-                self.assertEqual(self.call("POST", "/v1/mqtt/relays/alarm-state-relay", {"state": "on"}, extra={"X-Armor-Maint-Totp": self.agent.totp_code(secret, now)})[0], 200)
+                self.assertEqual(self.call("POST", "/v1/mqtt/relays/alarm-state-relay", {"state": "on"}, extra={"X-Armor-Maint-Totp": self.agent.totp_code(vector_key, now)})[0], 200)
                 # the same code also guards the rewriting of the broker rules file, and only while the authenticator is set up
                 self.agent._totp_last_counter[0] = 0
                 self.assertEqual(self.call("PUT", "/v1/files/mosquitto.acl", {"content": "user x\n"})[1], {"error": "totp_required"})
-                self.assertEqual(self.call("PUT", "/v1/files/mosquitto.acl", {"content": "user x\n"}, extra={"X-Armor-Maint-Totp": self.agent.totp_code(secret, now)})[0], 200)
+                self.assertEqual(self.call("PUT", "/v1/files/mosquitto.acl", {"content": "user x\n"}, extra={"X-Armor-Maint-Totp": self.agent.totp_code(vector_key, now)})[0], 200)
             finally:
                 totp.unlink(missing_ok=True)
                 self.agent._totp_last_counter[0] = 0

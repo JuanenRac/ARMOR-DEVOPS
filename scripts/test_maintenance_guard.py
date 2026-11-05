@@ -21,7 +21,7 @@ sys.modules["armor_maintenance_agent"] = agent
 spec.loader.exec_module(agent)
 
 # The test vector of RFC 6238 (SHA-1, secret "12345678901234567890"), the code for the time 59 s is 94287082 (eight digits), so 287082 in six.
-RFC_SECRET = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"
+RFC_VECTOR_KEY = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"
 
 
 class FakeConnection:
@@ -44,15 +44,15 @@ class GuardTests(unittest.TestCase):
         agent._totp_last_counter[0] = 0
 
     def test_the_code_of_rfc_6238_is_right(self):
-        self.assertEqual(agent.totp_code(RFC_SECRET, 59 // 30), "287082")
-        self.assertEqual(agent.totp_code(RFC_SECRET.lower(), 1111111109 // 30), "081804")
+        self.assertEqual(agent.totp_code(RFC_VECTOR_KEY, 59 // 30), "287082")
+        self.assertEqual(agent.totp_code(RFC_VECTOR_KEY.lower(), 1111111109 // 30), "081804")
 
     def test_a_code_is_good_once_and_only_near_its_time(self):
-        self.assertTrue(agent.totp_accepts(RFC_SECRET, "287082", now=59))
-        self.assertFalse(agent.totp_accepts(RFC_SECRET, "287082", now=59), "a code is spent when used")
-        self.assertFalse(agent.totp_accepts(RFC_SECRET, "081804", now=59 + 3600))
+        self.assertTrue(agent.totp_accepts(RFC_VECTOR_KEY, "287082", now=59))
+        self.assertFalse(agent.totp_accepts(RFC_VECTOR_KEY, "287082", now=59), "a code is spent when used")
+        self.assertFalse(agent.totp_accepts(RFC_VECTOR_KEY, "081804", now=59 + 3600))
         for bad in ("", "12345", "1234567", "abcdef", None, 287082):
-            self.assertFalse(agent.totp_accepts(RFC_SECRET, bad, now=59))
+            self.assertFalse(agent.totp_accepts(RFC_VECTOR_KEY, bad, now=59))
 
     def test_nothing_is_asked_while_the_checks_are_off(self):
         agent.guard_sensitive("POST", ["console", "run"], None, "")
@@ -67,7 +67,7 @@ class GuardTests(unittest.TestCase):
         agent.guard_sensitive("GET", ["overview"], (1, 1000, 1000), "")   # what only reads is not sensitive
 
     def test_a_current_code_is_needed_once_the_authenticator_is_enrolled(self):
-        self.file.write_text(RFC_SECRET + "\n", encoding="ascii")
+        self.file.write_text(RFC_VECTOR_KEY + "\n", encoding="ascii")
         with self.assertRaises(agent.Refused) as caught:
             agent.guard_sensitive("POST", ["console", "run"], None, "")
         self.assertEqual(caught.exception.code, "totp_required")
@@ -80,7 +80,7 @@ class GuardTests(unittest.TestCase):
                 agent.guard_sensitive("POST", ["console", "run"], None, "287082")
 
     def test_reading_never_needs_a_code(self):
-        self.file.write_text(RFC_SECRET + "\n", encoding="ascii")
+        self.file.write_text(RFC_VECTOR_KEY + "\n", encoding="ascii")
         agent.guard_sensitive("GET", ["overview"], None, "")
         agent.guard_sensitive("POST", ["updates"], None, "")
 

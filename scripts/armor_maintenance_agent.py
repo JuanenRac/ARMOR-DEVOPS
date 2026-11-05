@@ -42,6 +42,7 @@ import tempfile
 import threading
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -287,7 +288,7 @@ def clear_history() -> int:
 
 def download(job: Job, step: str, url: str, destination: Path) -> str:
     """Download to a file with the progress shown in the step; returns the SHA-256 of what came."""
-    request = urllib.request.Request(url, headers={"User-Agent": "armor-maintenance", **({"Authorization": f"Bearer {GITHUB_TOKEN}"} if GITHUB_TOKEN and "api.github.com" in url else {})})
+    request = urllib.request.Request(url, headers={"User-Agent": "armor-maintenance", **({"Authorization": f"Bearer {GITHUB_TOKEN}"} if GITHUB_TOKEN and urllib.parse.urlsplit(url).hostname == "api.github.com" else {})})
     digest = hashlib.sha256()
     with urllib.request.urlopen(request, timeout=30) as response, open(destination, "wb") as out:      # noqa: S310
         total = int(response.headers.get("Content-Length") or 0)

@@ -79,7 +79,7 @@ SECRET_KEY = re.compile(r"(PASSWORD|SECRET|TOKEN|KEY|PASS)", re.IGNORECASE)
 # What a compromised server must not be able to rewrite on its own: the broker rules and the .env files (and, because it edits the rules, the broker accounts).
 SENSITIVE_MODES = ("open", "second_token", "read_only")
 SENSITIVE_HEADER = "X-Armor-Admin-Sensitive-Token"
-MIN_SECRET = 24
+MIN_TOKEN_LENGTH = 24
 
 
 def is_sensitive_file(file_id: str) -> bool:
@@ -96,7 +96,7 @@ def configure_sensitive(mode: str, token: str, main_token: str = "") -> str | No
     """Sets the protection; returns the reason it is unusable (None when fine). An unknown mode or a bad second secret never falls back to open."""
     if mode not in SENSITIVE_MODES:
         return "unknown_mode"
-    if mode == "second_token" and (len(token) < MIN_SECRET or hmac.compare_digest(token.encode(), main_token.encode())):
+    if mode == "second_token" and (len(token) < MIN_TOKEN_LENGTH or hmac.compare_digest(token.encode(), main_token.encode())):
         return "second_token_missing_or_equal"
     Sensitive.mode, Sensitive.token = mode, token if mode == "second_token" else ""
     return None
@@ -633,7 +633,7 @@ def main() -> int:
     mode = os.environ.get("ARMOR_ADMIN_SENSITIVE", "open").strip().lower() or "open"
     problem = configure_sensitive(mode, os.environ.get("ARMOR_ADMIN_SENSITIVE_TOKEN", ""), token)
     if problem:
-        print(f"ARMOR_ADMIN_SENSITIVE is not usable ({problem}): use open, read_only, or second_token with ARMOR_ADMIN_SENSITIVE_TOKEN (at least {MIN_SECRET} characters, different from ARMOR_ADMIN_TOKEN)", file=sys.stderr)
+        print(f"ARMOR_ADMIN_SENSITIVE is not usable ({problem}): use open, read_only, or second_token with ARMOR_ADMIN_SENSITIVE_TOKEN (at least {MIN_TOKEN_LENGTH} characters, different from ARMOR_ADMIN_TOKEN)", file=sys.stderr)
         return 2
     if mode == "open":
         print("WARNING: the broker rules and the .env files can be rewritten with the admin token alone; a compromised server could open the broker. "

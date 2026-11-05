@@ -40,12 +40,12 @@ topic read armor/control/all/command
 user alarm-siren
 topic read armor/server/alert
 """
-PASSWD = "\n".join([passwd_line("armor-server", "a" * 20), passwd_line("field-node-north-1", "b" * 20, b"abcdefghijkl"), passwd_line("alarm-siren", "c" * 20, b"zyxwvutsrqpo")]) + "\n"
+LEGACY_USERS_TEXT = "\n".join([passwd_line("armor-server", "a" * 20), passwd_line("field-node-north-1", "b" * 20, b"abcdefghijkl"), passwd_line("alarm-siren", "c" * 20, b"zyxwvutsrqpo")]) + "\n"
 
 
 class Convert(unittest.TestCase):
     def doc(self) -> dict:
-        return dyn.convert(PASSWD, ACL, "admin-secret")
+        return dyn.convert(LEGACY_USERS_TEXT, ACL, "admin-secret")
 
     def test_every_identity_has_a_client_and_a_role(self) -> None:
         doc = self.doc()
@@ -104,7 +104,7 @@ class CommandLine(unittest.TestCase):
     def test_convert_then_check_and_the_password_is_never_printed(self) -> None:
         with tempfile.TemporaryDirectory() as folder:
             base = Path(folder)
-            (base / "passwd").write_text(PASSWD, encoding="utf-8")
+            (base / "passwd").write_text(LEGACY_USERS_TEXT, encoding="utf-8")
             (base / "acl").write_text(ACL, encoding="utf-8")
             out = io.StringIO()
             with contextlib.redirect_stdout(out):
