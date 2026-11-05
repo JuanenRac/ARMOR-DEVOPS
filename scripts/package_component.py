@@ -19,6 +19,11 @@
 #
 #   python package_component.py server --repo ../../ARMOR-SERVER --sign --publish
 #   python package_component.py --sign-existing armor-server-0.5.7.tgz --upload       # sign a package that is already published (downloaded next to it) and add the .sig to its release
+#
+# WHERE THE PROGRAM IS BUILT. Nothing is compiled on the machine of the maintainer: the build is the workflow package-build.yml of the repository (GitHub Actions), and
+# --from-actions FOLDER packs only from the artifact of that run once it is downloaded and verified (the folder holds armor-<component>-<version>.tgz and its SHA256SUMS; the
+# package is checked against the sums, copied to --out with its .sha256 and then signed and published like any other). Packing from a local dist still works, with a note on how it
+# gets built: with ALLOW_LOCAL_BUILD=1 the stale-build refusals say to run npm run build; without it they say to launch the workflow.
 # Copyright (C) 2026 JuanenRac (Electro Hobby 3D)
 # GPL-3.0-or-later - see LICENSE
 # =============================================================================
@@ -126,6 +131,13 @@ BUILT = {"server": ["dist/server.mjs", "dist/server_solar.mjs"], "studio": ["dis
 STALE_TOLERANCE_SECONDS = 2.0
 
 
+def rebuild_hint() -> str:
+    """How a stale or missing build gets rebuilt: on this machine only when the owner allowed local builds, otherwise in GitHub Actions."""
+    if os.environ.get("ALLOW_LOCAL_BUILD", "").strip() == "1":
+        return "run `npm run build`"
+    return "launch package-build.yml in GitHub Actions and pack its artifact with --from-actions"
+
+
 def newest_mtime(root: Path, names: list[str]) -> float:
     newest = 0.0
     for name in names:
@@ -152,11 +164,11 @@ def check_built_is_current(component: str, repo: Path, version: str) -> None:
     if component == "studio":
         built = str(json.loads((repo / "dist" / "version.json").read_text(encoding="utf-8")).get("version"))
         if built != version:
-            problems.append(f"dist/version.json says {built} and the manifest {version}: dist is stale, run `npm run build`")
+            problems.append(f"dist/version.json says {built} and the manifest {version}: dist is stale, {rebuild_hint()}")
     built_at = min((repo / name).stat().st_mtime for name in BUILT[component] if (repo / name).is_file())
     source_at = newest_mtime(repo, SOURCES[component])
     if source_at > built_at + STALE_TOLERANCE_SECONDS:
-        problems.append("the build is older than the source it was built from (dist is stale): run `npm run build` again")
+        problems.append("the build is older than the source it was built from (dist is stale): {rebuild_hint()}")
     if problems:
         raise SystemExit(f"{repo.name} is not ready to pack: " + "; ".join(problems))
 
@@ -173,7 +185,7 @@ def build(component: str, repo: Path, out: Path) -> tuple[Path, str, str]:
         raise SystemExit(f"{component} is {name}, not {repo.name}")
     missing = [item for item in required if not (repo / item).exists()]
     if missing:
-        raise SystemExit(f"{name} is not ready to pack (build it first): missing {', '.join(missing)}")
+        raise SystemExit(f"{name} is not ready to pack ({rebuild_hint()}): missing {', '.join(missing)}")
     version = version_of(repo)
     check_built_is_current(component, repo, version)
     out.mkdir(parents=True, exist_ok=True)
@@ -254,6 +266,38 @@ def publish(component: str, repo: Path, package: Path, version: str, extra: list
     print(f"published {name} v{version}")
 
 
+def from_actions(folder: Path, out: Path) -> tuple[Path, str, str, str]:
+    """Packs from the artifact of a run of package-build.yml that was downloaded and verified: nothing is built here and no dist is looked at.
+
+    The folder must hold exactly one armor-<component>-<version>.tgz and the SHA256SUMS of the artifact; the package must be the one the sums list, and the build manifest,
+    when it is there, must name the same version and say the package is unsigned. Returns the package copied into ``out`` (with its .sha256), the version, the hash and the component."""
+    packages = sorted(folder.glob("armor-*.tgz"))
+    if len(packages) != 1:
+        raise SystemExit(f"{folder} must hold exactly one armor-<component>-<version>.tgz (the artifact of package-build.yml), found {len(packages)}")
+    source = packages[0]
+    match = re.fullmatch(r"armor-([a-z]+)-(\d+\.\d+\.\d+(?:\.\d+)?)\.tgz", source.name)
+    if not match or match.group(1) not in LAYOUT:
+        raise SystemExit(f"{source.name} is not a package named armor-<component>-<version>.tgz")
+    component, version = match.groups()
+    sums = folder / "SHA256SUMS"
+    if not sums.is_file():
+        raise SystemExit(f"{folder} has no SHA256SUMS: it is not a verified artifact (download it with armor_fetch_and_sign.py, which checks it)")
+    digest = hashlib.sha256(source.read_bytes()).hexdigest()
+    listed = {parts[1].lstrip("*"): parts[0].lower() for parts in (line.split() for line in sums.read_text(encoding="utf-8").splitlines()) if len(parts) == 2}
+    if listed.get(source.name) != digest:
+        raise SystemExit(f"{source.name} is not the package that SHA256SUMS lists (hash {digest})")
+    manifest = folder / "build-manifest.json"
+    if manifest.is_file():
+        data = json.loads(manifest.read_text(encoding="utf-8"))
+        if str(data.get("version", version)) != version or data.get("signed") is True:
+            raise SystemExit("build-manifest.json does not describe this package (another version, or it says the package is already signed)")
+    out.mkdir(parents=True, exist_ok=True)
+    package = out / source.name
+    shutil.copyfile(source, package)
+    (out / (package.name + ".sha256")).write_text(f"{digest}  {package.name}\n", encoding="utf-8")
+    return package, version, digest, component
+
+
 def sign_existing(file: Path, signer: list[str] | None, upload: bool) -> int:
     match = re.fullmatch(r"armor-([a-z]+)-(\d+\.\d+\.\d+(?:\.\d+)?)\.tgz", file.name)
     if not match or match.group(1) not in LAYOUT:
@@ -279,16 +323,26 @@ def main() -> int:
     parser.add_argument("--publish", action="store_true", help="create the release on GitHub (or add the package to the one that exists)")
     parser.add_argument("--sign", action="store_true", help="the package MUST be signed: fail when there is no signer or key (without it, it is signed when they are there)")
     parser.add_argument("--signer", help="the command that signs (default: node ~/.armor/sign.mjs); it is given --public or --message <text>")
+    parser.add_argument("--from-actions", metavar="FOLDER", help="pack from the downloaded and verified artifact of package-build.yml (nothing is built here): the folder with armor-<component>-<version>.tgz and SHA256SUMS")
     parser.add_argument("--sign-existing", metavar="PACKAGE", help="only sign a package that already exists (armor-<component>-<version>.tgz); its .sig is written next to it")
     parser.add_argument("--upload", action="store_true", help="with --sign-existing: add the .sig to the release of that version")
     arguments = parser.parse_args()
     signer = find_signer(arguments.signer)
     if arguments.sign_existing:
         return sign_existing(Path(arguments.sign_existing).resolve(), signer, arguments.upload)
-    if not arguments.component or not arguments.repo:
-        parser.error("a component and --repo are needed")
-    repo = Path(arguments.repo).resolve()
-    package, version, digest = build(arguments.component, repo, Path(arguments.out).resolve())
+    if arguments.from_actions:
+        package, version, digest, component = from_actions(Path(arguments.from_actions).resolve(), Path(arguments.out).resolve())
+        if arguments.component and arguments.component != component:
+            raise SystemExit(f"the artifact is the {component} package, not {arguments.component}")
+        arguments.component = component
+        if arguments.publish and not arguments.repo:
+            parser.error("--publish needs --repo (the CHANGELOG of the repository gives the notes)")
+        repo = Path(arguments.repo).resolve() if arguments.repo else Path(".").resolve()
+    else:
+        if not arguments.component or not arguments.repo:
+            parser.error("a component and --repo are needed")
+        repo = Path(arguments.repo).resolve()
+        package, version, digest = build(arguments.component, repo, Path(arguments.out).resolve())
     print(f"{package.name}  {digest}")
     signature = sign_package(package, arguments.component, version, digest, signer, arguments.sign)
     if signature:

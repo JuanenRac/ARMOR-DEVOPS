@@ -130,6 +130,54 @@ class PackageTest(unittest.TestCase):
                 module.build(component, repo, self.root / "out")
             self.assertIn("package.json says 0.8.0.3", str(raised.exception))
 
+    # ---- nothing is compiled here: the refusals point at GitHub Actions, and the artifact of a run can be packed as it is ----
+    def test_a_stale_build_says_to_launch_the_workflow_unless_local_builds_are_allowed(self) -> None:
+        repo = self.built_repo("studio", "ARMOR-STUDIO", dist_version="0.8.0.3")
+        with mock.patch.dict(os.environ, {"ALLOW_LOCAL_BUILD": ""}):
+            with self.assertRaises(SystemExit) as raised:
+                module.build("studio", repo, self.root / "out")
+        self.assertIn("launch package-build.yml in GitHub Actions", str(raised.exception))
+        self.assertNotIn("npm run build", str(raised.exception))
+        with mock.patch.dict(os.environ, {"ALLOW_LOCAL_BUILD": "1"}):
+            with self.assertRaises(SystemExit) as raised:
+                module.build("studio", repo, self.root / "out")
+        self.assertIn("npm run build", str(raised.exception))
+
+    def artifact(self, version: str = "0.8.0.4", sums: bool = True, manifest: dict | None = None) -> Path:
+        folder = self.root / "artifact"
+        folder.mkdir()
+        data = b"unsigned package bytes"
+        (folder / f"armor-server-{version}.tgz").write_bytes(data)
+        if sums:
+            (folder / "SHA256SUMS").write_text(f"{hashlib.sha256(data).hexdigest()}  armor-server-{version}.tgz\n", encoding="utf-8")
+        if manifest is not None:
+            (folder / "build-manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+        return folder
+
+    def test_the_artifact_of_a_run_is_packed_without_a_dist_or_a_build(self) -> None:
+        folder = self.artifact(manifest={"version": "0.8.0.4", "signed": False})
+        package, version, digest, component = module.from_actions(folder, self.root / "out")
+        self.assertEqual((package.name, version, component), ("armor-server-0.8.0.4.tgz", "0.8.0.4", "server"))
+        self.assertEqual(package.read_bytes(), b"unsigned package bytes")
+        self.assertEqual((self.root / "out" / "armor-server-0.8.0.4.tgz.sha256").read_text(encoding="utf-8").split()[0], digest)
+
+    def test_an_artifact_that_was_not_verified_or_does_not_match_is_refused(self) -> None:
+        with self.assertRaises(SystemExit) as raised:
+            module.from_actions(self.artifact(sums=False), self.root / "out")
+        self.assertIn("SHA256SUMS", str(raised.exception))
+        folder = self.root / "artifact"
+        (folder / "SHA256SUMS").write_text("0" * 64 + "  armor-server-0.8.0.4.tgz\n", encoding="utf-8")
+        with self.assertRaises(SystemExit):
+            module.from_actions(folder, self.root / "out")
+
+    def test_an_artifact_whose_manifest_disagrees_is_refused(self) -> None:
+        import shutil
+        for manifest in ({"version": "0.8.0.3", "signed": False}, {"version": "0.8.0.4", "signed": True}):
+            folder = self.artifact(manifest=manifest)
+            with self.assertRaises(SystemExit):
+                module.from_actions(folder, self.root / "out")
+            shutil.rmtree(folder)
+
     def test_a_missing_package_json_is_refused(self) -> None:
         repo = self.built_repo("server", "ARMOR-SERVER")
         (repo / "package.json").unlink()
