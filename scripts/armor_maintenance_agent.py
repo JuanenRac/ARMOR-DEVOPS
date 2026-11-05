@@ -34,6 +34,7 @@ import signal
 import socket
 import socketserver
 import ssl
+import struct
 import subprocess
 import sys
 import tarfile
@@ -44,7 +45,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-AGENT_VERSION = "0.1.6"
+AGENT_VERSION = "0.1.7"
 PREFIX = Path(os.environ.get("ARMOR_PREFIX", "/opt/armor"))
 SYSTEMCTL = os.environ.get("ARMOR_SYSTEMCTL", "systemctl")
 APT_GET = os.environ.get("ARMOR_APT_GET", "apt-get")
@@ -1690,6 +1691,96 @@ def ddns_setup(data: dict[str, object]) -> dict[str, object]:
     return {"ok": True, **remote_state()}
 
 
+# ---- Who may change the sensitive settings: the user of the caller (SO_PEERCRED) and a one-time code (TOTP) ------------------------------------------------------------------
+# The socket is open to the group `armor` and wants the token, which every service of that group could read. For what changes the machine (the console, the reboot, the system
+# upgrade, the automatic updates, the remote access) two more checks can be switched on, each by what the administrator writes in armor.maint.env, and both are off until then so
+# nothing is locked out by an update of this file:
+#   ARMOR_MAINT_PEER_UIDS=998,0   the user numbers the kernel reports for the process on the other end of the socket (SO_PEERCRED); any other user is refused (403 peer_not_allowed)
+#   ARMOR_MAINT_TOTP_FILE=...     the file with the base32 secret of the administrator's authenticator (made by `--totp-enroll`, mode 0600); when it exists, a sensitive call
+#                                 must bring a current six-digit code in X-Armor-Maint-Totp (401 totp_required / totp_invalid); a code is good once (no replay)
+SENSITIVE_ROUTES = {
+    ("POST", ("console", "run")), ("POST", ("system", "reboot")), ("POST", ("system", "upgrade")), ("POST", ("system", "auto-updates")),
+    ("POST", ("remote", "wireguard", "setup")), ("POST", ("remote", "ddns", "setup")),
+}
+TOTP_STEP_S = 30
+TOTP_WINDOW = 1            # steps either side of now, for a clock that is a little off
+_totp_last_counter = [0]
+_totp_lock = threading.Lock()
+
+
+def peer_uids() -> list[int] | None:
+    """The user numbers allowed to make sensitive calls (ARMOR_MAINT_PEER_UIDS, comma separated); None when the check is off."""
+    text = os.environ.get("ARMOR_MAINT_PEER_UIDS", "").strip()
+    if not text:
+        return None
+    return [int(item) for item in text.split(",") if item.strip().isdigit()]
+
+
+def peer_credentials(connection: object) -> tuple[int, int, int] | None:
+    """(pid, uid, gid) of the process on the other end of a Unix socket, as the kernel says; None where the system cannot say."""
+    option = getattr(socket, "SO_PEERCRED", None)
+    getsockopt = getattr(connection, "getsockopt", None)
+    if option is None or getsockopt is None:
+        return None
+    try:
+        pid, uid, gid = struct.unpack("3i", getsockopt(socket.SOL_SOCKET, option, struct.calcsize("3i")))
+    except (OSError, struct.error):
+        return None
+    return pid, uid, gid
+
+
+def totp_file() -> Path:
+    return Path(os.environ.get("ARMOR_MAINT_TOTP_FILE", str(PREFIX / "etc" / "maint.totp")))
+
+
+def totp_code(secret_base32: str, counter: int, digits: int = 6) -> str:
+    """The code of RFC 6238 (HMAC-SHA1) for one time step."""
+    key = base64.b32decode(secret_base32.strip().replace(" ", "").upper() + "=" * (-len(secret_base32.strip().replace(" ", "")) % 8))
+    digest = hmac.new(key, struct.pack(">Q", counter), hashlib.sha1).digest()
+    offset = digest[-1] & 0x0F
+    value = (struct.unpack(">I", digest[offset:offset + 4])[0] & 0x7FFFFFFF) % (10 ** digits)
+    return str(value).zfill(digits)
+
+
+def totp_accepts(secret_base32: str, code: str, now: float | None = None) -> bool:
+    """Whether `code` is the code of the current step or one next to it, and has not been used. A good code is spent."""
+    if not (isinstance(code, str) and len(code) == 6 and code.isdigit()):
+        return False
+    counter = int((time.time() if now is None else now) // TOTP_STEP_S)
+    with _totp_lock:
+        for step in range(counter - TOTP_WINDOW, counter + TOTP_WINDOW + 1):
+            if step > _totp_last_counter[0] and hmac.compare_digest(totp_code(secret_base32, step), code):
+                _totp_last_counter[0] = step
+                return True
+    return False
+
+
+def totp_enroll() -> str:
+    """Makes the secret of the authenticator (20 random bytes, base32), writes it with mode 0600 and gives it back to be shown once to the administrator."""
+    secret = base64.b32encode(os.urandom(20)).decode("ascii")
+    path = totp_file()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(descriptor, "w", encoding="ascii") as handle:
+        handle.write(secret + chr(10))
+    return secret
+
+
+def guard_sensitive(method: str, parts: list[str], credentials: tuple[int, int, int] | None, code: str) -> None:
+    """Refuses a sensitive call that does not come from an allowed user or without a current code, when those checks are on; does nothing for any other call."""
+    if (method, tuple(parts)) not in SENSITIVE_ROUTES:
+        return
+    allowed = peer_uids()
+    if allowed is not None and (credentials is None or credentials[1] not in allowed):
+        raise Refused(403, "peer_not_allowed")
+    path = totp_file()
+    if path.is_file():
+        if not code:
+            raise Refused(401, "totp_required")
+        if not totp_accepts(path.read_text(encoding="ascii").strip(), code):
+            raise Refused(401, "totp_invalid")
+
+
 class Handler(http.server.BaseHTTPRequestHandler):
     server_version = "armor-maint"
     token = ""
@@ -1738,6 +1829,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 raise Refused(404, "not_found")
             parts = parts[1:]
             arguments = dict(pair.split("=", 1) for pair in query.split("&") if "=" in pair)
+            guard_sensitive(method, parts, peer_credentials(self.request), self.headers.get("X-Armor-Maint-Totp", ""))
             if method == "GET" and parts == ["overview"]:
                 self.reply(200, overview(arguments.get("force") == "1"))
             elif method == "POST" and parts == ["updates"]:
@@ -1878,7 +1970,11 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Maintenance helper of A.R.M.O.R. Studio: updates from GitHub, the system's updates and the root console")
     parser.add_argument("--socket", default="/run/armor-maint.sock")
     parser.add_argument("--group", default="armor", help="the group allowed to open the socket")
+    parser.add_argument("--totp-enroll", action="store_true", help="make the secret of the administrator's authenticator (written with mode 0600), show it once and exit")
     arguments = parser.parse_args()
+    if arguments.totp_enroll:
+        print(totp_enroll())
+        return 0
     token = os.environ.get("ARMOR_MAINT_TOKEN", "")
     if len(token) < 24:
         print("ARMOR_MAINT_TOKEN must be set (at least 24 characters)", file=sys.stderr)
