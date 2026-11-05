@@ -400,9 +400,11 @@ class AgentTest(unittest.TestCase):
             self.assertEqual((status, data["battery_write"], data["alarm_state_relay"], data["approval"]), (200, ["bat-1"], True, "not_enrolled"))
             self.assertEqual(self.call("POST", "/v1/mqtt/relays/battery-write", {"node": "bat-1", "state": "off"}), (403, {"error": "totp_not_enrolled"}))
             self.assertEqual(self.call("POST", "/v1/mqtt/relays/alarm-state-relay", {"state": "off"}), (403, {"error": "totp_not_enrolled"}))
+            self.assertEqual(self.call("GET", "/v1/status")[1]["approval"], "not_enrolled")
             secret = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"
             totp.write_text(secret + "\n", encoding="ascii")
             try:
+                self.assertEqual(self.call("GET", "/v1/status")[1]["approval"], "totp")
                 now = int(time.time() // 30)
                 self.agent._totp_last_counter[0] = 0
                 self.assertEqual(self.call("POST", "/v1/mqtt/relays/battery-write", {"node": "bat-1", "state": "off"}), (401, {"error": "totp_required"}))

@@ -537,7 +537,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             parts = parts[1:]
             sensitive_given = self.headers.get(SENSITIVE_HEADER, "")
             if method == "GET" and parts == ["status"]:
-                self.reply(200, {"sensitive_writes": sensitive_status()})
+                self.reply(200, {"sensitive_writes": sensitive_status(), "approval": "totp" if totp_file().is_file() else "not_enrolled"})
             elif method == "GET" and parts == ["services"]:
                 self.reply(200, {"services": [service_state(key) for key in SERVICES]})
             elif method == "POST" and len(parts) == 3 and parts[0] == "services":
