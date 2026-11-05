@@ -160,6 +160,12 @@ class LanCaProfileTests(unittest.TestCase):
             done = subprocess.run(["bash", str(ROOT / "scripts" / "armor_ca_fingerprint.sh"), str(cert)], capture_output=True, text=True, check=False)
             self.assertEqual(done.returncode, 0, done.stderr)
             self.assertRegex(done.stdout.strip(), r"^[0-9A-F]{64}$")
+            spki = subprocess.run(["bash", str(ROOT / "scripts" / "armor_ca_fingerprint.sh"), "--spki", str(cert)], capture_output=True, text=True, check=False)
+            self.assertEqual(spki.returncode, 0, spki.stderr)
+            self.assertRegex(spki.stdout.strip(), r"^[A-Za-z0-9+/]{43}=$")                 # the base64 of 32 bytes: what the phone app pins
+            pem = subprocess.run(["bash", str(ROOT / "scripts" / "armor_ca_fingerprint.sh"), "--pem", str(cert)], capture_output=True, text=True, check=False)
+            self.assertTrue(pem.stdout.startswith("-----BEGIN CERTIFICATE-----"), pem.stdout[:40])
+
             missing = subprocess.run(["bash", str(ROOT / "scripts" / "armor_ca_fingerprint.sh"), str(Path(folder) / "none.crt")], capture_output=True, text=True, check=False)
             self.assertNotEqual(missing.returncode, 0)
 
