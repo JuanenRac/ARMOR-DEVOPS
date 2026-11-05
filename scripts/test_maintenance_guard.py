@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import importlib.util
 import os
-import socket
 import struct
 import sys
 import tempfile
