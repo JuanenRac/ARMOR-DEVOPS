@@ -15,6 +15,7 @@ from unittest import mock
 
 HERE = Path(__file__).resolve().parent
 spec = importlib.util.spec_from_file_location("armor_maintenance_agent", HERE / "armor_maintenance_agent.py")
+assert spec is not None and spec.loader is not None
 agent = importlib.util.module_from_spec(spec)
 sys.modules["armor_maintenance_agent"] = agent
 spec.loader.exec_module(agent)
