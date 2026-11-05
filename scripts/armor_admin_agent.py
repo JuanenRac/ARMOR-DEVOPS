@@ -21,14 +21,18 @@
 from __future__ import annotations
 
 import argparse
+import base64
+import hashlib
 import hmac
 import http.server
 import json
 import os
 import re
 import socketserver
+import struct
 import subprocess
 import sys
+import threading
 import tempfile
 import time
 from pathlib import Path
@@ -166,6 +170,81 @@ def service_action(service_id: str, action: str) -> dict[str, object]:
     return {"ok": True, "service": service_id, "action": action}
 
 
+# ---- hiding the secrets of the .env files -------------------------------------------------------------------------------------------------------
+# What this agent returns of an .env file never holds a secret: the value of every secret key is replaced by a mask, and an address that carries a
+# login (mqtt://user:secret@host, https://host/hook?token=...) loses its secret. When the file is saved with a mask where a secret was, the value it had
+# is put back from the file on disk, so the server and the console never hold the originals. The same rules and vectors as ARMOR-COMMON's
+# env_masking.json (scripts/test_admin_agent.py compares them with the copy in scripts/env_masking.json).
+ENV_MASK = "********"
+ENV_SECRET_KEY = re.compile(r"(PASSWORD|SECRET|TOKEN|KEY|PASS|WEBHOOK_ID)", re.IGNORECASE)
+ENV_LINE = re.compile(r"^(\s*)([A-Za-z_][A-Za-z0-9_]*)=(.*?)(\r?)$")
+ENV_LOGIN = re.compile(r"(://[^/\s:@]+:)[^@/\s]+@")
+ENV_LOGIN_EDITED = re.compile(r"(://[^/\s:@]+:)\*\*\*@")
+ENV_LOGIN_PASSWORD = re.compile(r"://[^/\s:@]+:([^@/\s]+)@")
+ENV_QUERY = re.compile(r"([?&](?:token|key|secret|password|pass)=)[^&\s]+", re.IGNORECASE)
+ENV_QUERY_EDITED = re.compile(r"([?&])(token|key|secret|password|pass)=\*\*\*", re.IGNORECASE)
+
+
+def hide_login(value: str) -> str:
+    return ENV_QUERY.sub(lambda m: m.group(1) + "***", ENV_LOGIN.sub(lambda m: m.group(1) + "***@", value, count=1))
+
+
+def restore_login(edited: str, before: str) -> str:
+    found = ENV_LOGIN_PASSWORD.search(before)
+    out = edited
+    if found is not None:
+        password = found.group(1)
+        out = ENV_LOGIN_EDITED.sub(lambda m: m.group(1) + password + "@", out, count=1)
+
+    def query(match: "re.Match[str]") -> str:
+        original = re.search(r"[?&]" + re.escape(match.group(2)) + r"=([^&\s]+)", before, re.IGNORECASE)
+        return match.group(0) if original is None else match.group(1) + match.group(2) + "=" + original.group(1)
+
+    return ENV_QUERY_EDITED.sub(query, out)
+
+
+def mask_env(content: str) -> str:
+    out = []
+    for line in content.split("\n"):
+        match = ENV_LINE.match(line)
+        if match is None or match.group(3) == "":
+            out.append(line)
+        elif ENV_SECRET_KEY.search(match.group(2)):
+            out.append(f"{match.group(1)}{match.group(2)}={ENV_MASK}{match.group(4)}")
+        else:
+            hidden = hide_login(match.group(3))
+            out.append(line if hidden == match.group(3) else f"{match.group(1)}{match.group(2)}={hidden}{match.group(4)}")
+    return "\n".join(out)
+
+
+def unmask_env(edited: str, current: str) -> dict[str, str]:
+    """The edited text with every hidden value given back the value it had, or ``{"missing": KEY}`` for a mask whose key is not in the file any more."""
+    known: dict[str, str] = {}
+    for line in current.split("\n"):
+        match = ENV_LINE.match(line)
+        if match:
+            known[match.group(2)] = match.group(3)
+    missing = ""
+    out = []
+    for line in edited.split("\n"):
+        match = ENV_LINE.match(line)
+        if match is None:
+            out.append(line)
+            continue
+        lead, key, value, ending = match.groups()
+        before = known.get(key)
+        if value != ENV_MASK and before is not None and hide_login(before) != before and "***" in value:
+            out.append(f"{lead}{key}={restore_login(value, before)}{ending}")
+        elif value != ENV_MASK:
+            out.append(line)
+        elif before is None:
+            missing = key
+            out.append(line)
+        else:
+            out.append(f"{lead}{key}={before}{ending}")
+    return {"missing": missing} if missing else {"content": "\n".join(out)}
+
+
 # ---- files --------------------------------------------------------------------------------------------------------------------------------------
 
 def file_path(file_id: str) -> Path:
@@ -204,14 +283,23 @@ def read_file(file_id: str) -> dict[str, object]:
         mtime = path.stat().st_mtime
     except FileNotFoundError:
         return {"id": file_id, "path": str(path), "format": fmt, "description": description, "units": list(units), "exists": False, "content": "", "mtime": 0}
-    return {"id": file_id, "path": str(path), "format": fmt, "description": description, "units": list(units), "exists": True, "content": content, "mtime": mtime}
+    answer: dict[str, object] = {"id": file_id, "path": str(path), "format": fmt, "description": description, "units": list(units), "exists": True, "content": content, "mtime": mtime}
+    if fmt == "env":        # the secrets never leave this program; a save with a mask where one was gets the value back below
+        answer["content"] = mask_env(content)
+        answer["masked"] = True
+    return answer
 
 
 def write_file(file_id: str, content: str, expect_mtime: float | None) -> dict[str, object]:
     path = file_path(file_id)
     fmt = FILES[file_id][1]
-    check_content(fmt, content)
     existing = path.exists()
+    if fmt == "env" and ENV_MASK in content:
+        given = unmask_env(content, path.read_text(encoding="utf-8") if existing else "")
+        if "missing" in given:
+            raise Refused(422, f"masked_value_without_original:{given['missing']}")
+        content = given["content"]
+    check_content(fmt, content)
     if existing and expect_mtime is not None and abs(path.stat().st_mtime - expect_mtime) > 0.5:
         raise Refused(409, "file_changed")      # somebody else wrote it since it was read
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -305,6 +393,100 @@ def remove_account(user: str) -> dict[str, object]:
     return {"ok": True, "user": user}
 
 
+# ---- local approval: the one-time code of the administrator's authenticator ----------------------------------------------------------------------
+# Changing the broker rules from here (the ACL file, and the two switches below) can need a six-digit code of RFC 6238 (TOTP). The secret is the file of the maintenance
+# agent (ARMOR_MAINT_TOTP_FILE, default etc/maint.totp, made by `armor_maintenance_agent.py --totp-enroll`), so the administrator has one authenticator for both. While that
+# file does not exist the check is off for the ACL file (nothing is locked out by an update of this program); the two switches are new and refuse to work until it exists.
+# A code is good once in this program (it is not shared with the maintenance agent: a code spent there can be tried here inside its 90 seconds).
+TOTP_HEADER = "X-Armor-Maint-Totp"
+TOTP_STEP_S = 30
+TOTP_WINDOW = 1
+_totp_last_counter = [0]
+_totp_lock = threading.Lock()
+
+
+def totp_file() -> Path:
+    return Path(os.environ.get("ARMOR_MAINT_TOTP_FILE", str(PREFIX / "etc" / "maint.totp")))
+
+
+def totp_code(secret_base32: str, counter: int, digits: int = 6) -> str:
+    """The code of RFC 6238 (HMAC-SHA1) for one time step."""
+    text = secret_base32.strip().replace(" ", "").upper()
+    key = base64.b32decode(text + "=" * (-len(text) % 8))
+    digest = hmac.new(key, struct.pack(">Q", counter), hashlib.sha1).digest()
+    offset = digest[-1] & 0x0F
+    return str((struct.unpack(">I", digest[offset:offset + 4])[0] & 0x7FFFFFFF) % (10 ** digits)).zfill(digits)
+
+
+def totp_accepts(secret_base32: str, code: str, now: float | None = None) -> bool:
+    """Whether `code` is the code of the current step or one next to it and has not been used. A good code is spent."""
+    if not (isinstance(code, str) and len(code) == 6 and code.isdigit()):
+        return False
+    counter = int((time.time() if now is None else now) // TOTP_STEP_S)
+    with _totp_lock:
+        for step in range(counter - TOTP_WINDOW, counter + TOTP_WINDOW + 1):
+            if step > _totp_last_counter[0] and hmac.compare_digest(totp_code(secret_base32, step), code):
+                _totp_last_counter[0] = step
+                return True
+    return False
+
+
+def require_approval(code: str, enrolled_required: bool = False) -> None:
+    """Refuses a change of the broker rules without a current code when the authenticator is set up; with `enrolled_required` it refuses too while it is not."""
+    path = totp_file()
+    if not path.is_file():
+        if enrolled_required:
+            raise Refused(403, "totp_not_enrolled")
+        return
+    if not code:
+        raise Refused(401, "totp_required")
+    if not totp_accepts(path.read_text(encoding="ascii").strip(), code):
+        raise Refused(401, "totp_invalid")
+
+
+# ---- the two switches of the broker rules that no install turns on ------------------------------------------------------------------------------
+# `battery-write NODE on|off` lets the server send an order to write to the batteries of one solar node; `alarm-state-relay on|off` lets the server publish again, signed,
+# the state of the alarm panels. Both are lines of the broker rules that mqtt_identity.sh writes; here they are asked for one at a time, always with a code.
+RELAYS = ("battery-write", "alarm-state-relay")
+SERVER_BATTERY_LINE = re.compile(r"topic write armor/solar/([a-z0-9][a-z0-9_-]{0,63})/maintenance/command")
+
+
+def relay_status() -> dict[str, object]:
+    """Which of the two switches are on, read from the block of the server in the broker rules."""
+    try:
+        text = (PREFIX / "etc/mosquitto/acl").read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return {"installed": False, "battery_write": [], "alarm_state_relay": False}
+    inside = False
+    battery: list[str] = []
+    alarm = False
+    for line in text.splitlines():
+        if line.startswith("user "):
+            inside = line.strip() == "user armor-server"
+        elif inside:
+            found = SERVER_BATTERY_LINE.fullmatch(line.strip())
+            if found:
+                battery.append(found.group(1))
+            elif line.strip() == "topic write armor/alarm/+/state":
+                alarm = True
+    return {"installed": True, "battery_write": sorted(set(battery)), "alarm_state_relay": alarm,
+            "approval": "totp" if totp_file().is_file() else "not_enrolled"}
+
+
+def set_relay(kind: str, node: str, state: str) -> dict[str, object]:
+    if kind not in RELAYS:
+        raise Refused(404, "not_found")
+    if state not in ("on", "off"):
+        raise Refused(422, "invalid_state")
+    if kind == "battery-write" and not NAME.fullmatch(node):
+        raise Refused(422, "invalid_name")
+    done = identity([kind, node, state] if kind == "battery-write" else [kind, state])
+    if done.returncode != 0:
+        message = (done.stderr or done.stdout).strip().splitlines()[-1:] or [""]
+        raise Refused(409 if "does not exist" in message[0] else 502, "identity_failed")
+    return {"ok": True, "relay": kind, "node": node if kind == "battery-write" else "", "state": state, **relay_status()}
+
+
 # ---- the socket ---------------------------------------------------------------------------------------------------------------------------------
 
 class Handler(http.server.BaseHTTPRequestHandler):
@@ -367,6 +549,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             elif method == "PUT" and len(parts) == 2 and parts[0] == "files":
                 if is_sensitive_file(parts[1]):
                     require_sensitive(sensitive_given)
+                if FILES[parts[1]][1] == "acl":
+                    require_approval(self.headers.get(TOTP_HEADER, ""))
                 data = self.body()
                 content = data.get("content")
                 if not isinstance(content, str):
@@ -388,6 +572,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
             elif method == "DELETE" and len(parts) == 3 and parts[:2] == ["mqtt", "accounts"]:
                 require_sensitive(sensitive_given)
                 self.reply(200, remove_account(parts[2]))
+            elif method == "GET" and parts == ["mqtt", "relays"]:
+                self.reply(200, relay_status())
+            elif method == "POST" and len(parts) == 3 and parts[:2] == ["mqtt", "relays"] and parts[2] in RELAYS:
+                require_sensitive(sensitive_given)
+                require_approval(self.headers.get(TOTP_HEADER, ""), enrolled_required=True)
+                data = self.body()
+                self.reply(200, set_relay(parts[2], str(data.get("node", "")), str(data.get("state", ""))))
             else:
                 raise Refused(404, "not_found")
         except Refused as refusal:

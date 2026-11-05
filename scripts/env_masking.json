@@ -1,0 +1,32 @@
+{
+ "version": 1,
+ "note": "How the secrets of an environment file are hidden before they leave the machine that holds the file, and given back when the file is saved. The maintenance agent hides them in what it returns, the server hides them again before it shows them (the same rules, so the second pass changes nothing), and a saved file whose hidden value is untouched keeps the value it had. Both programs follow the vectors below.",
+ "mask": "********",
+ "secret_key_pattern": "(PASSWORD|SECRET|TOKEN|KEY|PASS|WEBHOOK_ID)",
+ "secret_key_flags": "i",
+ "login_hidden": "***",
+ "query_names": ["token", "key", "secret", "password", "pass"],
+ "mask_vectors": [
+  {"name": "plain value stays", "input": "PORT=18080", "output": "PORT=18080"},
+  {"name": "comment and blank line stay", "input": "# TOKEN=abc\n\nPORT=1", "output": "# TOKEN=abc\n\nPORT=1"},
+  {"name": "secret key is hidden", "input": "ARMOR_ADMIN_TOKEN=abc", "output": "ARMOR_ADMIN_TOKEN=********"},
+  {"name": "key match ignores case", "input": "api_key=zzz", "output": "api_key=********"},
+  {"name": "key match is a substring match on purpose", "input": "BYPASS_MODE=on", "output": "BYPASS_MODE=********"},
+  {"name": "indent is kept", "input": "  MQTT_PASSWORD=hunter2", "output": "  MQTT_PASSWORD=********"},
+  {"name": "empty secret stays empty", "input": "MQTT_PASSWORD=", "output": "MQTT_PASSWORD="},
+  {"name": "login of an address is hidden", "input": "MQTT_URL=mqtt://armor:s3cret@broker:18883", "output": "MQTT_URL=mqtt://armor:***@broker:18883"},
+  {"name": "query token of an address is hidden", "input": "HOOK_URL=https://h.example/x?token=abc&b=1", "output": "HOOK_URL=https://h.example/x?token=***&b=1"},
+  {"name": "address without secret stays", "input": "BROKER=mqtt://broker:18883", "output": "BROKER=mqtt://broker:18883"},
+  {"name": "windows line ends are handled", "input": "A_TOKEN=x\r\nPORT=2\r\n", "output": "A_TOKEN=********\r\nPORT=2\r\n"},
+  {"name": "a second pass changes nothing", "input": "A_TOKEN=********\nU=mqtt://armor:***@broker:18883", "output": "A_TOKEN=********\nU=mqtt://armor:***@broker:18883"}
+ ],
+ "unmask_vectors": [
+  {"name": "hidden value gets the value it had", "edited": "A_TOKEN=********\nPORT=9", "current": "A_TOKEN=abc\nPORT=1", "content": "A_TOKEN=abc\nPORT=9"},
+  {"name": "a new value for a secret is kept", "edited": "A_TOKEN=new", "current": "A_TOKEN=abc", "content": "A_TOKEN=new"},
+  {"name": "mask of a key that is gone is refused", "edited": "B_TOKEN=********", "current": "A_TOKEN=abc", "missing": "B_TOKEN"},
+  {"name": "untouched login goes back as it was", "edited": "U=mqtt://armor:***@broker:18883", "current": "U=mqtt://armor:s3cret@broker:18883", "content": "U=mqtt://armor:s3cret@broker:18883"},
+  {"name": "login keeps its secret when the host changes", "edited": "U=mqtt://armor:***@other:18883", "current": "U=mqtt://armor:s3cret@broker:18883", "content": "U=mqtt://armor:s3cret@other:18883"},
+  {"name": "query token goes back as it was", "edited": "H=https://h.example/x?token=***&b=2", "current": "H=https://h.example/x?token=abc&b=1", "content": "H=https://h.example/x?token=abc&b=2"},
+  {"name": "windows line ends are handled", "edited": "A_TOKEN=********\r\nPORT=2\r\n", "current": "A_TOKEN=abc\r\nPORT=1\r\n", "content": "A_TOKEN=abc\r\nPORT=2\r\n"}
+ ]
+}

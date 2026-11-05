@@ -17,6 +17,7 @@ import stat
 import sys
 import tempfile
 import threading
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -65,6 +66,8 @@ class AgentTest(unittest.TestCase):
             "  rotate) if [ \"$3\" = ghost ]; then echo 'field-node-ghost does not exist' >&2; exit 1; fi; echo \"user: field-node-$3\"; echo 'password: pw456';;\n"
             "  add) if [ \"$3\" = taken ]; then echo 'field-node-taken already exists' >&2; exit 1; fi; echo \"user: field-node-$3\"; echo 'password: pw123';;\n"
             "  remove) echo removed;;\n"
+            "  battery-write) if [ \"$2\" = ghost ]; then echo \"solar-node-ghost does not exist (add solar-node ghost first)\" >&2; exit 1; fi; echo \"solar-node-$2 now has: $3\";;\n"
+            "  alarm-state-relay) echo \"armor-server now has: $2\";;\n"
             "esac\n", encoding="utf-8")
         os.environ.update(ARMOR_PREFIX=str(cls.prefix), ARMOR_SYSTEMCTL=str(systemctl), ARMOR_MQTT_IDENTITY=str(identity),
                           ARMOR_ADMIN_EXTRA_SERVICES="extra=armor-extra,bad key=x")
@@ -347,6 +350,86 @@ class AgentTest(unittest.TestCase):
                 with contextlib.redirect_stderr(io.StringIO()) as err:
                     self.assertEqual(self.agent.main(), 2)
             self.assertIn("ARMOR_ADMIN_SENSITIVE", err.getvalue())
+
+    def test_an_env_file_never_leaves_with_a_secret_and_a_mask_gets_the_value_back(self) -> None:
+        path = self.prefix / "etc/armor.network.env"
+        original = "ARMOR_STUDIO_PASSWORD=secret-two\nARMOR_PORT=18080\nARMOR_MQTT_URL=mqtt://armor:s3cret@broker:18883\n"
+        path.write_text(original, encoding="utf-8")
+        status, data = self.call("GET", "/v1/files/network.env")
+        self.assertEqual(status, 200)
+        self.assertIs(data["masked"], True)
+        self.assertNotIn("secret-two", json.dumps(data))
+        self.assertNotIn("s3cret", json.dumps(data))
+        self.assertIn("ARMOR_STUDIO_PASSWORD=********", data["content"])
+        self.assertIn("mqtt://armor:***@broker:18883", data["content"])
+        self.assertNotIn("masked", self.call("GET", "/v1/files/mosquitto.acl")[1])            # only the env files are masked
+        self.agent.write_file("network.env", data["content"].replace("18080", "19090").replace("@broker", "@other"), None)
+        self.assertEqual(path.read_text(encoding="utf-8"), "ARMOR_STUDIO_PASSWORD=secret-two\nARMOR_PORT=19090\nARMOR_MQTT_URL=mqtt://armor:s3cret@other:18883\n")
+        with self.assertRaises(self.agent.Refused) as refused:
+            self.agent.write_file("network.env", "NEW_TOKEN=********\n", None)
+        self.assertEqual(refused.exception.code, "masked_value_without_original:NEW_TOKEN")
+        self.assertIn("secret-two", path.read_text(encoding="utf-8"), "a refused save changes nothing")
+
+    def test_the_masking_rules_are_the_shared_ones(self) -> None:
+        shared = HERE.parent.parent / "ARMOR-COMMON" / "src" / "armor_common" / "env_masking.json"
+        copy = json.loads((HERE / "env_masking.json").read_text(encoding="utf-8"))
+        if shared.exists():
+            self.assertEqual(copy, json.loads(shared.read_text(encoding="utf-8")), "copy ARMOR-COMMON/src/armor_common/env_masking.json to scripts/env_masking.json")
+        self.assertEqual(self.agent.ENV_MASK, copy["mask"])
+        self.assertEqual(self.agent.ENV_SECRET_KEY.pattern, copy["secret_key_pattern"])
+        for case in copy["mask_vectors"]:
+            self.assertEqual(self.agent.mask_env(case["input"]), case["output"], case["name"])
+        for case in copy["unmask_vectors"]:
+            got = self.agent.unmask_env(case["edited"], case["current"])
+            self.assertEqual(got, {"missing": case["missing"]} if "missing" in case else {"content": case["content"]}, case["name"])
+
+    def test_totp_follows_rfc_6238(self) -> None:
+        secret = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"                     # "12345678901234567890", the secret of the RFC
+        self.assertEqual(self.agent.totp_code(secret, 59 // 30), "287082")
+        self.assertEqual(self.agent.totp_code(secret, 1111111109 // 30), "081804")
+        self.assertTrue(self.agent.totp_accepts(secret, "287082", now=59.0))
+        self.agent._totp_last_counter[0] = 0
+
+    def test_the_two_switches_of_the_broker_rules_need_the_authenticator_and_say_what_is_on(self) -> None:
+        totp = Path(self.tmp.name) / "maint.totp"
+        acl = self.prefix / "etc/mosquitto/acl"
+        acl.write_text("user armor-server\ntopic write armor/solar/bat-1/maintenance/command\ntopic write armor/alarm/+/state\n\nuser solar-node-bat-1\n", encoding="utf-8")
+        self.agent.configure_sensitive("open", "")
+        with mock.patch.dict(os.environ, {"ARMOR_MAINT_TOTP_FILE": str(totp)}):
+            status, data = self.call("GET", "/v1/mqtt/relays")
+            self.assertEqual((status, data["battery_write"], data["alarm_state_relay"], data["approval"]), (200, ["bat-1"], True, "not_enrolled"))
+            self.assertEqual(self.call("POST", "/v1/mqtt/relays/battery-write", {"node": "bat-1", "state": "off"}), (403, {"error": "totp_not_enrolled"}))
+            self.assertEqual(self.call("POST", "/v1/mqtt/relays/alarm-state-relay", {"state": "off"}), (403, {"error": "totp_not_enrolled"}))
+            secret = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"
+            totp.write_text(secret + "\n", encoding="ascii")
+            try:
+                now = int(time.time() // 30)
+                self.agent._totp_last_counter[0] = 0
+                self.assertEqual(self.call("POST", "/v1/mqtt/relays/battery-write", {"node": "bat-1", "state": "off"}), (401, {"error": "totp_required"}))
+                self.assertEqual(self.call("POST", "/v1/mqtt/relays/battery-write", {"node": "bat-1", "state": "off"}, extra={"X-Armor-Maint-Totp": "000000"}), (401, {"error": "totp_invalid"}))
+                good = self.agent.totp_code(secret, now)
+                status, data = self.call("POST", "/v1/mqtt/relays/battery-write", {"node": "bat-1", "state": "on"}, extra={"X-Armor-Maint-Totp": good})
+                self.assertEqual((status, data["ok"], data["relay"], data["state"], data["approval"]), (200, True, "battery-write", "on", "totp"))
+                self.assertEqual(self.call("POST", "/v1/mqtt/relays/battery-write", {"node": "bat-1", "state": "on"}, extra={"X-Armor-Maint-Totp": good})[1], {"error": "totp_invalid"}, "a code is good once")
+                self.agent._totp_last_counter[0] = 0
+                code = self.agent.totp_code(secret, now)
+                self.assertEqual(self.call("POST", "/v1/mqtt/relays/alarm-state-relay", {"state": "maybe"}, extra={"X-Armor-Maint-Totp": code}), (422, {"error": "invalid_state"}))
+                self.agent._totp_last_counter[0] = 0
+                self.assertEqual(self.call("POST", "/v1/mqtt/relays/battery-write", {"node": "Bad Name", "state": "on"}, extra={"X-Armor-Maint-Totp": self.agent.totp_code(secret, now)}), (422, {"error": "invalid_name"}))
+                self.agent._totp_last_counter[0] = 0
+                self.assertEqual(self.call("POST", "/v1/mqtt/relays/battery-write", {"node": "ghost", "state": "on"}, extra={"X-Armor-Maint-Totp": self.agent.totp_code(secret, now)})[0], 409)
+                self.agent._totp_last_counter[0] = 0
+                self.assertEqual(self.call("POST", "/v1/mqtt/relays/alarm-state-relay", {"state": "on"}, extra={"X-Armor-Maint-Totp": self.agent.totp_code(secret, now)})[0], 200)
+                # the same code also guards the rewriting of the broker rules file, and only while the authenticator is set up
+                self.agent._totp_last_counter[0] = 0
+                self.assertEqual(self.call("PUT", "/v1/files/mosquitto.acl", {"content": "user x\n"})[1], {"error": "totp_required"})
+                self.assertEqual(self.call("PUT", "/v1/files/mosquitto.acl", {"content": "user x\n"}, extra={"X-Armor-Maint-Totp": self.agent.totp_code(secret, now)})[0], 200)
+            finally:
+                totp.unlink(missing_ok=True)
+                self.agent._totp_last_counter[0] = 0
+            self.assertEqual(self.call("PUT", "/v1/files/mosquitto.acl", {"content": "user x\n"})[0], 200, "without an authenticator the rules file is as it always was")
+        self.assertIn("battery-write bat-1 on", (Path(self.tmp.name) / "identity.log").read_text(encoding="utf-8"))
+        self.assertIn("alarm-state-relay on", (Path(self.tmp.name) / "identity.log").read_text(encoding="utf-8"))
 
     def test_the_socket_is_not_open_to_everybody(self) -> None:
         mode = stat.S_IMODE(os.stat(self.sock).st_mode)
