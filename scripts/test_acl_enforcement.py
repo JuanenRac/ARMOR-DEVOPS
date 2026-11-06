@@ -17,7 +17,7 @@ import unittest
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-BASH = shutil.which("bash")
+BASH = shutil.which("bash") or ""
 
 
 def topic_matches(pattern: str, topic: str) -> bool:
@@ -51,8 +51,12 @@ class Broker:
         return any(mode in (verb, "readwrite") and topic_matches(filter_, topic) for mode, filter_ in self.blocks.get(user, []))
 
 
-@unittest.skipIf(BASH is None, "bash is needed to run mqtt_identity.sh")
+@unittest.skipIf(not BASH, "bash is needed to run mqtt_identity.sh")
 class MaintenanceCommandIsTheServers(unittest.TestCase):
+    work: Path
+    acl: Path
+    env: dict[str, str]
+
     @classmethod
     def setUpClass(cls) -> None:
         cls.work = Path(tempfile.mkdtemp())
