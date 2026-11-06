@@ -1692,6 +1692,151 @@ def ddns_setup(data: dict[str, object]) -> dict[str, object]:
     return {"ok": True, **remote_state()}
 
 
+# ---- Updating a program of this machine with the engine of ARMOR-UPDATER (`armor-updater status|update --json`) -------------------------------------------------------------------
+# OFF until ARMOR_MAINT_UPDATER=1 is written on purpose in armor.maint.env. Two steps: a preview (what is installed against the newest release, read-only, which hands out a
+# one-use plan that lives five minutes) and the apply, which wants that plan and is one of the sensitive calls (allowed user and one-time code when those checks are on). The
+# engine is started without a shell, with fixed arguments, and the signature policy `require` is forced in its environment: nothing unsigned is built or put in place. At most one apply
+# every ARMOR_MAINT_UPDATER_MIN_INTERVAL_S seconds (300 by default).
+UPDATER_PROJECT = re.compile(r"^ARMOR-[A-Z0-9][A-Z0-9-]{0,39}$")
+UPDATER_PLAN_TTL_S = 300
+UPDATER_MIN_INTERVAL_DEFAULT = 300
+UPDATER_PREVIEW_MIN_S = 10
+_updater_plans: dict[str, dict[str, object]] = {}
+_updater_clock = {"apply": 0.0, "preview": 0.0}
+_updater_lock = threading.Lock()
+
+
+def updater_enabled() -> bool:
+    return os.environ.get("ARMOR_MAINT_UPDATER", "") == "1"
+
+
+def updater_bin() -> Path:
+    return Path(os.environ.get("ARMOR_UPDATER_BIN", str(PREFIX / "bin" / "armor-updater")))
+
+
+def updater_workspace() -> Path:
+    return Path(os.environ.get("ARMOR_UPDATER_WORKSPACE", str(PREFIX / "workspace")))
+
+
+def updater_interval() -> float:
+    text = os.environ.get("ARMOR_MAINT_UPDATER_MIN_INTERVAL_S", "")
+    return float(min(86400, max(0, int(text)))) if text.isdigit() else float(UPDATER_MIN_INTERVAL_DEFAULT)
+
+
+def updater_environment() -> dict[str, str]:
+    environment = dict(os.environ)
+    environment["ARMOR_UPDATER_REQUIRE_SIGNED"] = "1"          # not a setting: what is installed from here is always signed
+    return environment
+
+
+def updater_projects() -> set[str]:
+    return {str(info["repo"]) for info in COMPONENTS.values()}
+
+
+def updater_run(arguments: list[str], timeout: float) -> dict[str, object]:
+    """Runs the engine without a shell and gives back the JSON object it prints on stdout ({} when there is none)."""
+    binary = updater_bin()
+    if not binary.is_file():
+        raise Refused(501, "updater_missing")
+    done = subprocess.run([str(binary), *arguments, "--workspace", str(updater_workspace()), "--json"], capture_output=True, text=True, timeout=timeout, check=False, env=updater_environment())
+    text = (done.stdout or "").strip()
+    candidates = [text] + list(reversed(text.splitlines()))        # status prints one indented object, install and update print one line
+    for candidate in candidates:
+        try:
+            data = json.loads(candidate)
+        except ValueError:
+            continue
+        if isinstance(data, dict):
+            return data
+    return {}
+
+
+def updater_project(data: dict[str, object]) -> str:
+    project = data.get("project")
+    if not isinstance(project, str) or not UPDATER_PROJECT.fullmatch(project) or project not in updater_projects():
+        raise Refused(422, "unknown_project")
+    return project
+
+
+def updater_state() -> dict[str, object]:
+    return {"enabled": updater_enabled(), "available": updater_bin().is_file(), "require_signed": True, "min_interval_s": updater_interval(), "projects": sorted(updater_projects())}
+
+
+def updater_preview(data: dict[str, object]) -> dict[str, object]:
+    if not updater_enabled():
+        raise Refused(403, "updater_disabled")
+    project = updater_project(data)
+    with _updater_lock:
+        if time.time() - _updater_clock["preview"] < UPDATER_PREVIEW_MIN_S:
+            raise Refused(429, "too_soon")
+        _updater_clock["preview"] = time.time()
+        for key in [key for key, plan in _updater_plans.items() if float(plan["expires"]) < time.time()]:  # type: ignore[arg-type]
+            _updater_plans.pop(key, None)
+    report = updater_run(["status"], timeout=120)
+    projects = report.get("projects")
+    entry = next((item for item in projects if isinstance(item, dict) and item.get("name") == project), None) if isinstance(projects, list) else None
+    if entry is None:
+        raise Refused(502, "no_status")
+    if report.get("signature_policy") != "require":
+        raise Refused(409, "signature_not_enforced")
+    outdated = entry.get("state") == "OUTDATED" and entry.get("installed") is True
+    view: dict[str, object] = {"project": project, "installed": entry.get("installed") is True, "local_version": entry.get("local_version"), "github_version": entry.get("github_version"),
+                               "state": entry.get("state"), "update_available": outdated, "signature_policy": "require"}
+    if outdated:
+        plan_id = os.urandom(12).hex()
+        with _updater_lock:
+            _updater_plans[plan_id] = {"project": project, "target": entry.get("github_version"), "expires": time.time() + UPDATER_PLAN_TTL_S}
+        view.update({"plan_id": plan_id, "expires_in_s": UPDATER_PLAN_TTL_S})
+    return view
+
+
+def updater_apply(data: dict[str, object]) -> Job:
+    if not updater_enabled():
+        raise Refused(403, "updater_disabled")
+    project = updater_project(data)
+    plan_id = data.get("plan_id")
+    with _updater_lock:
+        plan = _updater_plans.pop(plan_id, None) if isinstance(plan_id, str) else None      # one use: a plan that failed is asked for again
+        if plan is None:
+            raise Refused(404, "no_such_plan")
+        if plan["project"] != project:
+            raise Refused(422, "plan_mismatch")
+        if float(plan["expires"]) < time.time():                                              # type: ignore[arg-type]
+            raise Refused(410, "plan_expired")
+        if time.time() - _updater_clock["apply"] < updater_interval():
+            raise Refused(429, "too_soon")
+        if any(job.state == "running" for job in JOBS.values()):
+            raise Refused(409, "busy")
+        _updater_clock["apply"] = time.time()
+    job = Job("updater", [("update", f"{project}: update with signatures required"), ("report", "read the result")], label=project)
+    remember(job)
+
+    def work() -> None:
+        with WORK:
+            error = ""
+            try:
+                job.step("update", "running", 10)
+                job.say(f"{project}: updating to {plan['target']}")
+                report = updater_run(["update", project], timeout=3600)
+                ok = report.get("ok") is True
+                job.step("update", "done" if ok else "failed")
+                job.step("report", "done")
+                job.result = {"project": project, "ok": ok, "error": str(report.get("error", ""))[:300], "target": plan["target"]}
+                error = "" if ok else "update_failed"
+            except Refused as refusal:
+                error = refusal.code
+            except subprocess.TimeoutExpired:
+                error = "timeout"
+            except Exception as failure:                                   # a bug here must be seen in the log, not take the helper down
+                job.say(f"failed: {type(failure).__name__}")
+                error = "internal_error"
+            job.finish(error)
+            record_history(job)
+
+    threading.Thread(target=work, daemon=True).start()
+    return job
+
+
 # ---- Who may change the sensitive settings: the user of the caller (SO_PEERCRED) and a one-time code (TOTP) ------------------------------------------------------------------
 # The socket is open to the group `armor` and wants the token, which every service of that group could read. For what changes the machine (the console, the reboot, the system
 # upgrade, the automatic updates, the remote access) two more checks can be switched on, each by what the administrator writes in armor.maint.env, and both are off until then so
@@ -1701,7 +1846,7 @@ def ddns_setup(data: dict[str, object]) -> dict[str, object]:
 #                                 must bring a current six-digit code in X-Armor-Maint-Totp (401 totp_required / totp_invalid); a code is good once (no replay)
 SENSITIVE_ROUTES = {
     ("POST", ("console", "run")), ("POST", ("system", "reboot")), ("POST", ("system", "upgrade")), ("POST", ("system", "auto-updates")),
-    ("POST", ("remote", "wireguard", "setup")), ("POST", ("remote", "ddns", "setup")),
+    ("POST", ("remote", "wireguard", "setup")), ("POST", ("remote", "ddns", "setup")), ("POST", ("updater", "apply")),
 }
 TOTP_STEP_S = 30
 TOTP_WINDOW = 1            # steps either side of now, for a clock that is a little off
@@ -1923,6 +2068,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 if result.returncode != 0:
                     raise helper_failed(result)
                 self.reply(200, {"ok": True, **remote_state()})
+            elif method == "GET" and parts == ["updater"]:
+                self.reply(200, updater_state())
+            elif method == "POST" and parts == ["updater", "preview"]:
+                self.reply(200, updater_preview(self.body()))
+            elif method == "POST" and parts == ["updater", "apply"]:
+                self.reply(202, updater_apply(self.body()).view())
             elif method == "GET" and parts == ["console"]:
                 self.reply(200, {"enabled": CONSOLE_ENABLED})
             else:

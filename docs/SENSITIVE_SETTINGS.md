@@ -2,7 +2,7 @@
 
 The maintenance helper (`scripts/armor_maintenance_agent.py`) listens on a Unix socket that the group `armor` can open and wants a token. Every service of that group can read the token, so for what changes the machine two more checks can be switched on. Both are **off until the administrator writes them** in `armor.maint.env`, so an update never locks anybody out.
 
-The calls they protect: `POST /v1/console/run`, `POST /v1/system/reboot`, `POST /v1/system/upgrade`, `POST /v1/system/auto-updates`, `POST /v1/remote/wireguard/setup` and `POST /v1/remote/ddns/setup`. Reading and the updates of the programs are not affected.
+The calls they protect: `POST /v1/console/run`, `POST /v1/system/reboot`, `POST /v1/system/upgrade`, `POST /v1/system/auto-updates`, `POST /v1/remote/wireguard/setup`, `POST /v1/remote/ddns/setup` and `POST /v1/updater/apply`. Reading and the updates of the programs are not affected.
 
 | Setting | What it does |
 |---|---|
@@ -12,6 +12,10 @@ The calls they protect: `POST /v1/console/run`, `POST /v1/system/reboot`, `POST 
 Make the secret of the authenticator with `armor_maintenance_agent.py --totp-enroll` (as root): it writes the file with mode 0600 and shows the secret once, to be added to an authenticator app (SHA-1, six digits, 30 seconds). Delete the file to turn the code off again.
 
 The tests are in `scripts/test_maintenance_guard.py`.
+
+## Updating a program through the updater engine
+
+Off until `ARMOR_MAINT_UPDATER=1` is written in `armor.maint.env`. `POST /v1/updater/preview` with `{"project": "ARMOR-SERVER"}` runs `armor-updater status --json` (read-only) and, when the program is outdated, answers with a `plan_id` that is good once and for five minutes. `POST /v1/updater/apply` with the project and that `plan_id` is a sensitive call (the user and code checks above) and starts `armor-updater update <project> --json` without a shell; the helper forces `ARMOR_UPDATER_REQUIRE_SIGNED=1`, so an unsigned revision is never built, and refuses the preview when the engine does not report the policy `require`. Only the programs of `COMPONENTS` are accepted, one apply every `ARMOR_MAINT_UPDATER_MIN_INTERVAL_S` seconds (300 by default; `ARMOR_UPDATER_BIN` and `ARMOR_UPDATER_WORKSPACE` say where the engine and its workspace are). The tests are in `scripts/test_maintenance_updater.py`.
 
 ## Secrets of the .env files never leave the admin agent
 
