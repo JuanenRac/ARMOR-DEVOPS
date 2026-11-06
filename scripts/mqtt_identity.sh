@@ -2,8 +2,8 @@
 # ARMOR-DEVOPS - add or remove an MQTT identity on the A.R.M.O.R. test-bench broker.
 # Copyright (C) 2026 JuanenRac (Electro Hobby 3D). GPL-3.0-or-later.
 #
-#   sudo mqtt_identity.sh add node north-1     # a field node: writes its own telemetry/health, reads its own commands (and writes armor/solar/north-1/# if it also reads solar equipment)
-#   sudo mqtt_identity.sh add solar-node solar-1  # a solar gateway node (ARMOR-NODE-SOLAR): writes armor/solar/solar-1/# and nothing else
+#   sudo mqtt_identity.sh add node north-1     # a field node: writes its own telemetry/health, reads its own commands (and writes armor/solar/north-1/+/state and .../maintenance/result if it also reads solar equipment)
+#   sudo mqtt_identity.sh add solar-node solar-1  # a solar gateway node (ARMOR-NODE-SOLAR): writes armor/solar/solar-1/+/state and .../maintenance/result and nothing else (never the order topic: only the server writes it)
 #   sudo mqtt_identity.sh add electrical-node electrical-1  # an electrical node (ARMOR-NODE-ELECTRICAL): writes armor/electrical/electrical-1/state and /result and nothing else, reads nothing
 #   sudo mqtt_identity.sh add alarm-node alarm-1   # an alarm node (ARMOR-NODE-ALARM): writes armor/alarm/alarm-1/state and /result and reads only armor/alarm/alarm-1/zigbee and .../policy (the Zigbee zones and the security policy the server tells it)
 #   sudo mqtt_identity.sh add network-node network-1   # a network node (ARMOR-NETWORK): writes armor/network/network-1/state and nothing else, reads nothing
@@ -15,7 +15,9 @@
 #   sudo mqtt_identity.sh add consumer siren   # an alarm consumer: reads armor/server/alert only
 #   sudo mqtt_identity.sh add device kitchen   # one smart device (a plug, a sensor): reads and writes armor/device/kitchen/# only
 #   sudo mqtt_identity.sh add bridge zigbee    # a bridge to many devices (Zigbee2MQTT, a Shelly gateway): all of armor/device/#
-#   sudo mqtt_identity.sh upgrade-node north-1 # an existing field node: also let it write armor/node/north-1/info (where its panel is) use armor/device/north-1/# (its mapped pins) and write armor/solar/north-1/# (inverters and batteries it reads)
+#   sudo mqtt_identity.sh upgrade-node north-1 # an existing field node: also let it write armor/node/north-1/info (where its panel is) use armor/device/north-1/# (its mapped pins) and write armor/solar/north-1/+/state and .../maintenance/result (inverters and batteries it reads)
+#   sudo mqtt_identity.sh narrow-solar-acl solar-1  # a solar or field node made before the order topic was kept for the server: swap its wide line armor/solar/solar-1/# for the two narrow ones (idempotent; the previous ACL is kept)
+#   ARMOR_ACL_STRICT_MAINTENANCE_COMMAND=0 sudo -E mqtt_identity.sh add solar-node solar-1  # the compatibility mode (default 1 = strict): also writes the old wide line, which lets a node publish the battery order topic
 #   sudo mqtt_identity.sh alarm-policy alarm-1       # an alarm node made before the server's security options existed: also let it read armor/alarm/alarm-1/policy (idempotent)
 #   sudo mqtt_identity.sh node-control alarm-node alarm-1   # an identity made before remote control existed: also let the node read its own control orders and write its own answers and maintenance signal
 #   sudo mqtt_identity.sh radar-events north-1   # a radar node made before the events of its perimeter engine existed: let it write armor/radar/north-1/events and read armor/radar/north-1/control/armed, and let the server read the events
@@ -56,13 +58,17 @@ role_lines() {
       echo "topic write armor/health/$NAME"
       echo "topic read armor/node/$NAME/command"
       echo "topic readwrite armor/device/$NAME/#"
-      echo "topic write armor/solar/$NAME/#"
+      echo "topic write armor/solar/$NAME/+/state"
+      echo "topic write armor/solar/$NAME/maintenance/result"
       echo "topic write armor/radar/$NAME/events"
       echo "topic read armor/radar/$NAME/control/armed"
       echo "topic read armor/control/$NAME/command"
       echo "topic read armor/control/all/command"
       echo "topic write armor/control/$NAME/result"
       echo "topic write armor/control/$NAME/maintenance"
+      if [[ "${ARMOR_ACL_STRICT_MAINTENANCE_COMMAND:-1}" == "0" ]]; then
+        echo "topic write armor/solar/$NAME/#"
+      fi
       ;;
     hmi-node)
       echo "topic write armor/node/$NAME/health"
@@ -74,12 +80,16 @@ role_lines() {
       echo "topic write armor/control/$NAME/maintenance"
       ;;
     solar-node)
-      echo "topic write armor/solar/$NAME/#"
+      echo "topic write armor/solar/$NAME/+/state"
+      echo "topic write armor/solar/$NAME/maintenance/result"
       echo "topic write armor/health/$NAME"
       echo "topic read armor/control/$NAME/command"
       echo "topic read armor/control/all/command"
       echo "topic write armor/control/$NAME/result"
       echo "topic write armor/control/$NAME/maintenance"
+      if [[ "${ARMOR_ACL_STRICT_MAINTENANCE_COMMAND:-1}" == "0" ]]; then
+        echo "topic write armor/solar/$NAME/#"
+      fi
       ;;
     electrical-node)
       echo "topic write armor/electrical/$NAME/state"
@@ -117,7 +127,7 @@ role_lines() {
 }
 # END GENERATED
 
-usage() { echo "Usage: mqtt_identity.sh add node ID | add solar-node ID | add electrical-node ID | add network-node ID | add alarm-node ID | add hmi-node ID | add consumer NAME | add device NAME | add bridge NAME | upgrade-node NODE_ID | health-report ROLE NODE_ID | alarm-policy NODE_ID | node-control ROLE NODE_ID | electrical-switching NODE_ID on|off | alarm-commands NODE_ID on|off | electrical-relays NODE_ID on|off | alarm-relays NODE_ID on|off | battery-write NODE_ID on|off | alarm-state-relay on|off | ha-discovery on|off [PREFIX] | remove USER" >&2; exit 2; }
+usage() { echo "Usage: mqtt_identity.sh add node ID | add solar-node ID | add electrical-node ID | add network-node ID | add alarm-node ID | add hmi-node ID | add consumer NAME | add device NAME | add bridge NAME | upgrade-node NODE_ID | health-report ROLE NODE_ID | alarm-policy NODE_ID | node-control ROLE NODE_ID | electrical-switching NODE_ID on|off | alarm-commands NODE_ID on|off | electrical-relays NODE_ID on|off | alarm-relays NODE_ID on|off | battery-write NODE_ID on|off | narrow-solar-acl NODE_ID | alarm-state-relay on|off | ha-discovery on|off [PREFIX] | remove USER" >&2; exit 2; }
 ACTION="${1:-}"
 # Removes one line from the block of ONE identity ("user NAME" up to the next blank line), never from the others: the same line (topic readwrite armor/device/garage/#) can be in the
 # blocks of a device and of a node with the same name.
@@ -194,7 +204,7 @@ case "$ACTION" in
     grep -qx "user $USER_NAME" "$MQ/acl" || { echo "$USER_NAME does not exist" >&2; exit 1; }
     CHANGED=0
     # Idempotent: each line is added to the node's own block only when it is not there.
-    for LINE in "topic write armor/node/$NAME/info" "topic readwrite armor/device/$NAME/#" "topic write armor/solar/$NAME/#"; do
+    for LINE in "topic write armor/node/$NAME/info" "topic readwrite armor/device/$NAME/#" "topic write armor/solar/$NAME/+/state" "topic write armor/solar/$NAME/maintenance/result"; do
       if awk -v u="user $USER_NAME" -v l="$LINE" 'BEGIN{inb=0; found=0} $0==u{inb=1; next} inb && /^$/{inb=0} inb && $0==l{found=1} END{exit found?0:1}' "$MQ/acl"; then
         echo "$USER_NAME already has: $LINE"
       else
@@ -208,6 +218,34 @@ case "$ACTION" in
       chown root:armor "$MQ/acl"; chmod 0640 "$MQ/acl"
       reload_broker
       echo "the previous ACL is kept as acl.before-upgrade"
+    fi
+    ;;
+  narrow-solar-acl)
+    # A node made before the order topic of the batteries was kept for the server has the wide line `topic write armor/solar/<node>/#`, which also lets it publish
+    # armor/solar/<node>/maintenance/command. This swaps that line for the two narrow ones (the readings and the answers) in the block of the solar node and of the field node of that name.
+    # Idempotent; the previous ACL is kept. Nodes keep working: they publish nothing else under their subtree.
+    NAME="${2:-}"
+    [[ "$NAME" =~ ^[a-z0-9][a-z0-9_-]{0,63}$ ]] || { echo "the node id must match ^[a-z0-9][a-z0-9_-]{0,63}\$" >&2; exit 2; }
+    WIDE="topic write armor/solar/$NAME/#"; FOUND=0; CHANGED=0
+    for USER_NAME in "solar-node-$NAME" "field-node-$NAME"; do
+      grep -qx "user $USER_NAME" "$MQ/acl" || continue
+      FOUND=1
+      has_line() { awk -v u="user $USER_NAME" -v l="$1" 'BEGIN{inb=0; found=0} $0==u{inb=1; next} inb && /^$/{inb=0} inb && $0==l{found=1} END{exit found?0:1}' "$MQ/acl"; }
+      if has_line "$WIDE"; then
+        [[ "$CHANGED" -eq 1 ]] || cp -p "$MQ/acl" "$MQ/acl.before-narrow-solar"
+        drop_line "$USER_NAME" "$WIDE"; CHANGED=1; echo "$USER_NAME no longer has: $WIDE"
+        for LINE in "topic write armor/solar/$NAME/+/state" "topic write armor/solar/$NAME/maintenance/result"; do
+          has_line "$LINE" || { sed -i "/^user $USER_NAME\$/a $LINE" "$MQ/acl"; echo "$USER_NAME now has: $LINE"; }
+        done
+      else
+        echo "$USER_NAME does not have the wide line: nothing to narrow"
+      fi
+    done
+    [[ "$FOUND" -eq 1 ]] || { echo "neither solar-node-$NAME nor field-node-$NAME exists" >&2; exit 1; }
+    if [[ "$CHANGED" -eq 1 ]]; then
+      chown root:armor "$MQ/acl"; chmod 0640 "$MQ/acl"
+      reload_broker
+      echo "the previous ACL is kept as acl.before-narrow-solar"
     fi
     ;;
   alarm-policy)

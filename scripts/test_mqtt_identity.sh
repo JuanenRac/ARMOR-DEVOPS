@@ -306,4 +306,35 @@ run alarm-state-relay off >/dev/null
 if grep -q 'topic write armor/alarm/+/state' "$ACL"; then fail "alarm-state-relay off left the line"; fi
 if run alarm-state-relay maybe >/dev/null 2>&1; then fail "alarm-state-relay took a state that is not on or off"; fi
 
+# The solar lines never cover the order topic of the batteries: a new solar or field node writes its readings and its answers and nothing wider; the old wide line only comes back
+# when the strict mode is turned off on purpose, and an identity made before is narrowed by one command.
+run add solar-node strict-1 >/dev/null
+run add node strict-2 >/dev/null
+for BLOCK_OF in solar-node-strict-1:strict-1 field-node-strict-2:strict-2; do
+  WHO="${BLOCK_OF%%:*}"; ID="${BLOCK_OF#*:}"
+  grep -qx "topic write armor/solar/$ID/+/state" <<<"$(block "$WHO")" || fail "$WHO cannot write its readings"
+  grep -qx "topic write armor/solar/$ID/maintenance/result" <<<"$(block "$WHO")" || fail "$WHO cannot write its maintenance answers"
+  if grep -q "armor/solar/$ID/#" <<<"$(block "$WHO")"; then fail "$WHO has the wide solar line in strict mode"; fi
+done
+ARMOR_ACL_STRICT_MAINTENANCE_COMMAND=0 run add solar-node relaxed-1 >/dev/null
+grep -qx 'topic write armor/solar/relaxed-1/#' <<<"$(block solar-node-relaxed-1)" || fail "the relaxed mode did not write the old wide line"
+ARMOR_ACL_STRICT_MAINTENANCE_COMMAND=1 run add solar-node strict-3 >/dev/null
+if grep -q 'armor/solar/strict-3/#' "$ACL"; then fail "the strict mode wrote the wide line"; fi
+# An identity made by an older script: narrowed in place, idempotent, and a node without the wide line is left alone.
+printf '\nuser solar-node-old-1\ntopic write armor/solar/old-1/#\ntopic write armor/health/old-1\n' >>"$ACL"
+printf '\nuser field-node-old-2\ntopic write armor/node/old-2/telemetry\n' >>"$ACL"
+run narrow-solar-acl old-1 >/dev/null
+if grep -q 'armor/solar/old-1/#' "$ACL"; then fail "narrow-solar-acl left the wide line"; fi
+grep -qx 'topic write armor/solar/old-1/+/state' <<<"$(block solar-node-old-1)" || fail "narrow-solar-acl did not give the readings line"
+grep -qx 'topic write armor/solar/old-1/maintenance/result' <<<"$(block solar-node-old-1)" || fail "narrow-solar-acl did not give the answers line"
+grep -qx 'topic write armor/health/old-1' <<<"$(block solar-node-old-1)" || fail "narrow-solar-acl dropped another line"
+[[ -f "$WORK/prefix/etc/mosquitto/acl.before-narrow-solar" ]] || fail "the previous ACL was not kept"
+BEFORE="$(cat "$ACL")"
+run narrow-solar-acl old-1 >/dev/null
+[[ "$(cat "$ACL")" == "$BEFORE" ]] || fail "narrow-solar-acl twice changed the ACL"
+run narrow-solar-acl old-2 >/dev/null
+if grep -q 'armor/solar/old-2' "$ACL"; then fail "narrow-solar-acl gave a node that never had the wide line a solar line"; fi
+if run narrow-solar-acl nobody >/dev/null 2>&1; then fail "narrow-solar-acl took a node that does not exist"; fi
+if run narrow-solar-acl 'Bad Node' >/dev/null 2>&1; then fail "narrow-solar-acl took a bad name"; fi
+
 echo "ARMOR_MQTT_IDENTITY=PASS the switch and the relays of an electrical node and the commands of an alarm node are reachable only after an explicit on, only the server publishes control orders and each node reads only its own, and off and remove take them away"

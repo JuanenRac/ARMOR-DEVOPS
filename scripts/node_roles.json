@@ -1,8 +1,9 @@
 {
-  "_about": "The ONE table of what each kind of broker identity may do: its user name and its access lines, with {name} for the node name. ARMOR-DEVOPS scripts/mqtt_identity.sh writes them and a test compares its output with this file. The lines of the server are in ARMOR-DEVOPS scripts/armor_server.acl; the opt-in lines (commands) are written only on purpose by mqtt_identity.sh.",
+  "_about": "The ONE table of what each kind of broker identity may do: its user name and its access lines, with {name} for the node name. ARMOR-DEVOPS scripts/mqtt_identity.sh writes them and a test compares its output with this file. The lines of the server are in ARMOR-DEVOPS scripts/armor_server.acl; the opt-in lines (commands) are written only on purpose by mqtt_identity.sh. The solar lines name the readings and the answers of the maintenance steps and never the command topic (only the server publishes it); `relaxed_extra` is the old wide line, written only when mqtt_identity.sh runs with ARMOR_ACL_STRICT_MAINTENANCE_COMMAND=0.",
   "roles": {
     "node": {
       "user": "field-node-{name}",
+      "relaxed_extra": ["topic write armor/solar/{name}/#"],
       "topics": [
         "topic write armor/node/{name}/telemetry",
         "topic write armor/node/{name}/health",
@@ -10,7 +11,8 @@
         "topic write armor/health/{name}",
         "topic read armor/node/{name}/command",
         "topic readwrite armor/device/{name}/#",
-        "topic write armor/solar/{name}/#",
+        "topic write armor/solar/{name}/+/state",
+        "topic write armor/solar/{name}/maintenance/result",
         "topic write armor/radar/{name}/events",
         "topic read armor/radar/{name}/control/armed",
         "topic read armor/control/{name}/command",
@@ -33,8 +35,10 @@
     },
     "solar-node": {
       "user": "solar-node-{name}",
+      "relaxed_extra": ["topic write armor/solar/{name}/#"],
       "topics": [
-        "topic write armor/solar/{name}/#",
+        "topic write armor/solar/{name}/+/state",
+        "topic write armor/solar/{name}/maintenance/result",
         "topic write armor/health/{name}",
         "topic read armor/control/{name}/command",
         "topic read armor/control/all/command",

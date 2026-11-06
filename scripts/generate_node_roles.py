@@ -25,6 +25,11 @@ def generated() -> str:
     for role, entry in roles.items():
         out.append(f"    {role})")
         out += [f'      echo "{shell_text(line)}"' for line in entry["topics"]]
+        if entry.get("relaxed_extra"):
+            # the old wide line, only when the strict mode is turned off on purpose (it also covers the maintenance command topic)
+            out.append('      if [[ "${ARMOR_ACL_STRICT_MAINTENANCE_COMMAND:-1}" == "0" ]]; then')
+            out += [f'        echo "{shell_text(line)}"' for line in entry["relaxed_extra"]]
+            out.append("      fi")
         out.append("      ;;")
     out += ["  esac", "}"]
     return "\n".join(out)
