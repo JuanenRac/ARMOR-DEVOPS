@@ -880,9 +880,9 @@ fi
 
 # Keep the four newest releases; older ones are moved aside, never deleted.
 mkdir -p "$PREFIX/releases-old"
-ls -1dt "$PREFIX"/releases/*/ 2>/dev/null | tail -n +5 | while read -r old; do mv "$old" "$PREFIX/releases-old/" || true; done
+{ ls -1dt "$PREFIX"/releases/*/ 2>/dev/null || true; } | tail -n +5 | while read -r old; do mv "$old" "$PREFIX/releases-old/" || true; done
 # ... and the set-aside ones are not kept for ever either (each holds its node_modules): the six newest stay. The copies the maintenance helper makes (maint-*) are pruned by the helper.
-ls -1dt "$PREFIX"/releases-old/[0-9]*/ 2>/dev/null | tail -n +7 | while read -r old; do rm -rf -- "$old" || true; done
+{ ls -1dt "$PREFIX"/releases-old/[0-9]*/ 2>/dev/null || true; } | tail -n +7 | while read -r old; do rm -rf -- "$old" || true; done   # nothing set aside yet (a first install) is not an error under pipefail
 
 say "A.R.M.O.R. is running"
 say "  Studio : $SCHEME://$PUBLIC_HOST:$STUDIO_PORT"
