@@ -35,7 +35,14 @@ cp -a /studio/tools "$RELEASE/studio/tools"
 printf '<!doctype html><title>studio</title>\n' >"$RELEASE/studio/dist/index.html"
 
 INSTALL=(bash "$RELEASE/scripts/install_cm5.sh" --public-host 127.0.0.1 --bind 127.0.0.1 --apply --with-mqtt --with-admin --with-maintenance)
-if ! "${INSTALL[@]}" >/tmp/install.log 2>&1; then echo "FAIL the installer stopped:" >&2; tail -30 /tmp/install.log >&2; journalctl -u armor-server -u armor-studio -n 30 --no-pager >&2 || true; exit 1; fi
+if ! "${INSTALL[@]}" >/tmp/install.log 2>&1; then
+  echo "FAIL the installer stopped; its last lines:" >&2; tail -12 /tmp/install.log >&2
+  echo "--- what the services say" >&2
+  systemctl status armor-server armor-studio --no-pager -n 15 >&2 || true
+  curl -sv http://127.0.0.1:18080/healthz >&2 || true
+  curl -sv http://127.0.0.1:18081/healthz >&2 || true
+  exit 1
+fi
 echo "ok   install_cm5.sh --apply finished"
 
 for unit in armor-server armor-studio armor-mosquitto armor-admin armor-maintenance; do

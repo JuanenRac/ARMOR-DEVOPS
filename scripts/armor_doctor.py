@@ -28,6 +28,7 @@ import shutil
 import stat
 import sys
 from pathlib import Path
+from typing import Any
 
 DEFAULT_PREFIX = "/opt/armor"
 DEFAULT_MIN_TOKEN = 24
@@ -89,7 +90,7 @@ def acl_blocks(text: str) -> dict[str, list[str]]:
 WIDE_TOPIC = re.compile(r"^topic (read|write|readwrite) (#|armor/#|\$SYS/#)$")
 
 
-def role_for(user: str, roles: dict[str, dict[str, object]]) -> tuple[str, str] | None:
+def role_for(user: str, roles: dict[str, dict[str, Any]]) -> tuple[str, str] | None:
     """(kind, name) of the kind whose user pattern fits, the most specific one when several fit (``alarm-{name}`` also fits ``alarm-node-x``)."""
     best: tuple[int, str, str] | None = None
     for kind, entry in roles.items():
@@ -100,7 +101,7 @@ def role_for(user: str, roles: dict[str, dict[str, object]]) -> tuple[str, str] 
     return (best[1], best[2]) if best else None
 
 
-def acl_findings(acl_text: str, roles: dict[str, dict[str, object]], server_lines: list[str], add) -> None:
+def acl_findings(acl_text: str, roles: dict[str, dict[str, Any]], server_lines: list[str], add) -> None:
     """The access list against what each kind of identity is given. ``add`` is the ``add(level, subject, message)`` of ``diagnose``."""
     blocks = acl_blocks(acl_text)
     if not blocks:
@@ -122,8 +123,8 @@ def acl_findings(acl_text: str, roles: dict[str, dict[str, object]], server_line
                 continue
             kind, name = found
             entry = roles[kind]
-            expected = {str(topic).replace("{name}", name) for topic in entry["topics"]}   # type: ignore[union-attr]
-            relaxed = {str(topic).replace("{name}", name) for topic in entry.get("relaxed_extra", [])}   # type: ignore[union-attr]
+            expected = {str(topic).replace("{name}", name) for topic in entry["topics"]}
+            relaxed = {str(topic).replace("{name}", name) for topic in entry.get("relaxed_extra", [])}
         if not expected:
             continue
         beyond = sorted(set(lines) - expected - relaxed)
