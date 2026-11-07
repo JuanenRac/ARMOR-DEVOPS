@@ -101,7 +101,7 @@ check "failure: the server keeps answering while the broker is gone" curl -fs ht
 start_broker
 mosquitto_pub -h 127.0.0.1 -p "$PORT" -u field-node-n1 -P "$NODE_PASSWORD" -t armor/node/n1/telemetry -m '{"node_id":"n1","timestamp_ms":2000,"lux":260.5,"targets":[]}' >/dev/null 2>&1
 BACK=0; for _ in $(seq 1 60); do status | grep -q '260.5' && { BACK=1; break; }; sleep 0.5; done
-if [[ "$BACK" -eq 1 ]]; then ok "failure: the server reconnects by itself when the broker comes back"; else bad "failure: the server reconnects by itself when the broker comes back"; fi
+if [[ "$BACK" -eq 1 ]]; then ok "failure: the server reconnects by itself when the broker comes back"; else bad "failure: the server reconnects by itself when the broker comes back" "$(status | head -c 500) // $(tail -c 300 "$WORK/server.log")"; fi
 check "service: nothing in the data directory is readable by others" bash -c "! find '$DATA' -perm /o+rwx | grep -q ."
 kill "$SERVER_PID" 2>/dev/null; wait "$SERVER_PID" 2>/dev/null; SERVER_PID=""
 
