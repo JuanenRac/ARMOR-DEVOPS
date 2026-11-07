@@ -4,6 +4,7 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+- **A container bench for the scripts:** `scripts/container_bench.sh` runs as root in a Debian (trixie) container, with the real nftables parser and a real Mosquitto broker, and checks the host firewall (the rules are accepted, the table loads and is removed again), the identities of `mqtt_identity.sh` (a node reaches its own topics and no other, a wrong password, a repeated or badly named identity and a removed identity are refused) and a closed port and a full disk (the script fails, the ACL is left as it was, no password is printed). The workflow `DevOps container bench` runs it on every push. It proves the scripts on a Debian userland; the CM5 itself (its processor, kernel, services and network) is still to be tried.
 - **`firewall_core.sh --field-http` lets the field network reach the server over HTTP, off unless given:** one more rule accepts the field network on the server's port only (Studio stays closed to it), before the drop; without `--clients` it changes nothing. The test prints the rules with and without it and checks the order. Not loaded on a machine yet.
 
 ## [0.7.3] - The maintenance helper can update a program through the engine of the updater, in two steps and off by default: with ARMORMAINTUPDATER=1 in armor.maint.env, GET /v1/updater says whether it is on, POST /v1/updater/preview reads... (and 1 more changes)

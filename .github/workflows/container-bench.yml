@@ -1,0 +1,33 @@
+# =============================================================================
+# A.R.M.O.R. - DevOps container bench
+# Copyright (C) 2026 JuanenRac (Electro Hobby 3D)
+# GPL-3.0-or-later - see LICENSE
+# =============================================================================
+# The scripts of this repository (the host firewall, the MQTT identities) run as root in a Debian container (the release of the CM5, not its arm64 processor, kernel or network)
+# against a real Mosquitto broker and the real nftables parser, with failures played on purpose: a wrong password, a removed identity, a closed port and a full disk
+# (scripts/container_bench.sh). A green run says the scripts behave on a Debian userland with the real tools; it says nothing about the CM5 itself.
+name: DevOps container bench
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  container-bench:
+    name: Scripts in a Debian container with a real broker
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Run the bench in the container
+        run: |
+          docker run --rm --cap-add NET_ADMIN --tmpfs /full:rw,size=96k -v "$PWD:/repo:ro" debian:trixie \
+            bash -c 'apt-get update -qq && apt-get install -y -qq --no-install-recommends mosquitto mosquitto-clients nftables procps >/dev/null && bash /repo/scripts/container_bench.sh'
