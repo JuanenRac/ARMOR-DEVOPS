@@ -89,7 +89,7 @@ check "service: the process runs as the service account, not as root" bash -c "p
 status() { curl -fs -H "Authorization: Bearer $OPERATOR" http://127.0.0.1:28080/api/v1/status; }
 mosquitto_pub -h 127.0.0.1 -p "$PORT" -u field-node-n1 -P "$NODE_PASSWORD" -t armor/node/n1/telemetry -m "{\"node_id\":\"n1\",\"timestamp_ms\":$(date +%s%3N),\"lux\":250.5,\"targets\":[]}" >/dev/null 2>&1
 SEEN=0; for _ in $(seq 1 30); do status | grep -q '"n1"' && { SEEN=1; break; }; sleep 0.3; done
-if [[ "$SEEN" -eq 1 ]]; then ok "broker road: a node message through the access list reaches the server's status"; else bad "broker road: a node message through the access list reaches the server's status" "$(tail -c 300 "$WORK/server.log")"; fi
+if [[ "$SEEN" -eq 1 ]]; then ok "broker road: a node message through the access list reaches the server's status"; else bad "broker road: a node message through the access list reaches the server's status" "$(tail -c 900 "$WORK/server.log")"; fi
 mosquitto_pub -h 127.0.0.1 -p "$PORT" -u field-node-n1 -P "$NODE_PASSWORD" -t armor/node/other/telemetry -m '{"node_id":"other","timestamp_ms":1000,"lux":1,"targets":[]}' >/dev/null 2>&1
 sleep 1.5
 check "broker road: a node that writes on another node's topic is not heard" bash -c "! curl -fs -H 'Authorization: Bearer $OPERATOR' http://127.0.0.1:28080/api/v1/status | grep -q '\"other\"'"
@@ -99,9 +99,9 @@ kill "$BROKER_PID" 2>/dev/null; wait "$BROKER_PID" 2>/dev/null
 sleep 1
 check "failure: the server keeps answering while the broker is gone" curl -fs http://127.0.0.1:28080/healthz -o /dev/null
 start_broker
-mosquitto_pub -h 127.0.0.1 -p "$PORT" -u field-node-n1 -P "$NODE_PASSWORD" -t armor/node/n1/telemetry -m "{\"node_id\":\"n1\",\"timestamp_ms\":$(( $(date +%s%3N) + 5000 )),\"lux\":260.5,\"targets\":[]}" >/dev/null 2>&1
+mosquitto_pub -h 127.0.0.1 -p "$PORT" -u field-node-n1 -P "$NODE_PASSWORD" -t armor/node/n1/telemetry -m "{\"node_id\":\"n1\",\"timestamp_ms\":$(date +%s%3N),\"lux\":260.5,\"targets\":[]}" >/dev/null 2>&1
 BACK=0; for _ in $(seq 1 60); do status | grep -q '260.5' && { BACK=1; break; }; sleep 0.5; done
-if [[ "$BACK" -eq 1 ]]; then ok "failure: the server reconnects by itself when the broker comes back"; else bad "failure: the server reconnects by itself when the broker comes back" "$(status | head -c 500) // $(tail -c 300 "$WORK/server.log")"; fi
+if [[ "$BACK" -eq 1 ]]; then ok "failure: the server reconnects by itself when the broker comes back"; else bad "failure: the server reconnects by itself when the broker comes back" "$(status | head -c 500) // $(tail -c 900 "$WORK/server.log")"; fi
 check "service: nothing in the data directory is readable by others" bash -c "! find '$DATA' -perm /o+rwx | grep -q ."
 kill "$SERVER_PID" 2>/dev/null; wait "$SERVER_PID" 2>/dev/null; SERVER_PID=""
 
