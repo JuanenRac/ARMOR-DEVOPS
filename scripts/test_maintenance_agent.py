@@ -438,6 +438,30 @@ class MaintenanceTest(unittest.TestCase):
         self.assertTrue(self.agent.staging_enabled())
         self.assertIn(("POST", ("staging",)), self.agent.SENSITIVE_ROUTES)
 
+    def test_the_wait_of_the_trial_is_kept_between_five_and_one_hundred_twenty_seconds(self) -> None:
+        self.auto_setup()
+        for written, expected in (("1", 5), ("5", 5), ("30", 30), ("119", 119), ("999", 120), ("12345", 30), ("abc", 30), ("-4", 30), ("", 30)):
+            self.maint_env.write_text(f"ARMOR_MAINT_STAGING_WAIT_S={written}\n", encoding="utf-8")
+            self.assertEqual(self.agent.staging_wait(), float(expected), written)
+        self.maint_env.unlink()
+        self.assertEqual(self.agent.staging_wait(), 30.0)
+
+    def test_only_the_exact_word_on_turns_the_trial_on_from_the_settings_file(self) -> None:
+        self.auto_setup()
+        for written, expected in (("on", True), ("ON", True), (" on ", True), ("off", False), ("yes", False), ("1", False), ("true", False), ("", False)):
+            self.maint_env.write_text(f"ARMOR_MAINT_STAGING={written}\n", encoding="utf-8")
+            self.assertEqual(self.agent.staging_enabled(), expected, repr(written))
+
+    def test_a_choice_of_studio_is_kept_in_the_file_of_the_helper_and_read_back_whole(self) -> None:
+        self.auto_setup()
+        self.addCleanup(lambda: self.agent.auto_state_path().unlink(missing_ok=True))
+        self.agent.set_staging({"enabled": True})
+        self.assertIs(json.loads(self.agent.auto_state_path().read_text(encoding="utf-8"))["staging"], True)
+        data = self.agent.read_auto_file()
+        data["settings"] = {"enabled": False}
+        self.agent.write_auto_file(data)
+        self.assertTrue(self.agent.staging_enabled(), "saving the other settings does not lose the choice")
+
     def test_the_staging_is_off_when_nobody_chose_and_the_file_says_nothing(self) -> None:
         self.auto_setup()
         self.assertEqual(self.agent.staging_view(), {"enabled": False, "source": "env", "wait_s": 30})
