@@ -52,7 +52,7 @@ done
 check "the server answers /healthz" within 30 curl -fsS http://127.0.0.1:18080/healthz
 check "Studio answers /healthz" within 30 curl -fsS http://127.0.0.1:18081/healthz
 check "the broker listens on its own port" within 30 bash -c 'ss -ltn | grep -q ":18883 "'
-check "the broker is not on the standard port" bash -c '! ss -ltn | grep -q ":1883 "'
+check "the broker is not on the standard port" bash -c '! ss -ltn | grep -q ":1[8]83 "'
 
 # The hardening of the unit is what the kernel enforces, not only what the file says.
 check "the server cannot gain privileges" bash -c '[[ "$(systemctl show armor-server -p NoNewPrivileges --value)" == yes ]]'
