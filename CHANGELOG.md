@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+- **`firewall_core.sh --field-http` lets the field network reach the server over HTTP, off unless given:** one more rule accepts the field network on the server's port only (Studio stays closed to it), before the drop; without `--clients` it changes nothing. The test prints the rules with and without it and checks the order. Not loaded on a machine yet.
+
 ## [0.7.3] - The maintenance helper can update a program through the engine of the updater, in two steps and off by default: with ARMORMAINTUPDATER=1 in armor.maint.env, GET /v1/updater says whether it is on, POST /v1/updater/preview reads... (and 1 more changes)
 
 - **The maintenance helper can update a program through the engine of the updater, in two steps and off by default:** with `ARMOR_MAINT_UPDATER=1` in `armor.maint.env`, `GET /v1/updater` says whether it is on, `POST /v1/updater/preview` reads what is installed against the newest release (read-only) and hands out a one-use plan that lives five minutes, and `POST /v1/updater/apply` (one of the sensitive calls: allowed user and one-time code when those are on) wants that plan, starts `armor-updater update <project> --json` without a shell with the signature policy `require` forced, and follows it as a job. Only the programs the helper manages are accepted, one apply every `ARMOR_MAINT_UPDATER_MIN_INTERVAL_S` seconds (300 by default); twelve tests in `scripts/test_maintenance_updater.py` with a stand-in engine.

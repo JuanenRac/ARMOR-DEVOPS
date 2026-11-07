@@ -33,6 +33,17 @@ OPEN="$("$FW" print --field 192.168.0.0/24)"
 expect_in  "$OPEN" "tcp dport 18883 counter drop"
 expect_out "$OPEN" "tcp dport { 18080, 18081 }"
 
+# --field-http is off unless given: the field network never reaches the server's port by itself
+expect_out "$RULES" "tcp dport 18080 ip saddr { 192.168.0.0/24 }"
+# with it, the field network may reach the server (and only the server: Studio stays closed to it), before the drop
+HTTP="$("$FW" print --field 192.168.0.0/24 --clients 192.168.10.0/24 --field-http)"
+expect_in  "$HTTP" "tcp dport 18080 ip saddr { 192.168.0.0/24 } accept"
+expect_out "$HTTP" "tcp dport 18081 ip saddr { 192.168.0.0/24 }"
+expect_in  "$HTTP" "tcp dport { 18080, 18081 } counter drop"
+[[ "$(grep -n 'tcp dport 18080 ip saddr { 192.168.0.0/24 } accept' <<<"$HTTP" | cut -d: -f1)" -lt "$(grep -n 'counter drop' <<<"$HTTP" | tail -1 | cut -d: -f1)" ]] && ok || bad "the field rule must come before the drop"
+# without --clients there is nothing to open: the server is open anyway
+expect_out "$("$FW" print --field 192.168.0.0/24 --field-http)" "tcp dport 18080 ip saddr"
+
 # other ports, a trusted interface, more than one field network
 OTHER="$("$FW" print --field 192.168.0.0/24 --field 172.16.5.0/28 --mqtt-port 28883 --server-port 28080 --studio-port 28081 --clients 10.0.0.0/8 --trust-iface docker0)"
 expect_in  "$OTHER" "tcp dport 28883 ip saddr { 192.168.0.0/24,172.16.5.0/28 } accept"

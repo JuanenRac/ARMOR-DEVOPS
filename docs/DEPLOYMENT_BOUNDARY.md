@@ -44,6 +44,8 @@ in it, or leave `--clients` out. **Never forward the broker's port.** The rules 
 
 With `--clients`, the HTTP ports of the server accept only the clients' network, so a machine in the field network that speaks HTTP to the server is refused too: the HTTP ingestion of solar, electrical and network readings from another machine, and a wall panel placed in the field network (its session and its summary). The nodes publish by MQTT, which the broker accepts from the field network; for the others, give `--clients` the address or the network of that machine, or leave `--clients` out, and keep the wall panel in a network the clients' rule lets through.
 
+A field network that must reach the server over HTTP (readings of solar, electrical or network equipment that is not on the broker) can be let through with `--field-http`: it adds one rule that accepts the field network on the server's port only, before the drop, and Studio stays closed to it. It is **off unless given**, and it changes nothing without `--clients` (the server is open then anyway). It opens a way into the server's login from the field network, so turn it on only when a machine there needs it.
+
 ## Health reports
 
 Every kind of node writes its own `armor/health/<node>` (the same report for a radar, a solar, an electrical, an alarm node and a wall panel), and the server reads `armor/health/#`. `scripts/mqtt_identity.sh add <role> <id>` writes the line for new nodes; for a node installed before, run `scripts/mqtt_identity.sh health-report <role> <id>` (idempotent, the previous rules are kept as `acl.before-health`). On an existing server `install_cm5.sh` adds the read line once.

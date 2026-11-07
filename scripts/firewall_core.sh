@@ -4,7 +4,8 @@
 #
 # It puts the design of docs/SECURITY_BASELINE.md into rules for the machine that runs the server, the broker and Studio:
 #   - the broker's port is reachable only from the FIELD network (the nodes) and from this machine: never from the clients' network, never from the Internet;
-#   - the server's and Studio's ports are reachable only from the CLIENTS' network (and this machine), when --clients is given.
+#   - the server's and Studio's ports are reachable only from the CLIENTS' network (and this machine), when --clients is given;
+#   - with --field-http (off unless given) the SERVER's port is also reachable from the FIELD network, for the nodes that report over HTTP instead of the broker; Studio's never is.
 # The rules live in ONE table of their own (inet armor_core) that only ever mentions A.R.M.O.R.'s ports and has an "accept" policy: everything else on the
 # machine (SSH, another project's ports, DNS...) is left exactly as it was. The default ports are the ones install_cm5.sh uses. The rules act on the machine's
 # INPUT: services installed natively (install_cm5.sh) are covered; a port that Docker publishes is forwarded, not input, and is not (publish it on loopback,
@@ -18,7 +19,7 @@
 #   sudo firewall_core.sh revert                                                                    # remove the table (and the boot unit, if there is one)
 #   firewall_core.sh status                                                                         # the table as loaded
 #
-# Options: --field CIDR (required except for revert/status/confirm), --clients CIDR (repeatable), --mqtt-port N (18883), --server-port N (18080), --studio-port N (18081),
+# Options: --field CIDR (required except for revert/status/confirm), --clients CIDR (repeatable), --field-http (let the field network reach the server's port; it only matters with --clients, without which that port is open anyway), --mqtt-port N (18883), --server-port N (18080), --studio-port N (18081),
 #          --trust-iface NAME (repeatable: an interface whose traffic is accepted, e.g. a Docker bridge), --table NAME (armor_core).
 # IPv4 networks only. Nothing here has been run on the CM5.
 set -euo pipefail
@@ -26,7 +27,7 @@ set -euo pipefail
 TABLE="armor_core"
 MQTT_PORT="18883"; SERVER_PORT="18080"; STUDIO_PORT="18081"
 FIELD=(); CLIENTS=(); IFACES=()
-ROLLBACK=0; PERSIST=0
+ROLLBACK=0; PERSIST=0; FIELD_HTTP=0
 CONF_DIR="/etc/armor"; CONF_FILE="$CONF_DIR/firewall.nft"; UNIT="armor-firewall"; ROLLBACK_UNIT="armor-firewall-rollback"
 
 fail() { echo "firewall_core: $*" >&2; exit 2; }
@@ -59,6 +60,7 @@ while [[ $# -gt 0 ]]; do
     --table) valid_name "${2:-}" || fail "--table wants a plain name"; TABLE="$2"; shift 2 ;;
     --rollback-after) [[ "${2:-}" =~ ^[0-9]{1,4}$ ]] && (( 10#$2 >= 10 )) || fail "--rollback-after wants a number of seconds, at least 10"; ROLLBACK="$((10#$2))"; shift 2 ;;
     --persist) PERSIST=1; shift ;;
+    --field-http) FIELD_HTTP=1; shift ;;
     *) fail "unknown option '$1'" ;;
   esac
 done
@@ -85,9 +87,13 @@ ruleset() {
     clients="$(joined "${CLIENTS[@]}")"
     echo "    # the server and Studio: the clients' network, and this machine"
     echo "    tcp dport { $SERVER_PORT, $STUDIO_PORT } ip saddr { $clients } accept"
+    if (( FIELD_HTTP )); then
+      echo "    # --field-http: the nodes of the field network may also report to the server over HTTP (Studio stays closed to them)"
+      echo "    tcp dport $SERVER_PORT ip saddr { $field } accept"
+    fi
     echo "    tcp dport { $SERVER_PORT, $STUDIO_PORT } counter drop"
   else
-    echo "    # the server and Studio: no --clients given, so they stay as open as they were (the login protects them)"
+    echo "    # the server and Studio: no --clients given, so they stay as open as they were (the login protects them; --field-http has nothing to open)"
   fi
   echo "  }"
   echo "}"
