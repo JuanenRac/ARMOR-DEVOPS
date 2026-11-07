@@ -95,6 +95,13 @@ expect 0 "dry run only - add --apply to install" -- --public-host 192.168.0.5 --
 expect 0 "other software : untouched" -- --public-host my-bench.local --prefix "$PREFIX" "${PORTS[@]}"
 expect 0 "armor-server   : 127.0.0.1:28080" -- --public-host 192.168.0.5 --prefix "$PREFIX" "${PORTS[@]}" --bind 127.0.0.1
 expect 0 "armor-mosquitto: 0.0.0.0:18883" -- --public-host 192.168.0.5 --prefix "$PREFIX" "${PORTS[@]}" --with-mqtt
+expect 1 "--broker-auth must be acl or dynsec" -- --public-host 192.168.0.5 --prefix "$PREFIX" "${PORTS[@]}" --with-mqtt --broker-auth ldap
+expect 1 "--broker-auth needs --with-mqtt" -- --public-host 192.168.0.5 --prefix "$PREFIX" "${PORTS[@]}" --broker-auth dynsec
+expect 1 "the release has no scripts/armor_dynsec.py" -- --public-host 192.168.0.5 --prefix "$PREFIX" "${PORTS[@]}" --with-mqtt --broker-auth dynsec
+never "dynamic-security" -- --public-host 192.168.0.5 --prefix "$PREFIX" "${PORTS[@]}" --with-mqtt
+never "dynamic-security" -- --public-host 192.168.0.5 --prefix "$PREFIX" "${PORTS[@]}" --with-mqtt --broker-auth acl
+cp "$HERE/armor_dynsec.py" "$RELEASE/scripts/"
+expect 0 "the dynamic-security plugin of Mosquitto 2" -- --public-host 192.168.0.5 --prefix "$PREFIX" "${PORTS[@]}" --with-mqtt --broker-auth dynsec
 expect 0 "armor-mosquitto: 0.0.0.0:28883" -- --public-host 192.168.0.5 --prefix "$PREFIX" "${PORTS[@]}" --with-mqtt --mqtt-port 28883
 expect 0 "armor-voice    : 127.0.0.1:18090" -- --public-host 192.168.0.5 --prefix "$PREFIX" "${PORTS[@]}" --with-voice
 expect 0 "armor-backup   : daily, encrypted" -- --public-host 192.168.0.5 --prefix "$PREFIX" "${PORTS[@]}" --with-backup

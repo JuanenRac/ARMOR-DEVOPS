@@ -73,7 +73,7 @@
 * **秘密：**`scripts/generate_secrets.sh` はランダムな秘密を作って何も表示しません。`scripts/check-required-env.sh` は未設定、プレースホルダー、短すぎる、重複した値を拒否します。
 * **サーバーのブローカー規則は 1 つのファイルから、サーバー更新の前に試運転：**ブローカーのアクセスリストにあるサーバーの区画はファイル `scripts/armor_server.acl` で、インストーラー、`generate_secrets.sh`、そして ARMOR-SERVER が実際に発行・購読するトピックと突き合わせるテストがこれを使います。`mqtt_identity.sh battery-write ノード on|off` と `alarm-state-relay on|off` は、バッテリーへの書き込みとパネルの署名付き状態に必要な 2 つの経路を、要求があったときだけ開きます。`ARMOR_MAINT_STAGING=on` にすると、メンテナンスヘルパーはリリースフォルダーから新しいサーバーをループバックの空きポートで、空のデータフォルダーとブローカーなしで起動し、`/healthz` が応答したときだけ切り替えます（既定はオフ）。
 * **诊断：** `scripts/armor_doctor.py` 以只读方式检查安装是否自洽：`etc/armor*.env` 中每个密钥的权限与长度、没有重复密钥、网络节点令牌由摄取令牌派生、代理端口与 `mosquitto.conf` 一致以及剩余磁盘空间；不打印任何值（`--json`、`--strict`）。
-* **动态安全插件中的代理身份：** `scripts/armor_dynsec.py convert` 把代理的密码文件和 ACL 文件转换为 Mosquitto 2 插件的 `dynamic-security.json`（保留 `$7$` 哈希，每个身份一个角色，默认拒绝访问，为 `mosquitto_ctrl` 添加管理员，其密码只写入私有文件）；`check` 证明结果与 ACL 允许的完全一致；`conf` 打印 `mosquitto.conf` 的两行。运行中的代理不会被改动。
+* **动态安全插件中的代理身份：** `scripts/armor_dynsec.py convert` 把代理的密码文件和 ACL 文件转换为 Mosquitto 2 插件的 `dynamic-security.json`（保留 `$7$` 哈希，每个身份一个角色，默认拒绝访问，为 `mosquitto_ctrl` 添加管理员，其密码只写入私有文件）；`check` 证明结果与 ACL 允许的完全一致；`conf` 打印 `mosquitto.conf` 的两行。运行中的代理不会被改动。安装程序可代劳：`install_cm5.sh --with-mqtt --broker-auth dynsec` 只转换一次并检查结果，管理员密码保存在 `etc/armor.dynsec.admin`（权限 0600）；此后 `mqtt_identity.sh` 会拒绝执行，因为身份改用 `mosquitto_ctrl` 更改。
 * **バックアップと復元：**`scripts/backup_data.sh` はサーバーデータの AES-256 暗号化・検証済み・チェックサム付きアーカイブを作り（求めない限り証拠は除外）、`scripts/restore_data.sh` はそれを一覧するか、既存データを上書きせずに復元します。
 * **Studio から設定できる VPN と家の名前：** `armor_wireguard.sh` は数コマンドで WireGuard VPN を作り（鍵はマシン上、スマホごとに QR コード付きの設定、必要ならノードへのルーティング）、`armor_ddns.sh` はプロバイダーがアドレスを変えても DuckDNS・Cloudflare などの名前が家を指し続けるようにします。メンテナンスエージェントが両方を Studio とスマホに提供するので、コマンドを打つ必要はなく、ルーターの設定も 8 言語の手順書で説明しています。
 * **署名付きパッケージ：** メンテナンスヘルパーは、サーバー、Studio などのパッケージを、プロジェクトのリリース鍵による有効な Ed25519 署名がある場合にのみインストールします（追加ソフトなしの純粋な Python で検証）。署名がない、誤っている、改ざんされている場合、マシンは変更されません。緊急用の例外は、マシン自身のファイルの設定としてのみ存在します。
@@ -138,7 +138,7 @@ ARMOR-DEVOPS は、他のすべてがマシンに載り、最新に保たれる�
 | `ARMOR_MQTT_BIND`  `ARMOR_STUDIO_BIND` | 127.0.0.1 | Compose がブローカーと Studio を公開する場所 |
 | `ARMOR_PUBLIC_ORIGIN` | http://127.0.0.1:18081 | Studio にアクセスするオリジン |
 | `ARMOR_TLS_BIND`  `ARMOR_TLS_PORT`  `ARMOR_TLS_HTTP_PORT` | 8443 | `tls` プロファイルの Caddy |
-| `ARMOR_MAINT_STAGING`  `ARMOR_MAINT_STAGING_WAIT_S` | off  30 | `armor.maint.env` 内：`on` にすると、メンテナンスヘルパーは切り替える前に、新しいサーバーをループバックの空きポートで、空のデータフォルダーとブローカーなしで試します（待ち時間は 5〜120 秒） |
+| `ARMOR_MAINT_STAGING`  `ARMOR_MAINT_STAGING_WAIT_S` | off  30 | `armor.maint.env` 内：`on` にすると、メンテナンスヘルパーは切り替える前に、新しいサーバーをループバックの空きポートで、空のデータフォルダーとブローカーなしで試します（待ち時間は 5〜120 秒）。Studio の「更新」画面のスイッチを一度使うと、このファイルより優先されます |
 | `.env`  `.env.example` | - | `generate_secrets.sh` が作成し、Git は無視。例に全変数を記載 |
 
 メンテナンスヘルパーの root コンソールはマシン自身のファイルの設定で、既定ではオフです。ファイアウォールと TLS はインストーラーのオプションで、既定ではありません。詳細は [docs/CM5_TEST_BENCH.md](docs/CM5_TEST_BENCH.md)。

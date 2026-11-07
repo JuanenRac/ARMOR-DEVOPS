@@ -2,7 +2,7 @@
 
 The maintenance helper (`scripts/armor_maintenance_agent.py`) listens on a Unix socket that the group `armor` can open and wants a token. Every service of that group can read the token, so for what changes the machine two more checks can be switched on. Both are **off until the administrator writes them** in `armor.maint.env`, so an update never locks anybody out.
 
-The calls they protect: `POST /v1/console/run`, `POST /v1/system/reboot`, `POST /v1/system/upgrade`, `POST /v1/system/auto-updates`, `POST /v1/remote/wireguard/setup`, `POST /v1/remote/ddns/setup` and `POST /v1/updater/apply`. Reading and the updates of the programs are not affected.
+The calls they protect: `POST /v1/console/run`, `POST /v1/system/reboot`, `POST /v1/system/upgrade`, `POST /v1/system/auto-updates`, `POST /v1/staging`, `POST /v1/remote/wireguard/setup`, `POST /v1/remote/ddns/setup` and `POST /v1/updater/apply`. Reading and the updates of the programs are not affected.
 
 | Setting | What it does |
 |---|---|

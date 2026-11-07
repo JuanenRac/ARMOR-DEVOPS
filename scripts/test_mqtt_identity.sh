@@ -359,4 +359,16 @@ if grep -q 'armor/solar/old-2' "$ACL"; then fail "narrow-solar-acl gave a node t
 if run narrow-solar-acl nobody >/dev/null 2>&1; then fail "narrow-solar-acl took a node that does not exist"; fi
 if run narrow-solar-acl 'Bad Node' >/dev/null 2>&1; then fail "narrow-solar-acl took a bad name"; fi
 
+# A broker whose identities were moved to the dynamic-security plugin is not edited through the files it no longer reads: every command is refused, and the files stay as they were.
+BEFORE="$(cat "$ACL")"
+: >"$WORK/prefix/etc/mosquitto/dynamic-security.json"
+for command in "add node north-9" "rotate node north-9" "remove field-node-north-9" "battery-write solar-1 on" "alarm-state-relay on"; do
+  # shellcheck disable=SC2086
+  if run $command >/dev/null 2>"$WORK/err"; then fail "'$command' was accepted by a broker kept in the dynamic-security plugin"; fi
+  grep -q 'dynamic-security plugin' "$WORK/err" || fail "'$command' was refused without saying why: $(cat "$WORK/err")"
+done
+[[ "$(cat "$ACL")" == "$BEFORE" ]] || fail "a refused command changed the ACL file"
+rm -f "$WORK/prefix/etc/mosquitto/dynamic-security.json"
+run add node north-9 >/dev/null || fail "without the plugin file the script works as before"
+
 echo "ARMOR_MQTT_IDENTITY=PASS the switch and the relays of an electrical node and the commands of an alarm node are reachable only after an explicit on, only the server publishes control orders and each node reads only its own, and off and remove take them away"

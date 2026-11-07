@@ -73,7 +73,7 @@
 * **密钥：**`scripts/generate_secrets.sh` 创建随机密钥且不打印任何一个；`scripts/check-required-env.sh` 拒绝缺失、占位、过短或重复的值。
 * **服务器代理规则只有一个来源，服务器更新前先试运行：**代理访问列表中服务器的那一段就是文件 `scripts/armor_server.acl`；安装器、`generate_secrets.sh` 以及一项将其与 ARMOR-SERVER 实际发布和订阅的主题进行比较的测试都使用它。`mqtt_identity.sh battery-write 节点 on|off` 和 `alarm-state-relay on|off` 仅在需要时才打开电池写入和面板签名状态所需的两条路径。设置 `ARMOR_MAINT_STAGING=on` 后，维护助手会在回环地址的空闲端口上用空数据目录、不连代理地从新版本目录启动新服务器，只有 `/healthz` 应答才会切换（默认关闭）。
 * **ドクター：** `scripts/armor_doctor.py` は読み取り専用で、設備の整合性を確認します。`etc/armor*.env` の各秘密のモードと長さ、秘密の重複がないこと、インジェストトークンから導出されたネットワークノードのトークン、ブローカーのポートと `mosquitto.conf` の一致、ディスクの空き。値は一切表示しません（`--json`、`--strict`）。
-* **動的セキュリティプラグインでのブローカーID:** `scripts/armor_dynsec.py convert` はブローカーのパスワードファイルと ACL を Mosquitto 2 プラグインの `dynamic-security.json` に変換します(`$7$` ハッシュは引き継ぎ、IDごとに1つのロール、既定は拒否、`mosquitto_ctrl` 用の管理者のパスワードは非公開ファイルにのみ書き込み)。`check` は結果が ACL の許可と完全に一致することを確認し、`conf` は `mosquitto.conf` の2行を出力します。稼働中のブローカーには触れません。
+* **動的セキュリティプラグインでのブローカーID:** `scripts/armor_dynsec.py convert` はブローカーのパスワードファイルと ACL を Mosquitto 2 プラグインの `dynamic-security.json` に変換します(`$7$` ハッシュは引き継ぎ、IDごとに1つのロール、既定は拒否、`mosquitto_ctrl` 用の管理者のパスワードは非公開ファイルにのみ書き込み)。`check` は結果が ACL の許可と完全に一致することを確認し、`conf` は `mosquitto.conf` の2行を出力します。稼働中のブローカーには触れません。`install_cm5.sh --with-mqtt --broker-auth dynsec` でインストーラーが代行できます。変換は一度だけ行い結果を検証し、管理者パスワードは `etc/armor.dynsec.admin`（モード 0600）に保存します。以降 `mqtt_identity.sh` は拒否します（ID は `mosquitto_ctrl` で変更するため）。
 * **备份与恢复：**`scripts/backup_data.sh` 生成服务器数据的 AES-256 加密、经验证并带校验和的归档（除非要求否则不含证据）；`scripts/restore_data.sh` 列出或恢复它，且从不覆盖已有数据。
 * **可在 Studio 中设置的 VPN 和家的域名：** `armor_wireguard.sh` 用几条命令建立 WireGuard VPN（密钥保存在本机，每部手机一份带二维码的配置，需要时可路由到节点），`armor_ddns.sh` 在运营商更换地址时让 DuckDNS、Cloudflare 或其他域名始终指向您家；维护代理把两者提供给 Studio 和手机，无需任何人输入命令，并有八种语言的分步指南说明路由器设置。
 * **签名软件包：** 维护助手只有在软件包带有项目发布密钥的有效 Ed25519 签名时，才会安装服务器、Studio 或其他程序的软件包（用纯 Python 验证，无需额外软件）；签名缺失、错误或被篡改时机器保持不变。紧急例外仅作为机器自身文件中的设置存在。
@@ -138,7 +138,7 @@ ARMOR-DEVOPS 是其他一切到达机器并保持最新的途径。它在 CM5 �
 | `ARMOR_MQTT_BIND`  `ARMOR_STUDIO_BIND` | 127.0.0.1 | Compose 发布代理和 Studio 的位置 |
 | `ARMOR_PUBLIC_ORIGIN` | http://127.0.0.1:18081 | 访问 Studio 所用的来源 |
 | `ARMOR_TLS_BIND`  `ARMOR_TLS_PORT`  `ARMOR_TLS_HTTP_PORT` | 8443 | `tls` 配置的 Caddy |
-| `ARMOR_MAINT_STAGING`  `ARMOR_MAINT_STAGING_WAIT_S` | off  30 | `armor.maint.env` 内：`on` 让维护助手在切换前，于回环地址的空闲端口上以空数据目录且不连代理的方式试运行新服务器（等待 5 至 120 秒） |
+| `ARMOR_MAINT_STAGING`  `ARMOR_MAINT_STAGING_WAIT_S` | off  30 | `armor.maint.env` 内：`on` 让维护助手在切换前，于回环地址的空闲端口上以空数据目录且不连代理的方式试运行新服务器（等待 5 至 120 秒）；一旦使用过 Studio“更新”界面的开关，它将优先于此文件 |
 | `.env`  `.env.example` | - | 由 `generate_secrets.sh` 创建，Git 忽略；示例列出每个变量 |
 
 维护助手的 root 控制台是机器自身文件中的设置，默认关闭；防火墙和 TLS 是安装器的选项而非默认值。详见 [docs/CM5_TEST_BENCH.md](docs/CM5_TEST_BENCH.md)。

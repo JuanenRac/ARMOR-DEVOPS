@@ -45,6 +45,16 @@ set_value() { sed -i "s|^$2=.*|$2=$3|" "$1/.env"; }
 P="$WORK/p1"; project "$P"
 expect 0 "ARMOR_DEVOPS_ENV=PASS" check "$P"
 
+# The TLS key of the broker: world-readable is refused, owner-only is a note (the check still passes), group-readable is accepted without a word.
+P="$WORK/pk1"; project "$P"; : >"$P/secrets/mqtt_server.key"; chmod 0644 "$P/secrets/mqtt_server.key"
+expect 2 "is readable by every user of this machine" check "$P"
+chmod 0640 "$P/secrets/mqtt_server.key"
+out="$(check "$P" 2>&1)"; ok; [[ "$out" != *"readable only by its owner"* && "$out" == *"ARMOR_DEVOPS_ENV=PASS"* ]] || bad "a key readable by its group should pass without a note: $out"
+chmod 0600 "$P/secrets/mqtt_server.key"
+if [[ "$(stat -c %u "$P/secrets/mqtt_server.key" 2>/dev/null || echo x)" != "1883" ]]; then expect 0 "readable only by its owner" check "$P"; fi
+rm -f "$P/secrets/mqtt_server.key"
+expect 0 "ARMOR_DEVOPS_ENV=PASS" check "$P"
+
 P="$WORK/p2"; project "$P"; rm "$P/.env"
 expect 2 ".env is missing" check "$P"
 

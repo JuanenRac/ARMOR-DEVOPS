@@ -423,6 +423,24 @@ class MaintenanceTest(unittest.TestCase):
         Path(self.agent.UU_BIN).write_text("#!/bin/sh\n", encoding="utf-8")
         self.assertTrue(self.agent.auto_view()["package"])
 
+    def test_the_staging_switch_of_studio_wins_over_the_settings_file_and_takes_only_a_boolean(self) -> None:
+        self.auto_setup()
+        self.maint_env.write_text("ARMOR_MAINT_STAGING=on\n", encoding="utf-8")
+        self.assertEqual(self.agent.staging_view(), {"enabled": True, "source": "env", "wait_s": 30})
+        self.assertEqual(self.agent.set_staging({"enabled": False}), {"enabled": False, "source": "studio", "wait_s": 30})
+        self.assertFalse(self.agent.staging_enabled())
+        self.assertTrue(self.agent.set_staging({"enabled": True})["enabled"])
+        for bad, code in (({"enabled": "on"}, "bad_enabled"), ({"enabled": 1}, "bad_enabled"), ({"wait": 5}, "unknown_setting"), ({}, "unknown_setting"), ({"enabled": True, "x": 1}, "unknown_setting")):
+            with self.assertRaises(self.agent.Refused) as caught:
+                self.agent.set_staging(bad)
+            self.assertEqual(caught.exception.code, code)
+        self.assertTrue(self.agent.staging_enabled())
+        self.assertIn(("POST", ("staging",)), self.agent.SENSITIVE_ROUTES)
+
+    def test_the_staging_is_off_when_nobody_chose_and_the_file_says_nothing(self) -> None:
+        self.auto_setup()
+        self.assertEqual(self.agent.staging_view(), {"enabled": False, "source": "env", "wait_s": 30})
+
     # ---- npm ----
     def test_npm_gets_its_own_home_because_the_unit_hides_the_home_of_root(self) -> None:
         source = Path(self.agent.__file__).read_text(encoding="utf-8")

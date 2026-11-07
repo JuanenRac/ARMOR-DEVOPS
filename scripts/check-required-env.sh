@@ -27,6 +27,20 @@ done
 tokens="$(for v in ARMOR_INGEST_TOKEN ARMOR_CONTROL_TOKEN ARMOR_OPERATOR_TOKEN; do read_value "$v"; done | sort | uniq -d)"
 [[ -z "$tokens" ]] || { echo "ERROR: the ingest, control and operator tokens must all be different" >&2; status=2; }
 [[ -f secrets/mqtt.password && -f secrets/mqtt.acl ]] || { echo "ERROR: secrets/mqtt.password and secrets/mqtt.acl are required" >&2; status=2; }
+# The private key of the broker's TLS door (docker-compose.tls.yml mounts it as a secret, keeping the mode and the owner it has on this machine). Readable by every user of the
+# machine is refused. The broker starts as root and drops to its own user (1883) afterwards: a key only root can read is read at the start, but not again when the broker
+# reloads its certificate, so that is said (a note, because it still starts). A mode that cannot be read (a file system without modes) says nothing.
+KEY=secrets/mqtt_server.key
+if [[ -f "$KEY" ]]; then
+  mode="$(stat -c %a "$KEY" 2>/dev/null || true)"; owner="$(stat -c %u "$KEY" 2>/dev/null || true)"
+  if [[ "$mode" =~ ^[0-7]{3,4}$ ]]; then
+    if (( (8#$mode & 8#004) != 0 )); then
+      echo "ERROR: $KEY is readable by every user of this machine (mode $mode); chmod 0640 and give the group 1883, or chmod 0600 and chown 1883" >&2; status=2
+    elif (( (8#$mode & 8#040) == 0 )) && [[ "$owner" != "1883" ]]; then
+      echo "NOTE: $KEY is readable only by its owner ($owner): the broker (user 1883 after it starts) reads it at the start but not when it reloads the certificate; chown 1883 $KEY, or chmod 0640 with the group 1883" >&2
+    fi
+  fi
+fi
 if [[ "$REMOTE" == 1 ]]; then
   origin="$(read_value ARMOR_PUBLIC_ORIGIN)"
   [[ "$origin" == https://* ]] || { echo "ERROR: ARMOR_PUBLIC_ORIGIN must be an https:// address for remote access" >&2; status=2; }

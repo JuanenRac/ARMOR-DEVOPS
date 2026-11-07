@@ -621,8 +621,29 @@ def min_free_bytes() -> int:
 
 
 def staging_enabled() -> bool:
-    """Is the new server tried out before the switch? Only the exact word `on` turns it on; anything else keeps the old behaviour."""
+    """Is the new server tried out before the switch? A choice made from Studio (stored with the other settings of the agent) wins; without one, only the exact word `on` in
+    ARMOR_MAINT_STAGING turns it on, and anything else keeps the old behaviour."""
+    chosen = read_auto_file().get("staging")
+    if isinstance(chosen, bool):
+        return chosen
     return read_settings(MAINT_ENV).get("ARMOR_MAINT_STAGING", "off").strip().lower() == "on"
+
+
+def staging_view() -> dict[str, object]:
+    chosen = read_auto_file().get("staging")
+    return {"enabled": staging_enabled(), "source": "studio" if isinstance(chosen, bool) else "env", "wait_s": int(staging_wait())}
+
+
+def set_staging(change: dict[str, object]) -> dict[str, object]:
+    """The switch of Studio: only `enabled`, only a real boolean (a value that is not one is refused, not guessed)."""
+    if set(change) != {"enabled"}:
+        raise Refused(422, "unknown_setting")
+    if not isinstance(change["enabled"], bool):
+        raise Refused(422, "bad_enabled")
+    data = read_auto_file()
+    data["staging"] = change["enabled"]
+    write_auto_file(data)
+    return staging_view()
 
 
 def staging_wait() -> float:
@@ -1845,7 +1866,7 @@ def updater_apply(data: dict[str, object]) -> Job:
 #   ARMOR_MAINT_TOTP_FILE=...     the file with the base32 secret of the administrator's authenticator (made by `--totp-enroll`, mode 0600); when it exists, a sensitive call
 #                                 must bring a current six-digit code in X-Armor-Maint-Totp (401 totp_required / totp_invalid); a code is good once (no replay)
 SENSITIVE_ROUTES = {
-    ("POST", ("console", "run")), ("POST", ("system", "reboot")), ("POST", ("system", "upgrade")), ("POST", ("system", "auto-updates")),
+    ("POST", ("console", "run")), ("POST", ("system", "reboot")), ("POST", ("system", "upgrade")), ("POST", ("system", "auto-updates")), ("POST", ("staging",)),
     ("POST", ("remote", "wireguard", "setup")), ("POST", ("remote", "ddns", "setup")), ("POST", ("updater", "apply")),
 }
 TOTP_STEP_S = 30
@@ -2005,6 +2026,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 self.reply(202, system_upgrade_job(str(mode)).view())
             elif method == "POST" and parts == ["system", "reboot"]:
                 self.reply(202, reboot_machine())
+            elif method == "GET" and parts == ["staging"]:
+                self.reply(200, staging_view())
+            elif method == "POST" and parts == ["staging"]:
+                self.reply(200, set_staging(self.body()))
             elif method == "GET" and parts == ["system", "auto-updates"]:
                 self.reply(200, auto_view())
             elif method == "POST" and parts == ["system", "auto-updates"]:

@@ -32,6 +32,12 @@ PREFIX="${ARMOR_PREFIX:-/opt/armor}"
 MQ="$PREFIX/etc/mosquitto"
 [[ "$(id -u)" -eq 0 ]] || { echo "run as root" >&2; exit 1; }
 [[ -f "$MQ/passwd" && -f "$MQ/acl" ]] || { echo "the A.R.M.O.R. broker is not installed (install_cm5.sh --with-mqtt)" >&2; exit 1; }
+# A broker whose identities were moved to the dynamic-security plugin (install_cm5.sh --broker-auth dynsec) is changed with mosquitto_ctrl, not by editing these files:
+# the files stay only as the record of what was moved, and editing them would change nothing while looking as if it had.
+if [[ -f "$MQ/dynamic-security.json" ]]; then
+  echo "this broker keeps its identities in the dynamic-security plugin: change them with mosquitto_ctrl (the administrator password is in $PREFIX/etc/armor.dynsec.admin); this script edits the password and ACL files, which that broker no longer reads" >&2
+  exit 1
+fi
 
 # BEGIN GENERATED FROM scripts/node_roles.json (python3 scripts/generate_node_roles.py): the user name and the access lines of each kind of identity.
 role_user() {

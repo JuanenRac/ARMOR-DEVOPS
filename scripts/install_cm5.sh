@@ -28,6 +28,7 @@ SERVER_PORT="18080"
 STUDIO_PORT="18081"
 MQTT_PORT="18883"
 WITH_MQTT=0
+BROKER_AUTH=""      # acl | dynsec | empty (an upgrade keeps what the install had)
 WITH_BACKUP=0
 WITH_ADMIN=0
 WITH_MAINT=0
@@ -59,6 +60,10 @@ Usage: install_cm5.sh --public-host HOST [--apply] [--server-port N] [--studio-p
   --studio-port  ARMOR-STUDIO port (default ${STUDIO_PORT})
   --with-mqtt    also run A.R.M.O.R.'s own MQTT broker (needs the mosquitto package installed)
   --mqtt-port    broker port (default ${MQTT_PORT}; never the standard 1883, which other software may use)
+  --broker-auth acl|dynsec  with --with-mqtt: how the broker keeps its identities. acl (the default) is the password file and the ACL file that mqtt_identity.sh edits;
+                 dynsec moves them, once, into the dynamic-security plugin of Mosquitto 2 (a JSON file the broker itself changes, managed with mosquitto_ctrl; the
+                 administrator password is written to $PREFIX/etc/armor.dynsec.admin, mode 0600, and never printed). An upgrade keeps the mode of the install;
+                 going back to acl is not done by this script
   --with-admin   also run the admin agent (armor-admin, as root, with a closed list of what it may do) so that an administrator can start, stop and
                  restart the services, edit their settings and add MQTT accounts from Studio; the server itself stays unprivileged
   --with-maintenance  also run the maintenance helper (armor-maintenance, as root): from Studio an administrator updates the A.R.M.O.R. programs from GitHub,
@@ -88,6 +93,7 @@ while [[ $# -gt 0 ]]; do
     --forget-reach) FORGET_REACH=1; shift ;;
     --with-mqtt) WITH_MQTT=1; shift ;;
     --mqtt-port) MQTT_PORT="${2:-}"; MQTT_PORT_GIVEN=1; shift 2 ;;
+    --broker-auth) BROKER_AUTH="${2:-}"; shift 2 ;;
     --with-backup) WITH_BACKUP=1; shift ;;
     --with-admin) WITH_ADMIN=1; shift ;;
     --with-maintenance) WITH_MAINT=1; shift ;;
@@ -107,6 +113,14 @@ done
 fail() { echo "ERROR: $*" >&2; exit 1; }
 # An upgrade of an install that already has the broker (or the backup timer) keeps it, whether or not the flag is repeated.
 [[ -f "$PREFIX/etc/armor.mqtt.env" ]] && WITH_MQTT=1
+# The way the broker keeps its identities: the file of the plugin says it was moved; the choice is remembered, and never silently undone.
+[[ -z "$BROKER_AUTH" || "$BROKER_AUTH" == "acl" || "$BROKER_AUTH" == "dynsec" ]] || fail "--broker-auth must be acl or dynsec"
+if [[ -f "$PREFIX/etc/mosquitto/dynamic-security.json" ]]; then
+  [[ "$BROKER_AUTH" != "acl" ]] || fail "this broker already keeps its identities in the dynamic-security plugin; going back to the password and ACL files is not done by this script"
+  BROKER_AUTH="dynsec"
+fi
+[[ -z "$BROKER_AUTH" || "$WITH_MQTT" -eq 1 ]] || fail "--broker-auth needs --with-mqtt (it is about the broker's identities)"
+if [[ "$WITH_MQTT" -eq 1 && -z "$BROKER_AUTH" ]]; then BROKER_AUTH="acl"; fi
 [[ -f "$PREFIX/etc/armor.backup.passphrase" ]] && WITH_BACKUP=1
 [[ -f "$PREFIX/etc/armor.admin.env" ]] && WITH_ADMIN=1
 [[ -f "$PREFIX/etc/armor.maint.env" ]] && WITH_MAINT=1
@@ -177,7 +191,7 @@ CURL_TLS=(); [[ "$SCHEME" == "https" ]] && CURL_TLS=(-k)
 # The services listen only on --bind: the programs of this machine reach them on that address (on the loopback when they listen everywhere).
 LOCAL_HOST="127.0.0.1"; [[ "$BIND_ADDRESS" == "0.0.0.0" ]] || LOCAL_HOST="$BIND_ADDRESS"
 # Everything that is going to be copied is checked before anything is changed.
-for needed in scripts/mqtt_identity.sh $([[ "$WITH_MQTT" -eq 1 ]] && echo scripts/armor_server.acl); do
+for needed in scripts/mqtt_identity.sh $([[ "$WITH_MQTT" -eq 1 ]] && echo scripts/armor_server.acl) $([[ "$BROKER_AUTH" == "dynsec" ]] && echo scripts/armor_dynsec.py); do
   [[ -f "$RELEASE_DIR/$needed" ]] || fail "the release has no $needed"
 done
 [[ "$WITH_ADMIN" -ne 1 || -f "$RELEASE_DIR/scripts/armor_admin_agent.py" ]] || fail "the release has no scripts/armor_admin_agent.py (needed by the admin agent)"
@@ -225,6 +239,7 @@ say "  armor-studio   : $BIND_ADDRESS:$STUDIO_PORT"
 say "  browser opens  : $SCHEME://$PUBLIC_HOST:$STUDIO_PORT"
 for pair in "${REACH_UNIQUE[@]}"; do say "  also reachable : ${pair%%=*} (server ${pair#*=})"; done
 [[ "$WITH_MQTT" -ne 1 ]] || say "  armor-mosquitto: $BIND_ADDRESS:$MQTT_PORT (own broker, own passwords)"
+[[ "$BROKER_AUTH" != "dynsec" ]] || say "  broker identities: the dynamic-security plugin of Mosquitto 2 (managed with mosquitto_ctrl; mqtt_identity.sh no longer edits them)"
 [[ "$WITH_AI" -ne 1 ]] || say "  armor-server-ai: looks at the cameras through the server (movement, weighed with the radars and the light) and tells it; its own token opens only four routes of the server"
 [[ "$AI_IP_RESTRICT" != "on" ]] || say "  armor-server-ai: the kernel only lets its unit talk to localhost${AI_IP_ALLOW:+ and $AI_IP_ALLOW} (IPAddressDeny=any)"
 [[ "$WITH_VOICE" -ne 1 ]] || say "  armor-voice    : 127.0.0.1:$VOICE_PORT (written and spoken commands: a closed list of fifteen, arm and disarm confirmed in two turns; only this machine can reach it)"
@@ -242,6 +257,12 @@ preflight_free_space "$PREFIX" "${ARMOR_MIN_FREE_MB:-300}"
 if [[ "$WITH_MQTT" -eq 1 ]]; then
   command -v mosquitto >/dev/null || fail "--with-mqtt needs the mosquitto package (its own service is not used; install it with your package manager)"
   command -v mosquitto_passwd >/dev/null || fail "--with-mqtt needs mosquitto_passwd (package mosquitto or mosquitto-clients)"
+  if [[ "$BROKER_AUTH" == "dynsec" ]]; then
+    command -v python3 >/dev/null || fail "--broker-auth dynsec needs python3"
+    command -v mosquitto_ctrl >/dev/null || fail "--broker-auth dynsec needs mosquitto_ctrl (package mosquitto-clients)"
+    DYNSEC_PLUGIN="$(find /usr/lib /usr/local/lib -name mosquitto_dynamic_security.so 2>/dev/null | head -n 1)"
+    [[ -n "$DYNSEC_PLUGIN" ]] || fail "--broker-auth dynsec needs the dynamic-security plugin of Mosquitto 2 (mosquitto_dynamic_security.so), which this machine does not have"
+  fi
 fi
 
 STAMP="$(date +%Y%m%d-%H%M%S)"
@@ -461,16 +482,29 @@ if [[ "$WITH_MQTT" -eq 1 ]]; then
   sed -i "s#^ARMOR_MQTT_URL=mqtt://.*#ARMOR_MQTT_URL=mqtt://$LOCAL_HOST:$MQTT_PORT#" "$PREFIX/etc/armor.mqtt.env"
   # An install made before devices existed: let the server listen on, and command, the devices' topics too.
   # An install made before the nodes said where their panel is, or before solar gateways or electrical nodes existed: let the server read those topics too (each line added once).
+  if [[ ! -f "$MQ/dynamic-security.json" ]]; then
   while IFS= read -r ACL_LINE; do
     grep -qxF "$ACL_LINE" "$MQ/acl" || sed -i "/^topic write armor\/server\/alert\$/a $ACL_LINE" "$MQ/acl"
   done < <(grep '^topic ' "$RELEASE_DIR/scripts/armor_server.acl")
   grep -qx 'topic readwrite armor/device/#' "$MQ/acl" || sed -i '0,/^topic write armor\/server\/alert$/s//topic write armor\/server\/alert\ntopic readwrite armor\/device\/#/' "$MQ/acl"
+  fi
+  if [[ "$BROKER_AUTH" == "dynsec" && ! -f "$MQ/dynamic-security.json" ]]; then
+    # Once: the identities and their rules move into the plugin's file, and the converter checks that it lets every identity do exactly what the ACL file did.
+    python3 "$RELEASE_DIR/scripts/armor_dynsec.py" convert --passwd "$MQ/passwd" --acl "$MQ/acl" --out "$MQ/dynamic-security.json" --admin-password-file "$PREFIX/etc/armor.dynsec.admin" || fail "the identities of the broker could not be moved to the dynamic-security plugin; nothing was changed in the password and ACL files"
+    chown "$SERVICE_USER:$SERVICE_USER" "$MQ/dynamic-security.json"; chmod 0600 "$MQ/dynamic-security.json"
+    chown root:root "$PREFIX/etc/armor.dynsec.admin"; chmod 0600 "$PREFIX/etc/armor.dynsec.admin"
+  fi
+  if [[ "$BROKER_AUTH" == "dynsec" ]]; then
+    BROKER_FILES="$(python3 "$RELEASE_DIR/scripts/armor_dynsec.py" conf --plugin "${DYNSEC_PLUGIN:-/usr/lib/mosquitto_dynamic_security.so}" --config-file "$MQ/dynamic-security.json")"
+  else
+    BROKER_FILES="password_file $MQ/passwd
+acl_file $MQ/acl"
+  fi
   cat >"$MQ/mosquitto.conf" <<EOF
 # A.R.M.O.R. broker: authenticated only, its own port, its own files.
 listener $MQTT_PORT $BIND_ADDRESS
 allow_anonymous false
-password_file $MQ/passwd
-acl_file $MQ/acl
+$BROKER_FILES
 persistence true
 persistence_location $PREFIX/data/mqtt/
 log_dest stderr
