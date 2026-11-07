@@ -73,6 +73,27 @@ refused frobnicate
 refused apply --field 192.168.0.0/24 --rollback-after 3        # not as root here, and too short anyway
 refused
 
+# field-http changes one switch of the rules that `apply` loaded last (the admin agent asks for it); --dry-run changes nothing
+OPTS="$(mktemp -d)"; trap 'rm -rf "$OPTS"' EXIT
+printf '%s
+' --field 192.168.0.0/24 --clients 192.168.10.0/24 --mqtt-port 18883 > "$OPTS/firewall.options"
+ON="$(ARMOR_FIREWALL_DIR="$OPTS" "$FW" field-http on --dry-run)"
+expect_in  "$ON" "tcp dport 18080 ip saddr { 192.168.0.0/24 } accept"
+expect_in  "$ON" "tcp dport { 18080, 18081 } ip saddr { 192.168.10.0/24 } accept"
+OFF="$(ARMOR_FIREWALL_DIR="$OPTS" "$FW" field-http off --dry-run)"
+expect_out "$OFF" "tcp dport 18080 ip saddr { 192.168.0.0/24 } accept"
+expect_in  "$OFF" "tcp dport 18883 ip saddr { 192.168.0.0/24 } accept"
+printf '%s
+' --field 192.168.0.0/24 --clients 192.168.10.0/24 --field-http > "$OPTS/firewall.options"
+TWICE="$(ARMOR_FIREWALL_DIR="$OPTS" "$FW" field-http on --dry-run)"
+[[ "$(grep -c 'tcp dport 18080 ip saddr' <<<"$TWICE")" == "1" ]] && ok || bad "the switch must not be doubled when it is already on"
+expect_out "$(ARMOR_FIREWALL_DIR="$OPTS" "$FW" field-http off --dry-run)" "tcp dport 18080 ip saddr"
+[[ "$(cat "$OPTS/firewall.options" | wc -l)" == "5" ]] && ok || bad "a dry run must not rewrite the options file"
+refused field-http maybe
+refused field-http
+out="$(ARMOR_FIREWALL_DIR="$OPTS/none" "$FW" field-http on --dry-run 2>&1)"; code=$?
+[[ $code -eq 2 ]] && grep -q "no rules were loaded" <<<"$out" && ok || bad "without rules loaded by apply there is nothing to change (code $code)"
+
 # the syntax is checked by nft itself when the machine has it
 CHECK="$("$FW" check --field 192.168.0.0/24 --clients 192.168.10.0/24 2>&1)"
 if grep -q "FIREWALL_CHECK=SKIP" <<<"$CHECK"; then echo "note: nft is not installed here; the rules were not checked by it"

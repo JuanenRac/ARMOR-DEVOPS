@@ -70,3 +70,33 @@ jobs:
       - name: Run the service bench in the container
         run: |
           docker run --rm -v "$PWD:/repo:ro" -v "$PWD/server:/server:ro" -v "$PWD/updater:/updater:ro" node:22-trixie bash /repo/scripts/service_bench.sh
+
+  compose-limits:
+    name: The compose file validates, and the broker is healthy with its limits
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Validate the compose file with every profile
+        run: |
+          bash scripts/generate_secrets.sh >/dev/null
+          docker compose --profile bench --profile tls --profile lan-ca config --quiet
+
+      - name: Start the broker and wait for its health check
+        run: |
+          docker compose up -d broker
+          for _ in $(seq 1 30); do
+            state="$(docker inspect --format '{{.State.Health.Status}}' "$(docker compose ps -q broker)")"
+            [ "$state" = healthy ] && break
+            sleep 2
+          done
+          echo "health: $state"
+          [ "$state" = healthy ]
+          id="$(docker compose ps -q broker)"
+          test "$(docker inspect --format '{{.HostConfig.Memory}}' "$id")" = 268435456
+          test "$(docker inspect --format '{{.HostConfig.PidsLimit}}' "$id")" = 512
+          docker compose down -v

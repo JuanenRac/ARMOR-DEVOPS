@@ -17,6 +17,8 @@
 #                                                                                                     unless you run `confirm` (a rule that shut you out undoes itself)
 #   sudo firewall_core.sh confirm                                                                   # keep the rules loaded by `apply --rollback-after`
 #   sudo firewall_core.sh revert                                                                    # remove the table (and the boot unit, if there is one)
+#   sudo firewall_core.sh field-http on|off [--dry-run]                                             # change only the --field-http switch of the rules `apply` loaded last (the admin agent asks for this
+#                                                                                                     one); --dry-run prints the new rules and changes nothing
 #   firewall_core.sh status                                                                         # the table as loaded
 #
 # Options: --field CIDR (required except for revert/status/confirm), --clients CIDR (repeatable), --field-http (let the field network reach the server's port; it only matters with --clients, without which that port is open anyway), --mqtt-port N (18883), --server-port N (18080), --studio-port N (18081),
@@ -27,8 +29,8 @@ set -euo pipefail
 TABLE="armor_core"
 MQTT_PORT="18883"; SERVER_PORT="18080"; STUDIO_PORT="18081"
 FIELD=(); CLIENTS=(); IFACES=()
-ROLLBACK=0; PERSIST=0; FIELD_HTTP=0
-CONF_DIR="/etc/armor"; CONF_FILE="$CONF_DIR/firewall.nft"; UNIT="armor-firewall"; ROLLBACK_UNIT="armor-firewall-rollback"
+ROLLBACK=0; PERSIST=0; FIELD_HTTP=0; DRY_RUN=0; STATE=""
+CONF_DIR="${ARMOR_FIREWALL_DIR:-/etc/armor}"; CONF_FILE="$CONF_DIR/firewall.nft"; OPTIONS_FILE="$CONF_DIR/firewall.options"; UNIT="armor-firewall"; ROLLBACK_UNIT="armor-firewall-rollback"
 
 fail() { echo "firewall_core: $*" >&2; exit 2; }
 
@@ -49,6 +51,11 @@ valid_name() { [[ "$1" =~ ^[A-Za-z0-9_.-]{1,15}$ ]]; }
 COMMAND="${1:-}"
 [[ -n "$COMMAND" ]] || fail "usage: firewall_core.sh print|check|apply|confirm|revert|status [options]  (see the header of the script)"
 shift
+if [[ "$COMMAND" == "field-http" ]]; then
+  STATE="${1:-}"; [[ "$STATE" == "on" || "$STATE" == "off" ]] || fail "field-http wants on or off, not '$STATE'"
+  shift
+fi
+ARGS=("$@")
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --field) valid_cidr "${2:-}" || fail "--field wants an IPv4 network like 192.168.0.0/24, not '${2:-}'"; FIELD+=("$2"); shift 2 ;;
@@ -61,6 +68,7 @@ while [[ $# -gt 0 ]]; do
     --rollback-after) [[ "${2:-}" =~ ^[0-9]{1,4}$ ]] && (( 10#$2 >= 10 )) || fail "--rollback-after wants a number of seconds, at least 10"; ROLLBACK="$((10#$2))"; shift 2 ;;
     --persist) PERSIST=1; shift ;;
     --field-http) FIELD_HTTP=1; shift ;;
+    --dry-run) DRY_RUN=1; shift ;;
     *) fail "unknown option '$1'" ;;
   esac
 done
@@ -115,6 +123,13 @@ case "$COMMAND" in
     printf '%s\n' "$text" | nft -c -f - || fail "nft refused the rules: nothing was changed"
     install -d -m 0750 "$CONF_DIR"
     printf '%s\n' "$text" > "$CONF_FILE"; chmod 0640 "$CONF_FILE"
+    # what `apply` was given (without the one-off options), one word per line, so that `field-http` can change one switch and load the same rules again
+    : > "$OPTIONS_FILE"; chmod 0640 "$OPTIONS_FILE"
+    skip=0
+    for word in "${ARGS[@]+"${ARGS[@]}"}"; do
+      if (( skip )); then skip=0; continue; fi
+      case "$word" in --rollback-after) skip=1 ;; --persist|--dry-run) ;; *) printf '%s\n' "$word" >> "$OPTIONS_FILE" ;; esac
+    done
     nft delete table inet "$TABLE" 2>/dev/null || true
     nft -f "$CONF_FILE"
     echo "loaded: table inet $TABLE (the rules are in $CONF_FILE)"
@@ -158,8 +173,18 @@ EOF
       rm -f "/etc/systemd/system/$UNIT.service"; systemctl daemon-reload
       echo "removed: $UNIT.service"
     fi
-    rm -f "$CONF_FILE"
+    rm -f "$CONF_FILE" "$OPTIONS_FILE"
+    ;;
+  field-http)
+    [[ -f "$OPTIONS_FILE" ]] || fail "no rules were loaded by apply (there is no $OPTIONS_FILE): load them first"
+    kept=()
+    while IFS= read -r word; do [[ -z "$word" || "$word" == "--field-http" ]] || kept+=("$word"); done < "$OPTIONS_FILE"
+    [[ "$STATE" == "on" ]] && kept+=("--field-http")
+    if (( DRY_RUN )); then exec "$0" print "${kept[@]}"; fi
+    need_root
+    extra=(); [[ -f "/etc/systemd/system/$UNIT.service" ]] && extra=(--persist)
+    exec "$0" apply "${kept[@]}" "${extra[@]+"${extra[@]}"}"
     ;;
   status) need_nft; nft list table inet "$TABLE" ;;
-  *) fail "unknown command '$COMMAND' (print, check, apply, confirm, revert, status)" ;;
+  *) fail "unknown command '$COMMAND' (print, check, apply, confirm, revert, field-http, status)" ;;
 esac

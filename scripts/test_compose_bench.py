@@ -170,5 +170,52 @@ class LanCaProfileTests(unittest.TestCase):
             self.assertNotEqual(missing.returncode, 0)
 
 
+class ResourceLimitsAndHealthTests(unittest.TestCase):
+    """Every service has a limit of processes, memory and CPUs that .env can change, and a check of health (its own, or the one its image carries)."""
+
+    SERVICES = ("broker", "server", "studio", "simulator", "proxy", "proxy_lan")
+
+    def test_every_service_has_a_memory_and_cpu_limit_that_the_environment_can_change(self):
+        for name in self.SERVICES:
+            text = block(name)
+            self.assertRegex(text, rf"mem_limit: \$\{{ARMOR_MEM_{name.upper()}:-[0-9]+[mg]\}}", name)
+            self.assertRegex(text, rf"cpus: \$\{{ARMOR_CPUS_{name.upper()}:-[0-9.]+\}}", name)
+            self.assertRegex(ENV_EXAMPLE, rf"(?m)^ARMOR_MEM_{name.upper()}=[0-9]+[mg]$", name)
+            self.assertRegex(ENV_EXAMPLE, rf"(?m)^ARMOR_CPUS_{name.upper()}=[0-9.]+$", name)
+
+    def test_the_limit_of_processes_is_in_the_shared_block_and_in_the_example(self):
+        anchor = COMPOSE.split("services:")[0]
+        self.assertIn("pids_limit: ${ARMOR_PIDS_LIMIT:-512}", anchor)
+        self.assertRegex(ENV_EXAMPLE, r"(?m)^ARMOR_PIDS_LIMIT=512$")
+        for name in self.SERVICES:
+            self.assertIn("<<: *hardened", block(name), name)
+
+    def test_the_defaults_leave_room_for_the_server(self):
+        server = re.search(r"mem_limit: \$\{ARMOR_MEM_SERVER:-([0-9]+)([mg])\}", block("server"))
+        self.assertIsNotNone(server)
+        megabytes = int(server.group(1)) * (1024 if server.group(2) == "g" else 1)  # type: ignore[union-attr]
+        self.assertGreaterEqual(megabytes, 512)
+
+    def test_the_services_without_a_check_in_their_image_have_one_here(self):
+        for name in ("broker", "proxy", "proxy_lan"):
+            text = block(name)
+            self.assertIn("healthcheck:", text, name)
+            self.assertRegex(text, r"pidof (mosquitto|caddy)", name)
+            for key in ("interval:", "timeout:", "retries:"):
+                self.assertIn(key, text, name)
+
+    def test_a_service_is_waited_for_as_healthy_only_if_something_checks_it(self):
+        waited = set(re.findall(r"(\w+): \{ condition: service_healthy \}", COMPOSE))
+        self.assertTrue(waited)
+        carried = {"server": ROOT.parent / "ARMOR-SERVER" / "Dockerfile", "studio": ROOT.parent / "ARMOR-STUDIO" / "Dockerfile"}
+        for name in waited:
+            if "healthcheck:" in block(name):
+                continue
+            dockerfile = carried.get(name)
+            if dockerfile is None or not dockerfile.is_file():
+                self.skipTest(f"the image of {name} is not next to this repository")
+            self.assertIn("HEALTHCHECK", dockerfile.read_text(encoding="utf-8"), name)
+
+
 if __name__ == "__main__":
     unittest.main()

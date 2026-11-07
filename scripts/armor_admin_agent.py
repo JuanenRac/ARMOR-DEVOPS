@@ -41,6 +41,7 @@ PREFIX = Path(os.environ.get("ARMOR_PREFIX", "/opt/armor"))
 SYSTEMCTL = os.environ.get("ARMOR_SYSTEMCTL", "systemctl")
 SCRIPT_DIR = Path(__file__).resolve().parent
 IDENTITY_SCRIPT = Path(os.environ.get("ARMOR_MQTT_IDENTITY", str(SCRIPT_DIR / "mqtt_identity.sh")))
+FIREWALL_SCRIPT = Path(os.environ.get("ARMOR_FIREWALL_SCRIPT", str(SCRIPT_DIR / "firewall_core.sh")))
 MAX_FILE_BYTES = 64 * 1024
 KEEP_BACKUPS = 5
 
@@ -487,6 +488,36 @@ def set_relay(kind: str, node: str, state: str) -> dict[str, object]:
     return {"ok": True, "relay": kind, "node": node if kind == "battery-write" else "", "state": state, **relay_status()}
 
 
+# ---- the host firewall --------------------------------------------------------------------------------------------------------------------------
+# The one switch of the firewall that Studio may ask for: whether the field network may also reach the server's port over HTTP (firewall_core.sh --field-http, off unless given).
+# The agent never builds rules: firewall_core.sh reads what `apply` was given from /etc/armor (ARMOR_FIREWALL_DIR), changes that one word and loads the table again, after
+# nft has checked it. Without rules loaded by `apply` there is nothing to change and the answer says so.
+
+def firewall_dir() -> Path:
+    return Path(os.environ.get("ARMOR_FIREWALL_DIR", "/etc/armor"))
+
+
+def firewall_status() -> dict[str, object]:
+    """Whether the rules of firewall_core.sh are loaded by `apply` and whether the field network may reach the server over HTTP."""
+    try:
+        words = (firewall_dir() / "firewall.options").read_text(encoding="utf-8").split()
+    except FileNotFoundError:
+        return {"installed": False, "field_http": False, "approval": "totp" if totp_file().is_file() else "not_enrolled"}
+    return {"installed": True, "field_http": "--field-http" in words, "approval": "totp" if totp_file().is_file() else "not_enrolled"}
+
+
+def set_field_http(state: str) -> dict[str, object]:
+    if state not in ("on", "off"):
+        raise Refused(422, "invalid_state")
+    if not firewall_status()["installed"]:
+        raise Refused(409, "firewall_not_loaded")
+    environment = dict(os.environ, ARMOR_FIREWALL_DIR=str(firewall_dir()))
+    done = subprocess.run(["bash", str(FIREWALL_SCRIPT), "field-http", state], capture_output=True, text=True, timeout=60, check=False, env=environment)
+    if done.returncode != 0:
+        raise Refused(502, "firewall_failed")
+    return {"ok": True, "state": state, **firewall_status()}
+
+
 # ---- the socket ---------------------------------------------------------------------------------------------------------------------------------
 
 class Handler(http.server.BaseHTTPRequestHandler):
@@ -579,6 +610,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 require_approval(self.headers.get(TOTP_HEADER, ""), enrolled_required=True)
                 data = self.body()
                 self.reply(200, set_relay(parts[2], str(data.get("node", "")), str(data.get("state", ""))))
+            elif method == "GET" and parts == ["firewall"]:
+                self.reply(200, firewall_status())
+            elif method == "POST" and parts == ["firewall", "field-http"]:
+                require_sensitive(sensitive_given)
+                require_approval(self.headers.get(TOTP_HEADER, ""), enrolled_required=True)
+                self.reply(200, set_field_http(str(self.body().get("state", ""))))
             else:
                 raise Refused(404, "not_found")
         except Refused as refusal:

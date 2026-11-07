@@ -433,6 +433,47 @@ class AgentTest(unittest.TestCase):
         self.assertIn("battery-write bat-1 on", (Path(self.tmp.name) / "identity.log").read_text(encoding="utf-8"))
         self.assertIn("alarm-state-relay on", (Path(self.tmp.name) / "identity.log").read_text(encoding="utf-8"))
 
+    def test_the_field_http_switch_of_the_firewall_needs_the_authenticator_and_loaded_rules(self) -> None:
+        totp = Path(self.tmp.name) / "fw.totp"
+        fw_dir = Path(self.tmp.name) / "fw"
+        fw_dir.mkdir(exist_ok=True)
+        stand_in = Path(self.tmp.name) / "firewall_stand_in.sh"
+        log = Path(self.tmp.name) / "firewall.log"
+        stand_in.write_text(f"#!/bin/sh\necho \"$@\" >> '{log}'\n[ \"$FAIL_FIREWALL\" = 1 ] && exit 3\n"
+                            f"if [ \"$2\" = on ]; then printf -- '--field\\n10.0.0.0/24\\n--field-http\\n' > \"$ARMOR_FIREWALL_DIR/firewall.options\"; "
+                            f"else printf -- '--field\\n10.0.0.0/24\\n' > \"$ARMOR_FIREWALL_DIR/firewall.options\"; fi\n", encoding="utf-8")
+        vector_key = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"
+        self.agent.configure_sensitive("open", "")
+        env = {"ARMOR_MAINT_TOTP_FILE": str(totp), "ARMOR_FIREWALL_DIR": str(fw_dir)}
+        with mock.patch.dict(os.environ, env), mock.patch.object(self.agent, "FIREWALL_SCRIPT", stand_in):
+            self.assertEqual(self.call("GET", "/v1/firewall")[1]["installed"], False, "no rules loaded by apply yet")
+            self.assertEqual(self.call("POST", "/v1/firewall/field-http", {"state": "on"}), (403, {"error": "totp_not_enrolled"}))
+            totp.write_text(vector_key + "\n", encoding="ascii")
+            try:
+                now = int(time.time() // 30)
+                self.agent._totp_last_counter[0] = 0
+                self.assertEqual(self.call("POST", "/v1/firewall/field-http", {"state": "on"}), (401, {"error": "totp_required"}))
+                self.agent._totp_last_counter[0] = 0
+                self.assertEqual(self.call("POST", "/v1/firewall/field-http", {"state": "maybe"}, extra={"X-Armor-Maint-Totp": self.agent.totp_code(vector_key, now)}), (422, {"error": "invalid_state"}))
+                self.agent._totp_last_counter[0] = 0
+                self.assertEqual(self.call("POST", "/v1/firewall/field-http", {"state": "on"}, extra={"X-Armor-Maint-Totp": self.agent.totp_code(vector_key, now)}), (409, {"error": "firewall_not_loaded"}))
+                self.assertFalse(log.exists(), "nothing is run when there are no rules to change")
+                (fw_dir / "firewall.options").write_text("--field\n10.0.0.0/24\n", encoding="utf-8")
+                self.agent._totp_last_counter[0] = 0
+                status, data = self.call("POST", "/v1/firewall/field-http", {"state": "on"}, extra={"X-Armor-Maint-Totp": self.agent.totp_code(vector_key, now)})
+                self.assertEqual((status, data["ok"], data["state"], data["installed"], data["field_http"]), (200, True, "on", True, True))
+                self.assertEqual(self.call("GET", "/v1/firewall")[1]["field_http"], True)
+                self.agent._totp_last_counter[0] = 0
+                status, data = self.call("POST", "/v1/firewall/field-http", {"state": "off"}, extra={"X-Armor-Maint-Totp": self.agent.totp_code(vector_key, now)})
+                self.assertEqual((status, data["field_http"]), (200, False))
+                self.agent._totp_last_counter[0] = 0
+                with mock.patch.dict(os.environ, {"FAIL_FIREWALL": "1"}):
+                    self.assertEqual(self.call("POST", "/v1/firewall/field-http", {"state": "on"}, extra={"X-Armor-Maint-Totp": self.agent.totp_code(vector_key, now)}), (502, {"error": "firewall_failed"}))
+            finally:
+                totp.unlink(missing_ok=True)
+                self.agent._totp_last_counter[0] = 0
+        self.assertEqual(log.read_text(encoding="utf-8").split("\n")[:2], ["field-http on", "field-http off"])
+
     def test_the_socket_is_not_open_to_everybody(self) -> None:
         mode = stat.S_IMODE(os.stat(self.sock).st_mode)
         self.assertEqual(mode & 0o007, 0, oct(mode))                                # nothing for "others"
