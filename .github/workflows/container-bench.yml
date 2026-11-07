@@ -31,3 +31,42 @@ jobs:
         run: |
           docker run --rm --cap-add NET_ADMIN --tmpfs /full:rw,size=96k -v "$PWD:/repo:ro" debian:trixie \
             bash -c 'apt-get update -qq && apt-get install -y -qq --no-install-recommends mosquitto mosquitto-clients nftables procps >/dev/null && bash /repo/scripts/container_bench.sh'
+
+  service-bench:
+    name: The server and the updater as a service account in a Debian container
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Check out the server
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: JuanenRac/ARMOR-SERVER
+          path: server
+          persist-credentials: false
+
+      - name: Check out the updater
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: JuanenRac/ARMOR-UPDATER
+          path: updater
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+
+      - name: Build the server
+        working-directory: server
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+
+      - name: Run the service bench in the container
+        run: |
+          docker run --rm -v "$PWD:/repo:ro" -v "$PWD/server:/server:ro" -v "$PWD/updater:/updater:ro" node:22-trixie bash /repo/scripts/service_bench.sh
