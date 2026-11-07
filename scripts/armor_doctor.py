@@ -8,6 +8,9 @@
 * the token of the network node is the one derived from the ingest token and its node id;
 * the port of the broker in ``armor.mqtt.env`` is a port ``mosquitto.conf`` listens on, when both are found;
 * no address or listener still on a port of the old Docker numbering (8080, 8088, 1883): the installations keep working, but the numbering is now 18080, 18081 and 18883 everywhere (ports.json);
+* the access list of the broker (``etc/mosquitto/acl``): every identity of a known kind has the lines its kind is given by ``node_roles.json`` (the table ``mqtt_identity.sh``
+  is generated from) and the server the lines of ``armor_server.acl``; a line that opens everything to an identity that is not the server fails, a line beyond the kind or a
+  line of the kind that is missing is a warning (the opt-in switches of ``mqtt_identity.sh`` add lines on purpose, so a line beyond the kind is reported, not judged);
 * the free space of the disk of the prefix.
 
 It only reads. No value is printed, nor the length of one: a line says "too short", not how short. Exit 0 when nothing failed, 1 when something failed, 2 for a wrong
@@ -63,6 +66,76 @@ def listener_ports(conf: Path) -> set[int]:
         if len(parts) >= 2 and parts[0] == "listener" and parts[1].isdigit():
             ports.add(int(parts[1]))
     return ports
+
+
+def acl_blocks(text: str) -> dict[str, list[str]]:
+    """``user NAME`` followed by its ``topic`` lines, up to the next ``user`` (a blank line ends a block, as it does for the broker). Comments are dropped."""
+    blocks: dict[str, list[str]] = {}
+    user: str | None = None
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line:
+            user = None
+        elif line.startswith("#"):
+            continue
+        elif line.startswith("user "):
+            user = line[5:].strip()
+            blocks.setdefault(user, [])
+        elif user is not None and line.startswith("topic "):
+            blocks[user].append(" ".join(line.split()))
+    return blocks
+
+
+WIDE_TOPIC = re.compile(r"^topic (read|write|readwrite) (#|armor/#|\$SYS/#)$")
+
+
+def role_for(user: str, roles: dict[str, dict[str, object]]) -> tuple[str, str] | None:
+    """(kind, name) of the kind whose user pattern fits, the most specific one when several fit (``alarm-{name}`` also fits ``alarm-node-x``)."""
+    best: tuple[int, str, str] | None = None
+    for kind, entry in roles.items():
+        template = str(entry["user"])
+        match = re.fullmatch(re.escape(template).replace(re.escape("{name}"), "(?P<name>[a-z0-9][a-z0-9_-]{0,63})"), user)
+        if match and (best is None or len(template) > best[0]):
+            best = (len(template), kind, match.group("name"))
+    return (best[1], best[2]) if best else None
+
+
+def acl_findings(acl_text: str, roles: dict[str, dict[str, object]], server_lines: list[str], add) -> None:
+    """The access list against what each kind of identity is given. ``add`` is the ``add(level, subject, message)`` of ``diagnose``."""
+    blocks = acl_blocks(acl_text)
+    if not blocks:
+        add("warn", "mosquitto/acl", "no identity found in the access list")
+        return
+    clean = 0
+    for user, lines in sorted(blocks.items()):
+        wide = [line for line in lines if WIDE_TOPIC.match(line)]
+        if wide and user != "armor-server":
+            add("fail", "mosquitto/acl", f"{user} is given everything ({wide[0]}): it can read and write what every other identity does")
+            continue
+        if user == "armor-server":
+            expected = {" ".join(line.split()) for line in server_lines}
+            relaxed: set[str] = set()
+        else:
+            found = role_for(user, roles)
+            if found is None:
+                add("warn", "mosquitto/acl", f"{user} is not an identity this installation makes (no kind of node fits its name): check what it may do")
+                continue
+            kind, name = found
+            entry = roles[kind]
+            expected = {str(topic).replace("{name}", name) for topic in entry["topics"]}   # type: ignore[union-attr]
+            relaxed = {str(topic).replace("{name}", name) for topic in entry.get("relaxed_extra", [])}   # type: ignore[union-attr]
+        if not expected:
+            continue
+        beyond = sorted(set(lines) - expected - relaxed)
+        missing = sorted(expected - set(lines))
+        if beyond:
+            add("warn", "mosquitto/acl", f"{user} has {len(beyond)} line(s) beyond its kind, the first one {beyond[0]!r} (the opt-in switches of mqtt_identity.sh add such lines on purpose; check that you asked for it)")
+        if missing:
+            add("warn", "mosquitto/acl", f"{user} lacks {len(missing)} line(s) its kind is given, the first one {missing[0]!r} (an identity made before that line existed: mqtt_identity.sh upgrade-node or the command of the line)")
+        if not beyond and not missing:
+            clean += 1
+    if clean:
+        add("ok", "mosquitto/acl", f"{clean} identit{'y has' if clean == 1 else 'ies have'} exactly the lines of {'its kind' if clean == 1 else 'their kind'}")
 
 
 def diagnose(prefix: Path, min_token: int = DEFAULT_MIN_TOKEN, min_free_mb: int = DEFAULT_MIN_FREE_MB, mosquitto_conf: Path | None = None) -> list[tuple[str, str, str]]:
@@ -130,6 +203,16 @@ def diagnose(prefix: Path, min_token: int = DEFAULT_MIN_TOKEN, min_free_mb: int 
             add("fail", "armor.mqtt.env", f"the server connects to port {match.group(1)} but {conf.name} listens on {', '.join(map(str, sorted(ports)))}")
     elif mqtt:
         add("warn", "armor.mqtt.env", "the port of the broker could not be compared (no mosquitto.conf found or no ARMOR_MQTT_URL)")
+
+    acl_path = prefix / "etc" / "mosquitto" / "acl"
+    if acl_path.is_file():
+        here = Path(__file__).resolve().parent
+        try:
+            roles = json.loads((here / "node_roles.json").read_text(encoding="utf-8"))["roles"]
+            server_lines = [line for line in (here / "armor_server.acl").read_text(encoding="utf-8").splitlines() if line.startswith("topic ")]
+            acl_findings(acl_path.read_text(encoding="utf-8", errors="replace"), roles, server_lines, add)
+        except (OSError, ValueError, KeyError) as error:
+            add("warn", "mosquitto/acl", f"the access list could not be compared with the table of kinds ({error})")
 
     old = old_port_map()
     old_pattern = re.compile(r"(?::|=)(" + "|".join(str(n) for n in old) + r")(?![0-9])")

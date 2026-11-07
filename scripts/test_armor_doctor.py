@@ -45,6 +45,73 @@ def levels(results):
     return [(level, subject) for level, subject, _m in results]
 
 
+class AclTests(unittest.TestCase):
+    HERE = Path(__file__).resolve().parent
+    ROLES = json.loads((HERE / "node_roles.json").read_text(encoding="utf-8"))["roles"]
+    SERVER = [line for line in (HERE / "armor_server.acl").read_text(encoding="utf-8").splitlines() if line.startswith("topic ")]
+
+    def run_acl(self, text: str):
+        found: list[tuple[str, str, str]] = []
+        armor_doctor.acl_findings(text, self.ROLES, self.SERVER, lambda level, subject, message: found.append((level, subject, message)))
+        return found
+
+    def block(self, user: str, lines) -> str:
+        return f"user {user}\n" + "\n".join(lines) + "\n\n"
+
+    def role_lines(self, kind: str, name: str) -> list[str]:
+        return [topic.replace("{name}", name) for topic in self.ROLES[kind]["topics"]]
+
+    def test_blocks_made_by_the_script_are_exactly_their_kind(self):
+        text = self.block("armor-server", self.SERVER) + self.block("field-node-north-1", self.role_lines("node", "north-1")) + self.block("alarm-node-alarm-1", self.role_lines("alarm-node", "alarm-1"))
+        found = self.run_acl(text)
+        self.assertEqual([(level, subject) for level, subject, _m in found], [("ok", "mosquitto/acl")], found)
+        self.assertIn("3 identities have", found[0][2])
+
+    def test_the_most_specific_kind_wins_for_a_name_two_kinds_fit(self):
+        self.assertEqual(armor_doctor.role_for("alarm-node-alarm-1", self.ROLES), ("alarm-node", "alarm-1"))
+        self.assertEqual(armor_doctor.role_for("alarm-siren", self.ROLES), ("consumer", "siren"))
+        self.assertIsNone(armor_doctor.role_for("somebody", self.ROLES))
+        self.assertIsNone(armor_doctor.role_for("field-node-", self.ROLES))
+
+    def test_a_line_that_opens_everything_to_a_node_fails_and_to_the_server_does_not(self):
+        wide = self.block("field-node-north-1", self.role_lines("node", "north-1") + ["topic readwrite #"])
+        self.assertEqual([r[0] for r in self.run_acl(wide)], ["fail"])
+        self.assertIn("is given everything", self.run_acl(wide)[0][2])
+        for line in ("topic read armor/#", "topic write #", "topic readwrite $SYS/#"):
+            self.assertEqual([r[0] for r in self.run_acl(self.block("device-kitchen", [line]))], ["fail"], line)
+        self.assertFalse([r for r in self.run_acl(self.block("armor-server", self.SERVER + ["topic read armor/#"])) if r[0] == "fail"])
+
+    def test_a_line_beyond_the_kind_and_a_missing_one_are_warnings_that_say_which(self):
+        lines = self.role_lines("node", "north-1")
+        extra = self.run_acl(self.block("field-node-north-1", lines + ["topic write armor/node/south-1/telemetry"]))
+        self.assertEqual([r[0] for r in extra], ["warn"])
+        self.assertIn("1 line(s) beyond its kind", extra[0][2])
+        self.assertIn("armor/node/south-1/telemetry", extra[0][2])
+        short = self.run_acl(self.block("field-node-north-1", lines[1:]))
+        self.assertEqual([r[0] for r in short], ["warn"])
+        self.assertIn("lacks 1 line(s)", short[0][2])
+
+    def test_the_old_wide_line_of_the_relaxed_mode_is_not_beyond_the_kind(self):
+        relaxed = self.block("field-node-north-1", self.role_lines("node", "north-1") + ["topic write armor/solar/north-1/#"])
+        self.assertEqual([r[0] for r in self.run_acl(relaxed)], ["ok"])
+
+    def test_an_identity_of_no_kind_and_an_empty_list_are_warnings(self):
+        self.assertEqual([r[0] for r in self.run_acl(self.block("somebody", ["topic read a/b"]))], ["warn"])
+        self.assertEqual([r[0] for r in self.run_acl("# nothing\n")], ["warn"])
+
+    def test_comments_and_blank_lines_end_and_skip_what_they_should(self):
+        parsed = armor_doctor.acl_blocks("# a\nuser a\n# note\ntopic read x/y\n\ntopic read lost\nuser b\ntopic  write   z\n")
+        self.assertEqual(parsed, {"a": ["topic read x/y"], "b": ["topic write z"]})
+
+    def test_diagnose_reads_the_list_of_an_installation_and_names_the_identity(self):
+        with tempfile.TemporaryDirectory() as folder:
+            prefix = installation(folder)
+            (prefix / "etc" / "mosquitto").mkdir()
+            write(prefix / "etc" / "mosquitto" / "acl", self.block("armor-server", self.SERVER) + self.block("device-kitchen", ["topic readwrite #"]))
+            results = armor_doctor.diagnose(prefix)
+        self.assertTrue([r for r in results if r[0] == "fail" and "device-kitchen" in r[2]], results)
+
+
 class DoctorTests(unittest.TestCase):
     def test_a_good_installation_passes(self):
         with tempfile.TemporaryDirectory() as folder:

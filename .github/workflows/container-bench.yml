@@ -71,6 +71,61 @@ jobs:
         run: |
           docker run --rm -v "$PWD:/repo:ro" -v "$PWD/server:/server:ro" -v "$PWD/updater:/updater:ro" node:22-trixie bash /repo/scripts/service_bench.sh
 
+  systemd-install:
+    name: The installer and its units on a real systemd in a Debian container
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Check out the server
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: JuanenRac/ARMOR-SERVER
+          path: server
+          persist-credentials: false
+
+      - name: Check out Studio (only its static host, tools/serve.mjs)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: JuanenRac/ARMOR-STUDIO
+          path: studio
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+
+      - name: Build the server
+        working-directory: server
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+
+      - name: Build the image with systemd as its init
+        run: |
+          docker build -t armor-systemd - <<'DOCKERFILE'
+          FROM node:22-trixie
+          RUN apt-get update -qq && apt-get install -y -qq --no-install-recommends systemd systemd-sysv dbus sudo mosquitto mosquitto-clients curl iproute2 procps python3 >/dev/null            && rm -rf /var/lib/apt/lists/* && systemctl mask getty.target console-getty.service >/dev/null
+          STOPSIGNAL SIGRTMIN+3
+          CMD ["/lib/systemd/systemd"]
+          DOCKERFILE
+
+      - name: Start the container and run the bench
+        run: |
+          docker run -d --name armorsd --privileged --cgroupns=host -v /sys/fs/cgroup:/sys/fs/cgroup:rw --tmpfs /run --tmpfs /run/lock             -v "$PWD:/repo:ro" -v "$PWD/server:/server:ro" -v "$PWD/studio:/studio:ro" armor-systemd
+          docker exec armorsd bash /repo/scripts/systemd_bench.sh
+
+      - name: What the container logged, if the bench failed
+        if: failure()
+        run: |
+          docker exec armorsd journalctl --no-pager -n 120 || true
+          docker exec armorsd systemctl --failed --no-pager || true
+
   compose-limits:
     name: The compose file validates, and the broker is healthy with its limits
     runs-on: ubuntu-latest
