@@ -425,6 +425,7 @@ class MaintenanceTest(unittest.TestCase):
 
     def test_the_staging_switch_of_studio_wins_over_the_settings_file_and_takes_only_a_boolean(self) -> None:
         self.auto_setup()
+        self.addCleanup(lambda: self.agent.auto_state_path().unlink(missing_ok=True))   # the choice must not leak into the tests that follow
         self.maint_env.write_text("ARMOR_MAINT_STAGING=on\n", encoding="utf-8")
         self.assertEqual(self.agent.staging_view(), {"enabled": True, "source": "env", "wait_s": 30})
         self.assertEqual(self.agent.set_staging({"enabled": False}), {"enabled": False, "source": "studio", "wait_s": 30})
