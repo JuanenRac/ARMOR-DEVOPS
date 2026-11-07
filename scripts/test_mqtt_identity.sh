@@ -158,6 +158,28 @@ if run alarm-commands 'Bad Node' on >/dev/null 2>&1; then fail "a bad alarm node
 run alarm-commands alarm-1 off >/dev/null
 if grep -q 'armor/alarm/alarm-1/command' "$ACL"; then fail "off left an alarm command reachable"; fi
 grep -qx 'topic write armor/alarm/alarm-1/state' <<<"$(block alarm-node-alarm-1)" || fail "off took the alarm node's own topics"
+# The state of Zigbee2MQTT is readable by an alarm node only after an explicit `alarm-z2m-state ... on`: one read line, that node only, no wildcard, idempotent, and `off` takes it away.
+if grep -q 'zigbee2mqtt' "$ACL"; then fail "a new alarm node can read the state of Zigbee2MQTT before it was turned on"; fi
+run alarm-z2m-state alarm-1 on >/dev/null
+grep -qx 'topic read zigbee2mqtt/bridge/state' <<<"$(block alarm-node-alarm-1)" || fail "the alarm node cannot read the state of Zigbee2MQTT after on"
+if grep -q 'zigbee2mqtt' <<<"$(block alarm-node-alarm-2)$(block armor-server)"; then fail "another identity got the state of Zigbee2MQTT"; fi
+test -f "$ACL.before-alarm-z2m-state" || fail "alarm-z2m-state did not keep the previous ACL"
+BEFORE="$(cat "$ACL")"
+run alarm-z2m-state alarm-1 on >/dev/null
+[[ "$(cat "$ACL")" == "$BEFORE" ]] || fail "a second alarm-z2m-state on changed the ACL"
+run alarm-z2m-state alarm-1 on house/z2m/bridge/state >/dev/null
+grep -qx 'topic read house/z2m/bridge/state' <<<"$(block alarm-node-alarm-1)" || fail "a chosen topic was not written"
+run alarm-z2m-state alarm-1 off house/z2m/bridge/state >/dev/null
+if grep -q 'house/z2m' "$ACL"; then fail "off left the chosen topic readable"; fi
+for BAD in '#' 'zigbee2mqtt/#' 'a/+/b' '/a' 'a//b' 'a b' ''; do
+  if run alarm-z2m-state alarm-1 on "$BAD" >/dev/null 2>&1 && [[ -n "$BAD" ]]; then fail "a bad topic was accepted: $BAD"; fi
+done
+if run alarm-z2m-state nothing on >/dev/null 2>&1; then fail "an unknown alarm node was accepted for the state of Zigbee2MQTT"; fi
+if run alarm-z2m-state alarm-1 maybe >/dev/null 2>&1; then fail "a bad state was accepted for the state of Zigbee2MQTT"; fi
+if run alarm-z2m-state 'Bad Node' on >/dev/null 2>&1; then fail "a bad node id was accepted for the state of Zigbee2MQTT"; fi
+run alarm-z2m-state alarm-1 off >/dev/null
+if grep -q 'zigbee2mqtt' "$ACL"; then fail "off left the state of Zigbee2MQTT readable"; fi
+grep -qx 'topic write armor/alarm/alarm-1/state' <<<"$(block alarm-node-alarm-1)" || fail "off took the alarm node's own topics"
 # The relays of an alarm node (the siren and the others) are devices of the device layer, reachable only after an explicit `alarm-relays ... on`, for that node only.
 if grep -q 'armor/device/alarm-1' "$ACL"; then fail "the relays of a new alarm node are reachable before they were turned on"; fi
 run alarm-relays alarm-1 on >/dev/null

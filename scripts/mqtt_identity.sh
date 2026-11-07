@@ -9,6 +9,7 @@
 #   sudo mqtt_identity.sh add network-node network-1   # a network node (ARMOR-NETWORK): writes armor/network/network-1/state and nothing else, reads nothing
 #   sudo mqtt_identity.sh electrical-relays electrical-1 on     # lets that node's relays be devices of the house (armor/device/electrical-1/#): it publishes their state and reads their commands (off again with `off`): NOT part of any install
 #   sudo mqtt_identity.sh alarm-commands alarm-1 on   # lets the server arm and disarm that alarm node, and the node read the commands (off again with `off`): NOT part of any install
+#   sudo mqtt_identity.sh alarm-z2m-state alarm-1 on [TOPIC]   # lets that alarm node read the retained state of Zigbee2MQTT (default zigbee2mqtt/bridge/state) to know when it is down while the broker is up (off again with `off`): NOT part of any install
 #   sudo mqtt_identity.sh electrical-switching electrical-1 on   # lets the server send commands to that node's switch, and the node read them (off again with `off`): NOT part of any install
 #   sudo mqtt_identity.sh battery-write solar-1 on   # lets the server send an order to write to the batteries of that solar node, and the node read it (off again with `off`): NOT part of any install
 #   sudo mqtt_identity.sh alarm-state-relay on   # lets the server publish again, signed, the state of the alarm panels (the option "alarm state signature"; off again with `off`): NOT part of any install
@@ -127,7 +128,7 @@ role_lines() {
 }
 # END GENERATED
 
-usage() { echo "Usage: mqtt_identity.sh add node ID | add solar-node ID | add electrical-node ID | add network-node ID | add alarm-node ID | add hmi-node ID | add consumer NAME | add device NAME | add bridge NAME | upgrade-node NODE_ID | health-report ROLE NODE_ID | alarm-policy NODE_ID | node-control ROLE NODE_ID | electrical-switching NODE_ID on|off | alarm-commands NODE_ID on|off | electrical-relays NODE_ID on|off | alarm-relays NODE_ID on|off | battery-write NODE_ID on|off | narrow-solar-acl NODE_ID | alarm-state-relay on|off | ha-discovery on|off [PREFIX] | remove USER" >&2; exit 2; }
+usage() { echo "Usage: mqtt_identity.sh add node ID | add solar-node ID | add electrical-node ID | add network-node ID | add alarm-node ID | add hmi-node ID | add consumer NAME | add device NAME | add bridge NAME | upgrade-node NODE_ID | health-report ROLE NODE_ID | alarm-policy NODE_ID | node-control ROLE NODE_ID | electrical-switching NODE_ID on|off | alarm-commands NODE_ID on|off | alarm-z2m-state NODE_ID on|off [TOPIC] | electrical-relays NODE_ID on|off | alarm-relays NODE_ID on|off | battery-write NODE_ID on|off | narrow-solar-acl NODE_ID | alarm-state-relay on|off | ha-discovery on|off [PREFIX] | remove USER" >&2; exit 2; }
 ACTION="${1:-}"
 # Removes one line from the block of ONE identity ("user NAME" up to the next blank line), never from the others: the same line (topic readwrite armor/device/garage/#) can be in the
 # blocks of a device and of a node with the same name.
@@ -336,6 +337,31 @@ case "$ACTION" in
       chown root:armor "$MQ/acl"; chmod 0640 "$MQ/acl"
       reload_broker
       echo "the previous ACL is kept as acl.before-radar-events"
+    fi
+    ;;
+  alarm-z2m-state)
+    # One line lets an alarm node READ the topic where Zigbee2MQTT says whether it is alive (zigbee2mqtt/bridge/state): with the node's setting zigbee_local.bridge_state_topic the node then takes
+    # the Zigbee coordinator of the network when Zigbee2MQTT is down even while the broker is up. Read only, one topic, no wildcard. Without the line the broker itself refuses the subscription.
+    NAME="${2:-}"; STATE="${3:-}"; TOPIC="${4:-zigbee2mqtt/bridge/state}"; USER_NAME="alarm-node-$NAME"
+    [[ "$NAME" =~ ^[a-z0-9][a-z0-9_-]{0,63}$ ]] || { echo "the node id must match ^[a-z0-9][a-z0-9_-]{0,63}\$" >&2; exit 2; }
+    [[ "$STATE" == "on" || "$STATE" == "off" ]] || usage
+    [[ "$TOPIC" =~ ^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$ && ${#TOPIC} -le 128 ]] || { echo "the topic must be plain levels of letters, digits, _ . - separated by one slash, with no wildcard (at most 128 characters)" >&2; exit 2; }
+    grep -qx "user $USER_NAME" "$MQ/acl" || { echo "$USER_NAME does not exist (add alarm-node $NAME first)" >&2; exit 1; }
+    LINE="topic read $TOPIC"
+    if awk -v u="user $USER_NAME" -v l="$LINE" 'BEGIN{inb=0; found=0} $0==u{inb=1; next} inb && /^$/{inb=0} inb && $0==l{found=1} END{exit found?0:1}' "$MQ/acl"; then HAS=1; else HAS=0; fi
+    if [[ "$STATE" == "on" ]]; then
+      if [[ "$HAS" -eq 1 ]]; then echo "$USER_NAME already has: $LINE"; else
+        cp -p "$MQ/acl" "$MQ/acl.before-alarm-z2m-state"
+        sed -i "/^user $USER_NAME\$/a $LINE" "$MQ/acl"; echo "$USER_NAME now has: $LINE"
+        chown root:armor "$MQ/acl"; chmod 0640 "$MQ/acl"; reload_broker
+        echo "the previous ACL is kept as acl.before-alarm-z2m-state; the node also needs zigbee_local.bridge_state_topic set to $TOPIC in its panel"
+      fi
+    else
+      if [[ "$HAS" -eq 0 ]]; then echo "$USER_NAME does not have: $LINE"; else
+        cp -p "$MQ/acl" "$MQ/acl.before-alarm-z2m-state"
+        drop_line "$USER_NAME" "$LINE"; echo "$USER_NAME no longer has: $LINE"
+        chown root:armor "$MQ/acl"; chmod 0640 "$MQ/acl"; reload_broker
+      fi
     fi
     ;;
   electrical-relays|alarm-relays)
