@@ -11,6 +11,8 @@
 * the access list of the broker (``etc/mosquitto/acl``): every identity of a known kind has the lines its kind is given by ``node_roles.json`` (the table ``mqtt_identity.sh``
   is generated from) and the server the lines of ``armor_server.acl``; a line that opens everything to an identity that is not the server fails, a line beyond the kind or a
   line of the kind that is missing is a warning (the opt-in switches of ``mqtt_identity.sh`` add lines on purpose, so a line beyond the kind is reported, not judged);
+* with ``--server-url`` (and the operator token in the environment variable ``ARMOR_DOCTOR_TOKEN``, never on the command line and never printed): the version of the
+  contract each node reports against the one the server speaks, so a node on an older contract is named;
 * the free space of the disk of the prefix.
 
 It only reads. No value is printed, nor the length of one: a line says "too short", not how short. Exit 0 when nothing failed, 1 when something failed, 2 for a wrong
@@ -28,7 +30,7 @@ import shutil
 import stat
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 DEFAULT_PREFIX = "/opt/armor"
 DEFAULT_MIN_TOKEN = 24
@@ -139,6 +141,47 @@ def acl_findings(acl_text: str, roles: dict[str, dict[str, Any]], server_lines: 
         add("ok", "mosquitto/acl", f"{clean} identit{'y has' if clean == 1 else 'ies have'} exactly the lines of {'its kind' if clean == 1 else 'their kind'}")
 
 
+def live_contracts(server_url: str, token: str, get: Callable[[str, str], Any] | None = None) -> list[tuple[str, str, str]]:
+    """Ask a running server which contract version each node reports. ``get(url, token)`` returns the decoded JSON (replaced in tests). Nothing printed here holds the token."""
+    found: list[tuple[str, str, str]] = []
+    fetch = get or _http_json
+    base = server_url.rstrip("/")
+    if not re.match(r"^https?://[A-Za-z0-9.\[\]:-]+(/.*)?$", base):
+        return [("fail", "server", "--server-url is not an http or https address")]
+    try:
+        info = fetch(f"{base}/api/v1/info", token)
+        health = fetch(f"{base}/api/v1/node-health", token)
+    except (OSError, ValueError) as error:
+        return [("warn", "server", f"the server could not be asked ({type(error).__name__}): the contract of the nodes was not compared")]
+    wanted = info.get("contract") if isinstance(info, dict) else None
+    if not isinstance(wanted, int):
+        return [("warn", "server", "the server did not say its contract version (the token may not be an operator's): the nodes were not compared")]
+    nodes = health.get("nodes", []) if isinstance(health, dict) else []
+    old, silent = [], []
+    for item in nodes:
+        report = item.get("report", {}) if isinstance(item, dict) else {}
+        said = report.get("contract") if isinstance(report, dict) else None
+        name = str(item.get("node_id", "?")) if isinstance(item, dict) else "?"
+        if not isinstance(said, int):
+            silent.append(name)
+        elif said < wanted:
+            old.append(f"{name} (contract {said})")
+    if old:
+        found.append(("warn", "nodes", f"on an older contract than the server's {wanted}: {', '.join(sorted(old))}; update their firmware"))
+    if silent:
+        found.append(("warn", "nodes", f"do not say their contract version (an older firmware): {', '.join(sorted(silent))}"))
+    if not old and not silent:
+        found.append(("ok", "nodes", f"{len(nodes)} node(s) report the server's contract {wanted}" if nodes else "no node has reported yet, so there is no contract to compare"))
+    return found
+
+
+def _http_json(url: str, token: str) -> Any:
+    import urllib.request
+    request = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}", "Accept": "application/json"})
+    with urllib.request.urlopen(request, timeout=10) as answer:   # noqa: S310 - the scheme is checked by the caller
+        return json.loads(answer.read(2_000_000).decode("utf-8"))
+
+
 def diagnose(prefix: Path, min_token: int = DEFAULT_MIN_TOKEN, min_free_mb: int = DEFAULT_MIN_FREE_MB, mosquitto_conf: Path | None = None) -> list[tuple[str, str, str]]:
     """A list of (level, subject, message); level is ok, warn or fail."""
     found: list[tuple[str, str, str]] = []
@@ -241,12 +284,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--min-token-length", type=int, default=DEFAULT_MIN_TOKEN, help=f"shortest secret accepted (default {DEFAULT_MIN_TOKEN})")
     parser.add_argument("--min-free-mb", type=int, default=DEFAULT_MIN_FREE_MB, help=f"free space below which it warns (default {DEFAULT_MIN_FREE_MB})")
     parser.add_argument("--mosquitto-conf", type=Path, help="the broker configuration to compare the port with (default: the one next to the installation)")
+    parser.add_argument("--server-url", help="a running server to ask which contract version each node reports (the operator token is read from ARMOR_DOCTOR_TOKEN)")
     parser.add_argument("--strict", action="store_true", help="a warning also makes the exit code 1")
     parser.add_argument("--json", action="store_true", help="print the result as JSON")
     args = parser.parse_args(argv)
     if args.min_token_length < 8 or args.min_free_mb < 0:
         parser.error("--min-token-length must be at least 8 and --min-free-mb not negative")
     results = diagnose(args.prefix, args.min_token_length, args.min_free_mb, args.mosquitto_conf)
+    if args.server_url:
+        token = os.environ.get("ARMOR_DOCTOR_TOKEN", "")
+        results += live_contracts(args.server_url, token) if token else [("warn", "server", "--server-url needs the operator token in ARMOR_DOCTOR_TOKEN: the nodes were not compared")]
     failed = sum(1 for level, _s, _m in results if level == "fail")
     warned = sum(1 for level, _s, _m in results if level == "warn")
     if args.json:

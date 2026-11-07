@@ -12,6 +12,7 @@ import os
 import sys
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -110,6 +111,51 @@ class AclTests(unittest.TestCase):
             write(prefix / "etc" / "mosquitto" / "acl", self.block("armor-server", self.SERVER) + self.block("device-kitchen", ["topic readwrite #"]))
             results = armor_doctor.diagnose(prefix)
         self.assertTrue([r for r in results if r[0] == "fail" and "device-kitchen" in r[2]], results)
+
+
+class LiveContractTests(unittest.TestCase):
+    def ask(self, info, health, url="http://127.0.0.1:18080"):
+        seen = []
+        def get(address, token):
+            seen.append((address, token))
+            if isinstance(info, Exception) and address.endswith("/info"):
+                raise info
+            return info if address.endswith("/info") else health
+        return armor_doctor.live_contracts(url, "tok", get), seen
+
+    def node(self, name, contract):
+        return {"node_id": name, "report": ({"contract": contract} if contract is not None else {})}
+
+    def test_nodes_on_the_servers_contract_are_ok(self):
+        found, seen = self.ask({"contract": 3}, {"nodes": [self.node("a", 3), self.node("b", 4)]})
+        self.assertEqual([r[0] for r in found], ["ok"])
+        self.assertIn("2 node(s)", found[0][2])
+        self.assertEqual([item[1] for item in seen], ["tok", "tok"])
+
+    def test_an_older_node_and_a_silent_one_are_named(self):
+        found, _ = self.ask({"contract": 3}, {"nodes": [self.node("radar-1", 2), self.node("old-9", None), self.node("fine", 3)]})
+        self.assertEqual([r[0] for r in found], ["warn", "warn"])
+        self.assertIn("radar-1 (contract 2)", found[0][2])
+        self.assertIn("old-9", found[1][2])
+
+    def test_no_nodes_and_an_unreadable_server_say_so_without_failing(self):
+        self.assertIn("no node has reported", self.ask({"contract": 3}, {"nodes": []})[0][0][2])
+        self.assertEqual(self.ask({"service": "armor-server"}, {})[0][0][0], "warn")
+        self.assertEqual(self.ask(OSError("down"), {})[0][0][0], "warn")
+        self.assertNotIn("tok", self.ask(OSError("down"), {})[0][0][2])
+
+    def test_a_bad_address_fails_before_anything_is_asked(self):
+        found, seen = self.ask({"contract": 3}, {}, url="file:///etc/passwd")
+        self.assertEqual(found[0][0], "fail")
+        self.assertEqual(seen, [])
+
+    def test_the_command_needs_the_token_in_the_environment(self):
+        with tempfile.TemporaryDirectory() as folder:
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out), unittest.mock.patch.dict(os.environ, {}, clear=False):
+                os.environ.pop("ARMOR_DOCTOR_TOKEN", None)
+                armor_doctor.main(["--prefix", str(installation(folder)), "--server-url", "http://127.0.0.1:1", "--min-free-mb", "0"])
+        self.assertIn("ARMOR_DOCTOR_TOKEN", out.getvalue())
 
 
 class DoctorTests(unittest.TestCase):
