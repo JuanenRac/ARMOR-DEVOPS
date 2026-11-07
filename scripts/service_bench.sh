@@ -12,7 +12,7 @@
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-WORK="$(mktemp -d)"
+WORK="$(mktemp -d)"; chmod 0711 "$WORK"
 PASSED=0; FAILED=0
 BROKER_PID=""; SERVER_PID=""
 trap '[[ -z "$SERVER_PID" ]] || kill "$SERVER_PID" 2>/dev/null; [[ -z "$BROKER_PID" ]] || kill "$BROKER_PID" 2>/dev/null; rm -rf -- "$WORK"' EXIT
