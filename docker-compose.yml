@@ -20,7 +20,7 @@ services:
     <<: *hardened
     mem_limit: ${ARMOR_MEM_BROKER:-256m}
     cpus: ${ARMOR_CPUS_BROKER:-1}
-    image: eclipse-mosquitto:2.0.21   # a patch version, not the floating series: an update of the broker is a decision, not something a pull does
+    image: eclipse-mosquitto:2.0.21@sha256:94f5a3d7deafa59fa3440d227ddad558f59d293c612138de841eec61bfa4d353   # a patch version and its digest, not the floating series: an update of the broker is a decision, not something a pull does
     # The image starts as root and drops to its own user; that needs these three, everything else stays dropped.
     cap_add: [CHOWN, SETUID, SETGID]
     tmpfs: ["/tmp", "/mosquitto/log"]
@@ -147,7 +147,7 @@ services:
     mem_limit: ${ARMOR_MEM_PROXY:-256m}
     cpus: ${ARMOR_CPUS_PROXY:-1}
     profiles: [tls]
-    image: caddy:2.9   # pinned to a series; pin a digest once a build has been tried on the target machine
+    image: caddy:2.9@sha256:748016f285ed8c43a9ce6e3aed6d92d3009d90ca41157950880f40beaf3ff62b   # the series and its digest (every architecture): an update of the proxy is a decision, not something a pull does
     # The caddy binary carries a file capability (bind low ports); with every capability dropped it can not even start.
     cap_add: [NET_BIND_SERVICE]
     environment:
@@ -177,7 +177,7 @@ services:
     mem_limit: ${ARMOR_MEM_PROXY_LAN:-256m}
     cpus: ${ARMOR_CPUS_PROXY_LAN:-1}
     profiles: [lan-ca]
-    image: caddy:2.9
+    image: caddy:2.9@sha256:748016f285ed8c43a9ce6e3aed6d92d3009d90ca41157950880f40beaf3ff62b
     cap_add: [NET_BIND_SERVICE]
     environment:
       ARMOR_LAN_HOST: ${ARMOR_LAN_HOST:-armor.lan}

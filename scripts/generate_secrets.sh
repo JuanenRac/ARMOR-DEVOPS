@@ -32,7 +32,7 @@ ENV
 # Mosquitto's own tool hashes the password; run it in the broker image so nothing is installed here.
 # The broker drops to its own unprivileged user inside the container, so it must be able to read these two files:
 # they are world-readable on purpose (a salted hash and an access list, no plaintext secret; .env stays private).
-docker run --rm --entrypoint sh -v "$PWD/secrets:/out" eclipse-mosquitto:2.0.21 \
+docker run --rm --entrypoint sh -v "$PWD/secrets:/out" eclipse-mosquitto:2.0.21@sha256:94f5a3d7deafa59fa3440d227ddad558f59d293c612138de841eec61bfa4d353 \
   -c 'mosquitto_passwd -b -c /out/mqtt.password armor-server "$1" >/dev/null && chmod 0644 /out/mqtt.password' _ "${broker_password}"
 # The access list is the example with the server's block taken from scripts/armor_server.acl, the one source of what the server may do (the installer uses the same file).
 [[ -f scripts/armor_server.acl ]] || { echo "ERROR: scripts/armor_server.acl is missing" >&2; exit 1; }

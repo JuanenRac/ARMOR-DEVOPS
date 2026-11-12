@@ -217,5 +217,28 @@ class ResourceLimitsAndHealthTests(unittest.TestCase):
             self.assertIn("HEALTHCHECK", dockerfile.read_text(encoding="utf-8"), name)
 
 
+class ImageDigestTests(unittest.TestCase):
+    """Every image the compose file pulls from a registry is fixed by the digest of its index, so a pull can never bring a different one."""
+
+    DIGEST = re.compile(r"^[a-z0-9./_-]+:[A-Za-z0-9._-]+@sha256:[0-9a-f]{64}$")
+
+    def images(self) -> list[str]:
+        return re.findall(r"^\s+image:\s*(\S+)", COMPOSE, re.M)
+
+    def test_registry_images_carry_a_digest(self):
+        pulled = [i for i in self.images() if not i.startswith("armor-") and "$" not in i]
+        self.assertTrue(pulled, "no image from a registry found")
+        for image in pulled:
+            self.assertRegex(image, self.DIGEST, image)
+
+    def test_both_proxies_use_the_same_digest(self):
+        caddy = {i for i in self.images() if i.startswith("caddy:")}
+        self.assertEqual(len(caddy), 1, caddy)
+
+    def test_the_secrets_script_uses_the_broker_image_of_the_compose_file(self):
+        broker = next(i for i in self.images() if i.startswith("eclipse-mosquitto:"))
+        self.assertIn(broker, (ROOT / "scripts" / "generate_secrets.sh").read_text(encoding="utf-8"))
+
+
 if __name__ == "__main__":
     unittest.main()

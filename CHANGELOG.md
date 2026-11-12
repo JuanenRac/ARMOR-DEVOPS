@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+- **The images pulled from a registry are fixed by digest:** the broker (`eclipse-mosquitto:2.0.21`, also the one `generate_secrets.sh` runs) and both Caddy proxies (`caddy:2.9`) carry the digest of their multi-architecture index after the tag, so a pull can never bring another image than the one that was tried. Updating one is a change of the file. Tests check that every image from a registry has a digest, that the two proxies share it and that the secrets script uses the broker image of the compose file.
+
 - **The backup can go to another machine and can include Docker volumes:** `backup_data.sh --copy-ssh HOST:/DIR` (scp, checked with sha256sum over ssh), `--copy-rclone REMOTE:PATH` (checked with rclone check) and `--compose-volume NAME` (the contents of a named volume, read-only, under `armor-volumes/`); `restore_data.sh --volumes-to DIR` gives the volume archives back. Names that could be read as an option are refused before anything is written, and a failed copy or an unreadable volume is an error. Tests with stand-ins for scp, ssh, rclone and docker in `scripts/test_backup.sh`.
 - **`install_cm5.sh` no longer stops at the end of a first install:** with `set -o pipefail`, the line that prunes the releases set aside failed when that folder had no release in it yet (`ls` finds nothing), which ended the script with an error after the services were already running. Found by the new run on a real systemd; the two pruning lines now tolerate an empty folder.
 
