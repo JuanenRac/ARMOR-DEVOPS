@@ -228,6 +228,57 @@ class ResourceLimitsAndHealthTests(unittest.TestCase):
             self.assertIn("HEALTHCHECK", dockerfile.read_text(encoding="utf-8"), name)
 
 
+class ServerHealthcheckTests(unittest.TestCase):
+    """The health check of the server image, run as it is against a stand-in server: plain HTTP, HTTPS when the server's own TLS is set, and a failing answer."""
+
+    DOCKERFILE = ROOT.parent / "ARMOR-SERVER" / "Dockerfile"
+
+    def command(self) -> str:
+        if not self.DOCKERFILE.is_file():
+            self.skipTest("ARMOR-SERVER is not next to this repository")
+        text = self.DOCKERFILE.read_text(encoding="utf-8")
+        match = re.search(r'HEALTHCHECK[^\n]*\\\n\s*CMD node -e "(.*)"\s*$', text, re.M)
+        self.assertIsNotNone(match, "no HEALTHCHECK with a node command")
+        return match.group(1)  # type: ignore[union-attr]
+
+    def test_it_asks_only_the_loopback_and_picks_https_with_the_own_certificate(self):
+        script = self.command()
+        self.assertIn("host:'127.0.0.1'", script)
+        self.assertIn("process.env.TLS_CERT_PATH&&process.env.TLS_KEY_PATH", script)
+        self.assertIn("require(tls?'https':'http')", script)
+        self.assertIn("rejectUnauthorized:false", script)   # only ever the loopback, so the name of the certificate is of no use
+
+    @unittest.skipUnless(shutil.which("node"), "no node")
+    def test_the_command_exits_zero_for_200_and_one_for_anything_else_or_nothing(self):
+        import http.server
+        import threading
+
+        status = {"code": 200}
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):  # noqa: N802
+                self.send_response(status["code"])
+                self.end_headers()
+
+            def log_message(self, *args):
+                pass
+
+        server = http.server.HTTPServer(("127.0.0.1", 0), Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            env = {k: v for k, v in os.environ.items() if not k.startswith(("TLS_", "ARMOR_"))}
+            env["ARMOR_PORT"] = str(server.server_address[1])
+            run = lambda: subprocess.run(["node", "-e", self.command()], env=env, capture_output=True, timeout=20, check=False).returncode  # noqa: E731
+            self.assertEqual(run(), 0)
+            status["code"] = 503
+            self.assertEqual(run(), 1)
+        finally:
+            server.shutdown()
+            server.server_close()
+        self.assertEqual(run(), 1)   # nobody answers: unhealthy
+
+
 class ImageDigestTests(unittest.TestCase):
     """Every image the compose file pulls from a registry is fixed by the digest of its index, so a pull can never bring a different one."""
 
@@ -249,6 +300,39 @@ class ImageDigestTests(unittest.TestCase):
     def test_the_secrets_script_uses_the_broker_image_of_the_compose_file(self):
         broker = next(i for i in self.images() if i.startswith("eclipse-mosquitto:"))
         self.assertIn(broker, (ROOT / "scripts" / "generate_secrets.sh").read_text(encoding="utf-8"))
+
+
+class PublicCertificateModeTests(unittest.TestCase):
+    """The profile "tls" for a name on the Internet (a real certificate): only the environment changes, the defaults stay local and conservative."""
+
+    CADDYFILE = (ROOT / "caddy" / "Caddyfile").read_text(encoding="utf-8")
+
+    def proxy(self) -> str:
+        return block("proxy")
+
+    def test_the_issuer_is_one_variable_and_the_default_is_the_local_authority(self):
+        self.assertIn("tls {$ARMOR_TLS_ISSUER:internal}", self.CADDYFILE)
+        self.assertIn("ARMOR_TLS_ISSUER: ${ARMOR_TLS_ISSUER:-internal}", self.proxy())
+        self.assertRegex(ENV_EXAMPLE, r"(?m)^ARMOR_TLS_ISSUER=internal$")
+
+    def test_the_site_address_follows_the_host_and_the_port_variables(self):
+        self.assertIn("https://{$ARMOR_TLS_HOST:localhost}:{$ARMOR_TLS_PORT:8443} {", self.CADDYFILE)
+        self.assertIn("default_sni {$ARMOR_TLS_HOST:localhost}", self.CADDYFILE)
+
+    def test_the_public_mode_can_publish_443_and_80_but_binds_to_loopback_by_default(self):
+        ports = re.search(r"ports: \[(.*?)\]", self.proxy(), re.S)
+        self.assertIsNotNone(ports)
+        published = re.findall(r'"([^"]+)"', ports.group(1))  # type: ignore[union-attr]
+        self.assertEqual(len(published), 2)
+        for entry in published:
+            self.assertTrue(entry.startswith("${ARMOR_TLS_BIND:-127.0.0.1}:"), entry)   # nothing is exposed to the network until the administrator says so
+        self.assertIn("${ARMOR_TLS_PORT:-8443}:${ARMOR_TLS_PORT:-8443}", published[0])    # 443 is only a value of the variable
+        self.assertTrue(published[1].endswith(":80"), published[1])                      # the authority's check lands on port 80 of the container
+
+    def test_the_first_certificate_is_not_asked_for_with_the_defaults(self):
+        self.assertIn("ARMOR_TLS_HSTS:300", self.CADDYFILE)                               # a short HSTS until the name is sure
+        self.assertNotIn("acme_ca", self.CADDYFILE)                                      # no outside authority is wired in by the file itself
+        self.assertNotIn("email ", self.CADDYFILE.replace("e-mail", ""))
 
 
 if __name__ == "__main__":
