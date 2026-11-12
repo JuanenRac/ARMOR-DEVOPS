@@ -121,8 +121,7 @@ jobs:
           VERSION: ${{ needs.plan.outputs.version }}
         run: |
           set -euo pipefail
-          printf '%s
-' "$VERSION" > scripts/VERSION
+          printf '%s\n' "$VERSION" > scripts/VERSION
 
       - name: Pack the program like the maintenance helper expects it
         shell: bash
