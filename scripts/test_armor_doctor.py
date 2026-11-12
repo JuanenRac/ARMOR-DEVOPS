@@ -114,10 +114,15 @@ class AclTests(unittest.TestCase):
 
 
 class LiveContractTests(unittest.TestCase):
-    def ask(self, info, health, url="http://127.0.0.1:18080"):
+    def ask(self, info, health, url="http://127.0.0.1:18080", status=None):
+        """``status`` is the answer of GET /api/v1/contract (an exception, or None for a server that has no such route); ``info`` and ``health`` the older way."""
         seen = []
         def get(address, token):
             seen.append((address, token))
+            if address.endswith("/contract"):
+                if status is None or isinstance(status, Exception):
+                    raise status or OSError("404")
+                return status
             if isinstance(info, Exception) and address.endswith("/info"):
                 raise info
             return info if address.endswith("/info") else health
@@ -126,26 +131,51 @@ class LiveContractTests(unittest.TestCase):
     def node(self, name, contract):
         return {"node_id": name, "report": ({"contract": contract} if contract is not None else {})}
 
-    def test_nodes_on_the_servers_contract_are_ok(self):
-        found, seen = self.ask({"contract": 3}, {"nodes": [self.node("a", 3), self.node("b", 4)]})
+    def said(self, name, contract, state):
+        return {"node_id": name, "family": "radar", "contract": contract, "status": state}
+
+    def test_the_server_that_compares_them_is_believed_and_asked_once(self):
+        found, seen = self.ask(None, None, status={"server": "0.8.0.7", "nodes": [self.said("a", "0.8.0.7", "current"), self.said("b", "0.9.0", "newer")], "totals": {}})
         self.assertEqual([r[0] for r in found], ["ok"])
         self.assertIn("2 node(s)", found[0][2])
-        self.assertEqual([item[1] for item in seen], ["tok", "tok"])
+        self.assertEqual(seen, [("http://127.0.0.1:18080/api/v1/contract", "tok")])
 
-    def test_an_older_node_and_a_silent_one_are_named(self):
-        found, _ = self.ask({"contract": 3}, {"nodes": [self.node("radar-1", 2), self.node("old-9", None), self.node("fine", 3)]})
+    def test_an_older_node_and_a_silent_one_are_named_by_the_servers_answer(self):
+        found, _ = self.ask(None, None, status={"server": "0.8.0.7", "nodes": [self.said("radar-1", "0.8.0.5", "older"), self.said("old-9", None, "unknown"), self.said("fine", "0.8.0.7", "current")]})
         self.assertEqual([r[0] for r in found], ["warn", "warn"])
-        self.assertIn("radar-1 (contract 2)", found[0][2])
+        self.assertIn("radar-1 (contract 0.8.0.5)", found[0][2])
+        self.assertIn("older contract than the server's 0.8.0.7", found[0][2])
         self.assertIn("old-9", found[1][2])
 
+    def test_a_server_without_the_route_is_asked_the_old_way_and_compared_here(self):
+        found, seen = self.ask({"contract": "0.8.0.7"}, {"nodes": [self.node("a", "0.8.0.7"), self.node("b", "0.8.1"), self.node("c", "0.10.0")]})
+        self.assertEqual([r[0] for r in found], ["ok"])
+        self.assertIn("3 node(s)", found[0][2])
+        self.assertEqual([item[1] for item in seen], ["tok", "tok", "tok"])
+        found, _ = self.ask({"contract": "0.8.0.7"}, {"nodes": [self.node("radar-1", "0.7.9.9"), self.node("old-9", None), self.node("junk", "soon"), self.node("fine", "0.8.0")]})
+        self.assertEqual([r[0] for r in found], ["warn", "warn"])
+        self.assertIn("radar-1 (contract 0.7.9.9)", found[0][2])
+        self.assertIn("junk, old-9", found[1][2])
+
+    def test_versions_are_compared_by_number_and_a_missing_fourth_part_is_zero(self):
+        relation = armor_doctor._contract_relation
+        self.assertEqual(relation("0.8.0", "0.8.0.0"), "current")
+        self.assertEqual(relation("0.8.0.6", "0.8.0.7"), "older")
+        self.assertEqual(relation("0.10.0", "0.9.9"), "newer")
+        for odd in (None, 3, "", "0.8", "v0.8.0", "0.8.0.7.1"):
+            self.assertEqual(relation(odd, "0.8.0.7"), "unknown", repr(odd))
+        self.assertEqual(relation("0.8.0.7", "x"), "unknown")
+
     def test_no_nodes_and_an_unreadable_server_say_so_without_failing(self):
-        self.assertIn("no node has reported", self.ask({"contract": 3}, {"nodes": []})[0][0][2])
+        self.assertIn("no node has reported", self.ask({"contract": "0.8.0.7"}, {"nodes": []})[0][0][2])
+        self.assertIn("no node has reported", self.ask(None, None, status={"server": "0.8.0.7", "nodes": []})[0][0][2])
         self.assertEqual(self.ask({"service": "armor-server"}, {})[0][0][0], "warn")
+        self.assertEqual(self.ask({"contract": 3}, {"nodes": []})[0][0][0], "warn", "a number is not a version")
         self.assertEqual(self.ask(OSError("down"), {})[0][0][0], "warn")
         self.assertNotIn("tok", self.ask(OSError("down"), {})[0][0][2])
 
     def test_a_bad_address_fails_before_anything_is_asked(self):
-        found, seen = self.ask({"contract": 3}, {}, url="file:///etc/passwd")
+        found, seen = self.ask({"contract": "0.8.0.7"}, {}, url="file:///etc/passwd")
         self.assertEqual(found[0][0], "fail")
         self.assertEqual(seen, [])
 

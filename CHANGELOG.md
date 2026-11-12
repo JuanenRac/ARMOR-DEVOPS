@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+- **The doctor compares the contract versions as versions:** with `--server-url` it asks `GET /api/v1/contract` and names the nodes that are behind the server or do not say their version; a server without that route is asked the old way (`/api/v1/info` and `/api/v1/node-health`) and compared here. Before, it expected whole numbers while the server and the nodes say versions such as `0.8.0.7`, so it never compared anything against a real server. Four parts or three are compared part by part (`0.10.0` is above `0.9.9`).
+
 ## [0.7.4] - A floor for the test coverage: the workflow `coverage-floor.yml` runs the Python tests under coverage and fails when the lines or the branches fall below `docs/coverage_threshold.json`. Floor of scripts/: lines 89.5, branches 85.0 (measured
 
 - **A floor for the test coverage:** the workflow `coverage-floor.yml` runs the Python tests under coverage and fails when the lines or the branches fall below `docs/coverage_threshold.json`. Floor of scripts/: lines 89.5, branches 85.0 (measured 89.92 and 85.28; the shell scripts are tested by their own shell tests and are not counted). Raising it is a change of that file, made with a figure measured by the workflow.

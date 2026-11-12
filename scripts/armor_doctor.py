@@ -141,37 +141,59 @@ def acl_findings(acl_text: str, roles: dict[str, dict[str, Any]], server_lines: 
         add("ok", "mosquitto/acl", f"{clean} identit{'y has' if clean == 1 else 'ies have'} exactly the lines of {'its kind' if clean == 1 else 'their kind'}")
 
 
+def _contract_parts(text: Any) -> tuple[int, int, int, int] | None:
+    """The four parts of a contract version (a missing fourth part is zero); None when it is not a version."""
+    match = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)(?:\.(\d+))?", text) if isinstance(text, str) else None
+    return (int(match[1]), int(match[2]), int(match[3]), int(match[4] or 0)) if match else None
+
+
+def _contract_relation(said: Any, wanted: str) -> str:
+    mine, theirs = _contract_parts(said), _contract_parts(wanted)
+    if mine is None or theirs is None:
+        return "unknown"
+    return "current" if mine == theirs else ("older" if mine < theirs else "newer")
+
+
 def live_contracts(server_url: str, token: str, get: Callable[[str, str], Any] | None = None) -> list[tuple[str, str, str]]:
-    """Ask a running server which contract version each node reports. ``get(url, token)`` returns the decoded JSON (replaced in tests). Nothing printed here holds the token."""
+    """Ask a running server which contract version each node reports. ``get(url, token)`` returns the decoded JSON (replaced in tests). Nothing printed here holds the token.
+
+    A server that has ``GET /api/v1/contract`` says it all in one answer (its own version and the state of every node); an older server is asked for its version in
+    ``/api/v1/info`` and for the reports in ``/api/v1/node-health``, and the comparison is made here."""
     found: list[tuple[str, str, str]] = []
     fetch = get or _http_json
     base = server_url.rstrip("/")
     if not re.match(r"^https?://[A-Za-z0-9.\[\]:-]+(/.*)?$", base):
         return [("fail", "server", "--server-url is not an http or https address")]
+    wanted: Any = None
+    nodes: list[tuple[str, str, Any]] = []
     try:
-        info = fetch(f"{base}/api/v1/info", token)
-        health = fetch(f"{base}/api/v1/node-health", token)
+        try:
+            status = fetch(f"{base}/api/v1/contract", token)
+        except (OSError, ValueError):
+            status = None                                  # a server before this route: ask the way it used to be asked
+        if isinstance(status, dict) and isinstance(status.get("server"), str) and isinstance(status.get("nodes"), list):
+            wanted = status["server"]
+            nodes = [(str(item.get("node_id", "?")), str(item.get("status", "unknown")), item.get("contract")) for item in status["nodes"] if isinstance(item, dict)]
+        else:
+            info = fetch(f"{base}/api/v1/info", token)
+            health = fetch(f"{base}/api/v1/node-health", token)
+            wanted = info.get("contract") if isinstance(info, dict) else None
+            for item in (health.get("nodes", []) if isinstance(health, dict) else []):
+                report = item.get("report", {}) if isinstance(item, dict) else {}
+                said = report.get("contract") if isinstance(report, dict) else None
+                nodes.append((str(item.get("node_id", "?")) if isinstance(item, dict) else "?", _contract_relation(said, wanted) if isinstance(wanted, str) else "unknown", said))
     except (OSError, ValueError) as error:
         return [("warn", "server", f"the server could not be asked ({type(error).__name__}): the contract of the nodes was not compared")]
-    wanted = info.get("contract") if isinstance(info, dict) else None
-    if not isinstance(wanted, int):
+    if not isinstance(wanted, str) or _contract_parts(wanted) is None:
         return [("warn", "server", "the server did not say its contract version (the token may not be an operator's): the nodes were not compared")]
-    nodes = health.get("nodes", []) if isinstance(health, dict) else []
-    old, silent = [], []
-    for item in nodes:
-        report = item.get("report", {}) if isinstance(item, dict) else {}
-        said = report.get("contract") if isinstance(report, dict) else None
-        name = str(item.get("node_id", "?")) if isinstance(item, dict) else "?"
-        if not isinstance(said, int):
-            silent.append(name)
-        elif said < wanted:
-            old.append(f"{name} (contract {said})")
+    old = sorted(f"{name} (contract {said})" for name, state, said in nodes if state == "older")
+    silent = sorted(name for name, state, _ in nodes if state == "unknown")
     if old:
-        found.append(("warn", "nodes", f"on an older contract than the server's {wanted}: {', '.join(sorted(old))}; update their firmware"))
+        found.append(("warn", "nodes", f"on an older contract than the server's {wanted}: {', '.join(old)}; update their firmware"))
     if silent:
-        found.append(("warn", "nodes", f"do not say their contract version (an older firmware): {', '.join(sorted(silent))}"))
+        found.append(("warn", "nodes", f"do not say their contract version (an older firmware): {', '.join(silent)}"))
     if not old and not silent:
-        found.append(("ok", "nodes", f"{len(nodes)} node(s) report the server's contract {wanted}" if nodes else "no node has reported yet, so there is no contract to compare"))
+        found.append(("ok", "nodes", f"{len(nodes)} node(s) report the server's contract {wanted} or a newer one" if nodes else "no node has reported yet, so there is no contract to compare"))
     return found
 
 
