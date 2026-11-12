@@ -74,6 +74,8 @@ through the TLS address. The profile has been started and answered over HTTPS wi
 (Docker Engine in WSL); Caddy logs an error that it could not install its root certificate in the container's own
 trust store, which is harmless. Whether a given browser trusts the authority once you install it has not been verified.
 
+For a name on the Internet (DuckDNS, No-IP or your own domain) the local authority is not what you want: put your e-mail address in `ARMOR_TLS_ISSUER` and Caddy asks Let's Encrypt for a real certificate by itself and renews it, so phones and browsers trust it without installing anything. That needs ports 80 and 443 of this host reachable from the Internet (`ARMOR_TLS_PORT=443`, `ARMOR_TLS_HTTP_PORT=80`). The whole procedure, with the dynamic DNS name, is in `REMOTE_ACCESS.md`; the pairing of the local authority is in `HTTPS_PAIRING.md`.
+
 ## HTTPS on the local network with a pinned authority (profile `lan-ca`)
 
 For a house network without a name on the Internet there is a second, optional profile, separate from `tls`: `docker compose --profile lan-ca up -d`. It starts `proxy_lan`, which serves Studio and the API only on port 443 (there is no port 80 and no redirect, so nothing answers in plain text) with a certificate for `ARMOR_LAN_HOST` issued by the internal authority of Caddy, kept in the volume `lan-ca-data` and never leaving the machine. It listens on `ARMOR_LAN_BIND` (loopback by default; put the address of the machine on the network when a firewall protects it).
