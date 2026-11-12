@@ -34,6 +34,8 @@ disk of its own, so an unplugged USB disk never fills the system card, and it is
 lacks room for the archive; the copy is flushed to the disk before the script reports success. Run it nightly
 from a cron entry or a systemd timer.
 
+Other copies and Docker volumes: `--copy-ssh HOST:/DIR` sends the archive and its `.sha256` to another machine with `scp` and checks them there with `sha256sum`; `--copy-rclone REMOTE:PATH` sends them to an rclone remote and checks them with `rclone check`; a copy that fails or does not match is an error and the verified archive stays in the output folder. `--compose-volume NAME` (repeat it) adds the contents of a named Docker volume, read once, read-only and without network by a throw-away container, under `armor-volumes/` in the archive; if a volume cannot be read nothing is backed up. `restore_data.sh --apply --volumes-to DIR` puts those tar files in `DIR`.
+
 ## Restore
 
 ```bash

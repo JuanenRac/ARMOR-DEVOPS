@@ -10,17 +10,22 @@ set -euo pipefail
 
 usage() {
   cat <<'USAGE'
-Usage: restore_data.sh --file ARCHIVE --data-dir DIR --passphrase-file FILE [--apply]
+Usage: restore_data.sh --file ARCHIVE --data-dir DIR --passphrase-file FILE [--apply] [--volumes-to DIR]
+
+  --volumes-to  with --apply: also put the tar of each Docker volume that the backup holds
+                (made with --compose-volume) in DIR; put one back with
+                docker run --rm -i -v NAME:/volume busybox tar -C /volume -xf - < DIR/NAME.tar
 USAGE
 }
 
-FILE="" DATA_DIR="" PASS_FILE="" APPLY=0
+FILE="" DATA_DIR="" PASS_FILE="" APPLY=0 VOLUMES_TO=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --file) FILE="${2:-}"; shift 2 ;;
     --data-dir) DATA_DIR="${2:-}"; shift 2 ;;
     --passphrase-file) PASS_FILE="${2:-}"; shift 2 ;;
     --apply) APPLY=1; shift ;;
+    --volumes-to) VOLUMES_TO="${2:-}"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) echo "unknown option: $1" >&2; usage >&2; exit 2 ;;
   esac
@@ -48,6 +53,7 @@ if echo "$LISTING" | grep -qE '(^/|(^|/)\.\.(/|$))'; then echo "the archive hold
 PARENT="$(cd "$(dirname "$DATA_DIR")" && pwd)"
 BASE="$(basename "$DATA_DIR")"
 ARCHIVE_BASE="$(echo "$LISTING" | head -n1 | cut -d/ -f1)"
+[[ "$ARCHIVE_BASE" != "armor-volumes" ]] || { echo "the archive does not start with a data directory" >&2; exit 1; }
 if [[ -d "$DATA_DIR" && -n "$(ls -A "$DATA_DIR" 2>/dev/null)" ]]; then
   MOVED="$PARENT/$BASE.before-restore-$(date -u +%Y%m%dT%H%M%SZ)"
   mv -- "$DATA_DIR" "$MOVED"
@@ -58,4 +64,9 @@ trap 'rm -rf -- "$TMP"' EXIT
 decrypt | tar -xzf - -C "$TMP"
 mkdir -p "$DATA_DIR"
 cp -a "$TMP/$ARCHIVE_BASE/." "$DATA_DIR/"
+if [[ -n "$VOLUMES_TO" && -d "$TMP/armor-volumes" ]]; then
+  mkdir -p "$VOLUMES_TO"
+  cp -a "$TMP/armor-volumes/." "$VOLUMES_TO/"
+  echo "the Docker volume archives were put in $VOLUMES_TO"
+fi
 echo "ARMOR_RESTORE=PASS data-dir=$DATA_DIR"
