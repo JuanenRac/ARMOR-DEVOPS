@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+- **Tests for the live bench and for the generator of the identity lines:** `scripts/test_bench_live_flow.py` runs the whole of `bench_live.py` against a stand-in server on the loopback address (what it checks, what a wrong answer does to the count, how the server process is started and stopped, the command line) and `scripts/test_generate_node_roles.py` checks what the generator writes for each kind of identity, that the committed script is what the table makes and that `--check` refuses one that drifted.
+
 - **The images pulled from a registry are fixed by digest:** the broker (`eclipse-mosquitto:2.0.21`, also the one `generate_secrets.sh` runs) and both Caddy proxies (`caddy:2.9`) carry the digest of their multi-architecture index after the tag, so a pull can never bring another image than the one that was tried. Updating one is a change of the file. Tests check that every image from a registry has a digest, that the two proxies share it and that the secrets script uses the broker image of the compose file.
 
 - **The backup can go to another machine and can include Docker volumes:** `backup_data.sh --copy-ssh HOST:/DIR` (scp, checked with sha256sum over ssh), `--copy-rclone REMOTE:PATH` (checked with rclone check) and `--compose-volume NAME` (the contents of a named volume, read-only, under `armor-volumes/`); `restore_data.sh --volumes-to DIR` gives the volume archives back. Names that could be read as an option are refused before anything is written, and a failed copy or an unreadable volume is an error. Tests with stand-ins for scp, ssh, rclone and docker in `scripts/test_backup.sh`.
