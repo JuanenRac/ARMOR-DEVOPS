@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [0.7.4] - A floor for the test coverage: the workflow `coverage-floor.yml` runs the Python tests under coverage and fails when the lines or the branches fall below `docs/coverage_threshold.json`. Floor of scripts/: lines 89.5, branches 85.0 (measured
+
 - **A floor for the test coverage:** the workflow `coverage-floor.yml` runs the Python tests under coverage and fails when the lines or the branches fall below `docs/coverage_threshold.json`. Floor of scripts/: lines 89.5, branches 85.0 (measured 89.92 and 85.28; the shell scripts are tested by their own shell tests and are not counted). Raising it is a change of that file, made with a figure measured by the workflow.
 
 - **Tests for the live bench and for the generator of the identity lines:** `scripts/test_bench_live_flow.py` runs the whole of `bench_live.py` against a stand-in server on the loopback address (what it checks, what a wrong answer does to the count, how the server process is started and stopped, the command line) and `scripts/test_generate_node_roles.py` checks what the generator writes for each kind of identity, that the committed script is what the table makes and that `--check` refuses one that drifted.
