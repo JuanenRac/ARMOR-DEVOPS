@@ -135,6 +135,17 @@ class LanCaProfileTests(unittest.TestCase):
         self.assertIn("reverse_proxy studio:80", text)
         self.assertNotIn("ARMOR_TLS_ISSUER", text)                             # an outside authority is not an option here
 
+    def test_the_variant_for_the_issued_certificate_reads_it_read_only_and_serves_only_https(self):
+        lan = block("proxy_lan")
+        self.assertIn("${ARMOR_LAN_CADDYFILE:-./caddy/Caddyfile.lan}:/etc/caddy/Caddyfile:ro", lan)   # the internal authority stays the default
+        self.assertIn("${ARMOR_LAN_CERT_DIR:-./caddy}:/lan-certs:ro", lan)
+        text = (ROOT / "caddy" / "Caddyfile.lan-issued").read_text(encoding="utf-8")
+        self.assertIn("tls /lan-certs/leaf.crt /lan-certs/leaf.key", text)
+        self.assertNotIn("tls internal", text)
+        self.assertNotIn("ca.key", text)
+        self.assertNotRegex(text, r"(?m)^\s*(http://|:80)")
+        self.assertIn("reverse_proxy studio:80", text)
+
     def test_it_is_hardened_like_the_other_proxy_and_reaches_only_studio(self):
         lan = block("proxy_lan")
         self.assertIn("<<: *hardened", lan)

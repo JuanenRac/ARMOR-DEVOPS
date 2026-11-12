@@ -183,7 +183,8 @@ services:
       ARMOR_LAN_HOST: ${ARMOR_LAN_HOST:-armor.lan}
     tmpfs: ["/tmp"]
     volumes:
-      - ./caddy/Caddyfile.lan:/etc/caddy/Caddyfile:ro
+      - ${ARMOR_LAN_CADDYFILE:-./caddy/Caddyfile.lan}:/etc/caddy/Caddyfile:ro
+      - ${ARMOR_LAN_CERT_DIR:-./caddy}:/lan-certs:ro
       - lan-ca-data:/data
       - lan-ca-config:/config
     ports: ["${ARMOR_LAN_BIND:-127.0.0.1}:443:443"]

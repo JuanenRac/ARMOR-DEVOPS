@@ -1,0 +1,21 @@
+# HTTPS for the local network with the certificate issued by scripts/armor_lan_cert.py (compose profile "lan-ca", opt-in; used instead of Caddyfile.lan).
+# Copyright (C) 2026 JuanenRac (Electro Hobby 3D). GPL-3.0-or-later.
+#
+# Start it with the folder of the certificate mounted read only (the private key of the authority is never in it, only leaf.crt and leaf.key):
+#   ARMOR_LAN_CADDYFILE=./caddy/Caddyfile.lan-issued ARMOR_LAN_CERT_DIR=$HOME/.armor/lan-ca docker compose --profile lan-ca up -d
+# Only port 443 is served and nothing answers in plain text. The devices trust the authority they installed (docs/LAN_CERTIFICATE.md), so no pinning is needed.
+{
+	auto_https off
+}
+
+https://{$ARMOR_LAN_HOST:armor.lan}:443 {
+	tls /lan-certs/leaf.crt /lan-certs/leaf.key
+	encode gzip
+	header {
+		Strict-Transport-Security "max-age=300"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+		-Server
+	}
+	reverse_proxy studio:80
+}
