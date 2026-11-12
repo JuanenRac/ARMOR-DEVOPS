@@ -196,6 +196,7 @@ fi
 # ---------------------------------------------------------------- deploy_cm5.sh: only what it refuses before it builds or connects to anything
 expect 2 "unknown option: --nonsense" bash "$HERE/deploy_cm5.sh" --nonsense
 expect 2 "usage: deploy_cm5.sh" bash "$HERE/deploy_cm5.sh"
+expect 2 "--host-fingerprint must look like" bash "$HERE/deploy_cm5.sh" --host 192.168.0.180 --user pi --host-fingerprint SHA256:short
 expect 2 "usage: deploy_cm5.sh" bash "$HERE/deploy_cm5.sh" --host 192.0.2.1
 expect 2 "usage: deploy_cm5.sh" bash "$HERE/deploy_cm5.sh" --user someone --with-mqtt
 expect 2 "--host must be a host name or an address" bash "$HERE/deploy_cm5.sh" --host '1.2.3.4;reboot' --user someone

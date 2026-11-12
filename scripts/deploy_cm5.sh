@@ -8,18 +8,20 @@
 # =============================================================================
 # Usage: deploy_cm5.sh --host 192.168.0.180 --user <user> --key ~/.ssh/id_key [--port N] [--public-host H] [--apply] [--with-mqtt] [--with-admin] [--with-voice] [--with-ai] [--with-backup] [--with-maintenance] [--with-network] [--network-node-id NAME] [--server-port N] [--studio-port N] [--mqtt-port N] [--bind ADDRESS]
 #        --port N          the SSH port, when it is not 22 (a router that forwards a public port to it)
+#        --host-fingerprint SHA256:...   pin the SSH host key (ssh-keygen -lf of the CM5 host key): another machine at that address is refused before anything is built
 #        --public-host H   the address the browser uses, when it is not --host
 #        [--also-reach http://PUBLIC:2601=http://PUBLIC:2600] [--forget-reach]   (another address the browser may log in from)
 # Without --apply the remote side only prints its plan.
 set -euo pipefail
 
-HOST=""; USER_NAME=""; KEY=""; APPLY=""; EXTRA=""; SSH_PORT=""; PUBLIC_HOST=""
+HOST=""; USER_NAME=""; KEY=""; APPLY=""; EXTRA=""; SSH_PORT=""; PUBLIC_HOST=""; HOST_FP=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --host) HOST="${2:-}"; shift 2 ;;
     --user) USER_NAME="${2:-}"; shift 2 ;;
     --key) KEY="${2:-}"; shift 2 ;;
     --port) SSH_PORT="${2:-}"; shift 2 ;;
+    --host-fingerprint) HOST_FP="${2:-}"; shift 2 ;;
     --public-host) PUBLIC_HOST="${2:-}"; shift 2 ;;
     --apply) APPLY="--apply"; shift ;;
     --with-mqtt) EXTRA="$EXTRA --with-mqtt"; shift ;;
@@ -43,6 +45,7 @@ done
 [[ "$USER_NAME" =~ ^[A-Za-z_][A-Za-z0-9._-]*$ ]] || { echo "--user must be an account name" >&2; exit 2; }
 [[ -z "$PUBLIC_HOST" || "$PUBLIC_HOST" =~ ^[A-Za-z0-9.-]+$ ]] || { echo "--public-host must be a host name or IPv4 address" >&2; exit 2; }
 [[ -z "$SSH_PORT" || "$SSH_PORT" =~ ^[0-9]{1,5}$ ]] || { echo "--port must be a number" >&2; exit 2; }
+[[ -z "$HOST_FP" || "$HOST_FP" =~ ^SHA256:[A-Za-z0-9+/]{43}=?$ ]] || { echo "--host-fingerprint must look like SHA256:<43 base64 characters> (ssh-keygen -lf of the host key)" >&2; exit 2; }
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 SSH_OPTS=(-o BatchMode=yes -o ConnectTimeout=10)
 [[ -n "$KEY" ]] && SSH_OPTS+=(-i "$KEY")
@@ -53,6 +56,12 @@ PUBLIC_HOST="${PUBLIC_HOST:-$HOST}"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
+# With --host-fingerprint the connection is pinned to the host key that has this fingerprint (checked before anything is built): another machine at that address is refused.
+if [[ -n "$HOST_FP" ]]; then
+  "$ROOT/ARMOR-DEVOPS/scripts/ssh_host_pin.sh" "$HOST" "${SSH_PORT:-22}" "$HOST_FP" "$WORK/known_hosts" || exit 3
+  PIN_OPTS=(-o "UserKnownHostsFile=$WORK/known_hosts" -o StrictHostKeyChecking=yes)
+  SSH_OPTS+=("${PIN_OPTS[@]}"); SCP_OPTS+=("${PIN_OPTS[@]}")
+fi
 
 # Build in a clean copy: a developer may have the servers running from the
 # working trees, and a reinstall in place would fight them for locked files.

@@ -4,6 +4,7 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+- **The deploy to the CM5 can pin its SSH host key:** `deploy_cm5.sh --host-fingerprint SHA256:...` asks the host for its keys before anything is built, keeps only the key with that fingerprint in a temporary known-hosts file and then connects with strict host key checking, so another machine at that address is refused (`scripts/ssh_host_pin.sh`, with host tests that use stand-ins for `ssh-keyscan` and `ssh-keygen`). Without the option nothing changes.
 - **More tests of the public certificate mode and of the health check of the server image:** the proxy asks for a certificate from one variable (local authority by default), publishes the console and the check of the authority on the two ports only when asked and binds to the loopback otherwise; the health check of the server image is run as it is against a stand-in server (plain HTTP, a failing answer and nobody answering).
 - **The certificate of the LAN can be served by the proxy, and its guide speaks eight languages:** `caddy/Caddyfile.lan-issued` serves the certificate that `scripts/armor_lan_cert.py` issued (mounted read only through `ARMOR_LAN_CADDYFILE` and `ARMOR_LAN_CERT_DIR`; without them the proxy keeps Caddy's own authority), and `docs/LAN_CERTIFICATE.md` is translated into Spanish, German, French, Italian, Japanese, Chinese and Portuguese.
 
