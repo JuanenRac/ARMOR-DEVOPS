@@ -30,6 +30,17 @@ python scripts/package_component.py --sign-existing armor-server-0.5.7.tgz --upl
 
 名前からコンポーネントとバージョンが決まります。`--upload` は、そのリポジトリのリリース `v<バージョン>` に `.sig2` と `.sig` を追加します（`gh` が必要）。
 
+## GitHub Actions からの公開
+
+このリポジトリのパッケージはワークフロー `package-build.yml`(手動で起動、`dry_run` は既定でオン)が作ります。`devops` パッケージのスクリプトを2つのランナーで2回パックし、2つが1バイトまで同一でなければ停止し、`armor-devops-<バージョン>.tgz` を `SHA256SUMS` と証明付きでアップロードします。鍵は持ちません。成功した実行のアーティファクトから、保守担当者のマシンで署名してリリースを公開するには:
+
+```
+gh attestation verify armor-devops-<version>.tgz --repo JuanenRac/ARMOR-DEVOPS
+python scripts/package_component.py --sign-existing armor-devops-<version>.tgz --upload
+```
+
+リリースには保守ヘルパーが必要とする `armor-devops-<バージョン>.tgz`、`.sha256`、`.sig`、`.sig2` が含まれます。これらがないリリースでは、マシンは「このリポジトリにはリリースがない」と報告します。
+
 ## 緊急時の例外
 
 署名なしでパッケージをインストールしなければならない場合(鍵を紛失したときなど)は、マシンの `armor.maint.env`(`$PREFIX/etc/` 内)に次の行を書き、終わったら削除してください。

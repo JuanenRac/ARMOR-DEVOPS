@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+- **Every release can carry its package:** the workflow `package-build.yml` (started by hand, `dry_run` on by default) packs the `devops` scripts twice on two runners, stops unless both packages are the same bytes and uploads `armor-devops-<version>.tgz` with `SHA256SUMS` and an attestation, so a release is signed and published with the `.sha256`, `.sig` and `.sig2` the maintenance helper needs (a release without them made the machine say the repository has no release). `build-watch.yml` finds a build that never ends. The steps are in `docs/SIGNED_PACKAGES.md`.
+
 - **The doctor compares the contract versions as versions:** with `--server-url` it asks `GET /api/v1/contract` and names the nodes that are behind the server or do not say their version; a server without that route is asked the old way (`/api/v1/info` and `/api/v1/node-health`) and compared here. Before, it expected whole numbers while the server and the nodes say versions such as `0.8.0.7`, so it never compared anything against a real server. Four parts or three are compared part by part (`0.10.0` is above `0.9.9`).
 
 ## [0.7.4] - A floor for the test coverage: the workflow `coverage-floor.yml` runs the Python tests under coverage and fails when the lines or the branches fall below `docs/coverage_threshold.json`. Floor of scripts/: lines 89.5, branches 85.0 (measured

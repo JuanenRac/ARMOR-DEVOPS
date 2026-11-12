@@ -30,6 +30,17 @@ python scripts/package_component.py --sign-existing armor-server-0.5.7.tgz --upl
 
 文件名给出组件和版本；`--upload` 会把 `.sig2` 和 `.sig` 添加到其仓库的发布 `v<版本>`（需要 `gh`）。
 
+## 通过 GitHub Actions 发布
+
+本仓库的软件包由工作流 `package-build.yml` 构建(手动启动,`dry_run` 默认开启):在两台运行器上各打包一次 `devops` 包的脚本,若两个包不是逐字节相同则停止,并上传 `armor-devops-<版本>.tgz`、`SHA256SUMS` 和构建证明。它不持有任何密钥。要在维护者的机器上用一次成功运行的产物签名并发布版本:
+
+```
+gh attestation verify armor-devops-<version>.tgz --repo JuanenRac/ARMOR-DEVOPS
+python scripts/package_component.py --sign-existing armor-devops-<version>.tgz --upload
+```
+
+发布版本随后包含维护助手所需的 `armor-devops-<版本>.tgz`、`.sha256`、`.sig` 和 `.sig2`;缺少它们的发布会让机器报告该仓库没有发布。
+
 ## 紧急例外
 
 如果必须安装没有签名的软件包(例如密钥丢失),请在机器的 `armor.maint.env`(位于 `$PREFIX/etc/`)中写入下面这一行,事后再删除:

@@ -30,6 +30,17 @@ python scripts/package_component.py --sign-existing armor-server-0.5.7.tgz --upl
 
 The name gives the component and the version; `--upload` adds the `.sig2` and the `.sig` to the release `v<version>` of its repository (needs `gh`).
 
+## Publishing from GitHub Actions
+
+The package of this repository is built by the workflow `package-build.yml` (started by hand, `dry_run` on by default): it packs the scripts of the `devops` package twice on two runners, stops unless both packages are the same bytes, and uploads `armor-devops-<version>.tgz` with `SHA256SUMS` and an attestation. It holds no key. To sign and publish the release on the maintainer's machine, from the artifact of a green run:
+
+```
+gh attestation verify armor-devops-<version>.tgz --repo JuanenRac/ARMOR-DEVOPS
+python scripts/package_component.py --sign-existing armor-devops-<version>.tgz --upload
+```
+
+The release then carries `armor-devops-<version>.tgz`, `.sha256`, `.sig` and `.sig2`, which the maintenance helper needs; a release without them makes the machine report that the repository has no release.
+
 ## Emergency override
 
 If a package must be installed without a signature (a lost key, for example), write this line in the machine's `armor.maint.env` (in `$PREFIX/etc/`) and remove it afterwards:
