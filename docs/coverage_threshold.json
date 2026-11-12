@@ -1,0 +1,5 @@
+{
+  "about": "The floor of the test coverage of scripts/, measured by the workflow coverage-floor.yml: a figure a little under what the tests reach. Raise it only with a measured figure.",
+  "lines": 89.5,
+  "branches": 85.0
+}
