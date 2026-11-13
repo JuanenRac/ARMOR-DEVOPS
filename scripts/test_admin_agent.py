@@ -490,7 +490,7 @@ class AgentTest(unittest.TestCase):
             status, data = self.call("GET", "/v1/lan-ca")
             self.assertEqual((status, data["enabled"], data["authority"], data["certificate"], data["renew_days"]), (200, True, {"days_left": 3000, "sha256": "AA:BB:CC"}, {"days_left": 12, "sha256": "DD:EE:FF"}, 30))
             self.assertEqual(data["expiring"], ["certificate"], "the certificate is within renew_days of its end, the authority is not")
-            order = {"action": "setup", "ip": "192.168.0.180", "names": ["armor.lan"]}
+            order: dict[str, object] = {"action": "setup", "ip": "192.168.0.180", "names": ["armor.lan"]}
             self.assertEqual(self.call("POST", "/v1/lan-ca", order), (403, {"error": "totp_not_enrolled"}))
             totp.write_text(vector_key + "\n", encoding="ascii")
             try:
