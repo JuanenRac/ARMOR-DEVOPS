@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+- **A guide for opening port 18080 to the Internet, in the eight languages (`docs/PUBLIC_ACCESS*.md`):** what to check before forwarding the port (strong secrets, TLS, two-step sign-in, remote policy, the remote check), how the server option that allows requests from outside works (off by default) and what to read afterwards.
+
 ## [0.7.5] - Pinned SSH deploy, local LAN CA and package in every release
 
 - **The deploy to the CM5 can pin its SSH host key:** `deploy_cm5.sh --host-fingerprint SHA256:...` asks the host for its keys before anything is built, keeps only the key with that fingerprint in a temporary known-hosts file and then connects with strict host key checking, so another machine at that address is refused (`scripts/ssh_host_pin.sh`, with host tests that use stand-ins for `ssh-keyscan` and `ssh-keygen`). Without the option nothing changes.
