@@ -1,0 +1,185 @@
+name: Changed paths (reusable)
+
+# Tells a caller whether a change touches the paths that make an expensive job worth running, so that a
+# Windows, macOS or Gradle job can be skipped on a change that cannot affect it. A caller uses it with
+#
+#   jobs:
+#     changes:
+#       uses: JuanenRac/<REPOSITORY>/.github/workflows/changed-paths.yml@<tag or commit>
+#       with:
+#         paths: |
+#           app/**
+#           gradle/**
+#           !app/docs/**
+#         label: full-ci
+#     android:
+#       needs: changes
+#       if: ${{ needs.changes.outputs.matched == 'true' }}
+#       ...
+#
+# Inputs: paths (required; globs, one per line: ** crosses folders, * and ? do not, a line starting with ! removes
+# what it matches, a name without wildcards also matches the folder of that name, # starts a comment) and label
+# (a pull request label that forces the answer true, for example full-ci).
+# Outputs: matched ("true" when the job should run) and reason (label, paths, no-paths, manual for any event that
+# is not a push, a pull request or a merge group, or unknown-base).
+# It never skips by mistake: whenever the base of the change cannot be found it answers "true". A job skipped by
+# the `if` shows as skipped, not red; a rule that requires that job by name has to accept a skipped one.
+# test-changed-paths.yml tries the rules on throw-away repositories and makes one real call of this workflow.
+
+on:
+  workflow_call:
+    inputs:
+      paths:
+        description: "Globs of the paths that matter, one per line (** crosses folders, * does not; a line starting with ! removes what it matches; a name without wildcards also matches the folder of that name)"
+        type: string
+        required: true
+      label:
+        description: "A pull request label that forces the answer true (empty: no label)"
+        type: string
+        default: ""
+    outputs:
+      matched:
+        description: "'true' when the job should run, 'false' when the change cannot affect it"
+        value: ${{ jobs.changes.outputs.matched }}
+      reason:
+        description: "Why: label, paths, no-paths, manual (any event that is not a push or a pull request) or unknown-base"
+        value: ${{ jobs.changes.outputs.reason }}
+
+permissions:
+  contents: read
+
+jobs:
+  changes:
+    name: Which paths changed
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      matched: ${{ steps.decide.outputs.matched }}
+      reason: ${{ steps.decide.outputs.reason }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+          sparse-checkout: .github
+      - name: Compare the change with the paths
+        id: decide
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+          WANT_LABEL: ${{ inputs.label }}
+          PATTERNS: ${{ inputs.paths }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          GROUP_BASE: ${{ github.event.merge_group.base_sha }}
+        run: |
+          python3 -I - <<'PY'
+          # engine:begin
+          import json
+          import os
+          import re
+          import subprocess
+          import sys
+
+
+          def git(*args):
+              return subprocess.run(["git", *args], capture_output=True, text=True, check=False)
+
+
+          def to_regex(glob):
+              glob = glob.strip().removeprefix("./")
+              if glob.endswith("/"):
+                  glob += "**"
+              plain = not any(c in glob for c in "*?")
+              out = []
+              i = 0
+              while i < len(glob):
+                  if glob.startswith("**/", i):
+                      out.append("(?:.*/)?")
+                      i += 3
+                  elif glob.startswith("**", i):
+                      out.append(".*")
+                      i += 2
+                  elif glob[i] == "*":
+                      out.append("[^/]*")
+                      i += 1
+                  elif glob[i] == "?":
+                      out.append("[^/]")
+                      i += 1
+                  else:
+                      out.append(re.escape(glob[i]))
+                      i += 1
+              tail = "(?:/.*)?" if plain else ""
+              return re.compile("".join(out) + tail + r"\Z")
+
+
+          def parse(text):
+              keep, drop = [], []
+              for line in text.splitlines():
+                  line = line.strip()
+                  if not line or line.startswith("#"):
+                      continue
+                  (drop if line.startswith("!") else keep).append(to_regex(line.removeprefix("!")))
+              return keep, drop
+
+
+          def answer(matched, reason):
+              print(f"matched={str(matched).lower()} reason={reason}")
+              target = os.environ.get("GITHUB_OUTPUT")
+              if target:
+                  with open(target, "a", encoding="utf-8") as handle:
+                      handle.write(f"matched={str(matched).lower()}\nreason={reason}\n")
+
+
+          def known(sha):
+              if not re.fullmatch(r"[0-9a-f]{40}", sha or "") or set(sha) == {"0"}:
+                  return False
+              if git("cat-file", "-e", sha + "^{commit}").returncode == 0:
+                  return True
+              git("fetch", "--no-tags", "--depth=1", "origin", sha)
+              return git("cat-file", "-e", sha + "^{commit}").returncode == 0
+
+
+          def base_of(event):
+              if event == "pull_request":
+                  parents = git("rev-list", "--parents", "-n", "1", "HEAD").stdout.split()
+                  return parents[1] if len(parents) == 3 else None
+              before = os.environ.get("PUSH_BEFORE", "") if event == "push" else os.environ.get("GROUP_BASE", "")
+              return before if known(before) else None
+
+
+          def main():
+              keep, drop = parse(os.environ.get("PATTERNS", ""))
+              if not keep:
+                  print("The input 'paths' has no pattern.", file=sys.stderr)
+                  return 1
+              event = os.environ.get("EVENT_NAME", "")
+              want = os.environ.get("WANT_LABEL", "").strip()
+              try:
+                  labels = json.loads(os.environ.get("LABELS") or "[]") or []
+              except ValueError:
+                  labels = []
+              if want and want in labels:
+                  answer(True, "label")
+                  return 0
+              if event not in ("push", "pull_request", "merge_group"):
+                  answer(True, "manual")
+                  return 0
+              base = base_of(event)
+              if base is None:
+                  answer(True, "unknown-base")
+                  return 0
+              diff = git("diff", "--name-only", "--no-renames", "-z", base, "HEAD")
+              if diff.returncode != 0:
+                  answer(True, "unknown-base")
+                  return 0
+              for name in filter(None, diff.stdout.split("\0")):
+                  if any(r.match(name) for r in keep) and not any(r.match(name) for r in drop):
+                      answer(True, "paths")
+                      return 0
+              answer(False, "no-paths")
+              return 0
+
+
+          sys.exit(main())
+          # engine:end
+          PY
