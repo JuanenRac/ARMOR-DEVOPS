@@ -15,10 +15,15 @@ on:
 
 permissions: {}
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   notify:
     name: Request dashboard refresh
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     env:
       DASHBOARD_DISPATCH_TOKEN: ${{ secrets.ECOSYSTEM_DASHBOARD_DISPATCH_TOKEN }}
     steps:

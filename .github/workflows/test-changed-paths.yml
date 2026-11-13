@@ -1,0 +1,247 @@
+name: Test changed-paths
+
+# Tries the reusable workflow changed-paths.yml before any repository depends on it: the decision rules on
+# throw-away repositories (a pull request that touches the paths, one that does not, a label, a push, a
+# manual run) and one real call of the workflow on GitHub.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/changed-paths.yml"
+      - ".github/workflows/test-changed-paths.yml"
+  pull_request:
+    paths:
+      - ".github/workflows/changed-paths.yml"
+      - ".github/workflows/test-changed-paths.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
+
+jobs:
+  rules:
+    name: Decision rules on throw-away repositories
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Run the cases
+        run: |
+          python3 -I - <<'PY'
+          import os
+          import re
+          import subprocess
+          import sys
+          import tempfile
+          import textwrap
+          import unittest
+          from pathlib import Path
+
+          WORKFLOW = Path(".github/workflows/changed-paths.yml").resolve()
+          text = WORKFLOW.read_text(encoding="utf-8")
+          block = re.search(r"# engine:begin\n(.*?)# engine:end", text, re.S)
+          assert block, "the engine is not marked in changed-paths.yml"
+          ENGINE = textwrap.dedent(block.group(1))
+          ZERO = "0" * 40
+
+
+          def run(*cmd, cwd, env=None, check=True):
+              out = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, env=env, check=False)
+              if check and out.returncode:
+                  raise AssertionError(f"{cmd}: {out.stderr}")
+              return out
+
+
+          class Repo:
+              """A throw-away repository: main has a base commit; a branch changes some files."""
+
+              def __init__(self, root):
+                  self.root = root
+                  run("git", "init", "-q", "-b", "main", cwd=root)
+                  run("git", "config", "user.name", "test", cwd=root)
+                  run("git", "config", "user.email", "test@example.invalid", cwd=root)
+                  self.write("README.md", "base")
+                  self.write("src/app.py", "base")
+                  self.commit("base")
+                  self.base = self.head()
+
+              def write(self, name, body):
+                  path = Path(self.root) / name
+                  path.parent.mkdir(parents=True, exist_ok=True)
+                  path.write_text(body, encoding="utf-8")
+
+              def commit(self, message):
+                  run("git", "add", "-A", cwd=self.root)
+                  run("git", "commit", "-q", "-m", message, cwd=self.root)
+
+              def head(self):
+                  return run("git", "rev-parse", "HEAD", cwd=self.root).stdout.strip()
+
+              def merge_of(self, files):
+                  """Check out the merge commit of a branch that changed `files` (what a pull request builds)."""
+                  run("git", "checkout", "-q", "-b", "topic", self.base, cwd=self.root)
+                  for name in files:
+                      self.write(name, "changed")
+                  self.commit("topic")
+                  run("git", "checkout", "-q", "main", cwd=self.root)
+                  self.write("unrelated.txt", "main moved")
+                  self.commit("main moved")
+                  run("git", "merge", "-q", "--no-ff", "-m", "merge", "topic", cwd=self.root)
+
+
+          def decide(repo, patterns, event, **extra):
+              out_file = Path(repo.root) / "github_output.txt"
+              out_file.write_text("", encoding="utf-8")
+              env = {
+                  **{k: v for k, v in os.environ.items() if k in ("PATH", "SYSTEMROOT", "HOME")},
+                  "EVENT_NAME": event,
+                  "PATTERNS": patterns,
+                  "GITHUB_OUTPUT": str(out_file),
+                  **extra,
+              }
+              done = run(sys.executable, "-I", "-c", ENGINE, cwd=repo.root, env=env, check=False)
+              values = dict(line.split("=", 1) for line in out_file.read_text(encoding="utf-8").split("\n") if "=" in line)
+              return done.returncode, values.get("matched"), values.get("reason")
+
+
+          class Cases(unittest.TestCase):
+              def setUp(self):
+                  self._tmp = tempfile.TemporaryDirectory()
+                  self.addCleanup(self._tmp.cleanup)
+                  self.repo = Repo(self._tmp.name)
+
+              def test_pull_request_that_touches_the_path(self):
+                  self.repo.merge_of(["src/deep/new.py"])
+                  self.assertEqual(decide(self.repo, "src/**", "pull_request"), (0, "true", "paths"))
+
+              def test_pull_request_that_does_not_touch_the_path(self):
+                  self.repo.merge_of(["docs/guide.md"])
+                  self.assertEqual(decide(self.repo, "src/**", "pull_request"), (0, "false", "no-paths"))
+
+              def test_the_changes_of_main_after_the_branch_do_not_count(self):
+                  self.repo.merge_of(["docs/guide.md"])
+                  self.assertEqual(decide(self.repo, "unrelated.txt", "pull_request"), (0, "false", "no-paths"))
+
+              def test_label_forces_true(self):
+                  self.repo.merge_of(["docs/guide.md"])
+                  got = decide(self.repo, "src/**", "pull_request", LABELS='["full-ci","docs"]', WANT_LABEL="full-ci")
+                  self.assertEqual(got, (0, "true", "label"))
+
+              def test_another_label_does_not(self):
+                  self.repo.merge_of(["docs/guide.md"])
+                  got = decide(self.repo, "src/**", "pull_request", LABELS='["docs"]', WANT_LABEL="full-ci")
+                  self.assertEqual(got, (0, "false", "no-paths"))
+
+              def test_no_labels_at_all(self):
+                  self.repo.merge_of(["docs/guide.md"])
+                  got = decide(self.repo, "src/**", "pull_request", LABELS="null", WANT_LABEL="full-ci")
+                  self.assertEqual(got, (0, "false", "no-paths"))
+
+              def test_push_that_touches_and_one_that_does_not(self):
+                  self.repo.write("src/app.py", "second")
+                  self.repo.commit("touch")
+                  self.assertEqual(decide(self.repo, "src/**", "push", PUSH_BEFORE=self.repo.base), (0, "true", "paths"))
+                  self.repo.write("README.md", "second")
+                  self.repo.commit("readme")
+                  before = self.repo.head()
+                  self.repo.write("README.md", "third")
+                  self.repo.commit("readme again")
+                  self.assertEqual(decide(self.repo, "src/**", "push", PUSH_BEFORE=before), (0, "false", "no-paths"))
+
+              def test_push_without_a_known_base_runs_everything(self):
+                  self.repo.write("README.md", "second")
+                  self.repo.commit("readme")
+                  for before in (ZERO, "", "f" * 40, "not-a-sha"):
+                      self.assertEqual(decide(self.repo, "src/**", "push", PUSH_BEFORE=before), (0, "true", "unknown-base"), before)
+
+              def test_pull_request_checkout_without_a_merge_commit_runs_everything(self):
+                  self.repo.write("README.md", "second")
+                  self.repo.commit("readme")
+                  self.assertEqual(decide(self.repo, "src/**", "pull_request"), (0, "true", "unknown-base"))
+
+              def test_manual_and_scheduled_runs_run_everything(self):
+                  for event in ("workflow_dispatch", "schedule", "release"):
+                      self.assertEqual(decide(self.repo, "src/**", event), (0, "true", "manual"), event)
+
+              def test_merge_queue_uses_the_base_of_the_group(self):
+                  self.repo.write("src/app.py", "second")
+                  self.repo.commit("touch")
+                  self.assertEqual(decide(self.repo, "src/**", "merge_group", GROUP_BASE=self.repo.base), (0, "true", "paths"))
+
+              def test_the_patterns(self):
+                  self.repo.merge_of(["app/ui/main.kt", "gradle/wrapper.properties", "Makefile"])
+                  cases = [
+                      ("app/**", "true"),
+                      ("app", "true"),
+                      ("app/", "true"),
+                      ("app/*", "false"),
+                      ("app/*/main.kt", "true"),
+                      ("**/main.kt", "true"),
+                      ("**/*.kt", "true"),
+                      ("*.kt", "false"),
+                      ("Make?ile", "true"),
+                      ("gradle/**\n!gradle/**", "false"),
+                      ("app/**\n!app/ui/**", "false"),
+                      ("# a comment\n\n  app/**  ", "true"),
+                      ("ap", "false"),
+                      ("lib/**", "false"),
+                  ]
+                  for patterns, expected in cases:
+                      self.assertEqual(decide(self.repo, patterns, "pull_request")[1], expected, patterns)
+
+              def test_an_empty_list_of_paths_is_an_error(self):
+                  self.repo.merge_of(["src/a.py"])
+                  for patterns in ("", "  \n# only a comment\n!src/**"):
+                      self.assertEqual(decide(self.repo, patterns, "pull_request")[0], 1, patterns)
+
+
+          unittest.main(argv=["cases"], verbosity=2)
+          PY
+
+  call:
+    name: One real call of the workflow
+    uses: ./.github/workflows/changed-paths.yml
+    with:
+      paths: |
+        .github/workflows/changed-paths.yml
+        .github/workflows/test-changed-paths.yml
+      label: full-ci
+
+  verify:
+    name: The answer is what the event requires
+    needs: call
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      EVENT_NAME: ${{ github.event_name }}
+      MATCHED: ${{ needs.call.outputs.matched }}
+      REASON: ${{ needs.call.outputs.reason }}
+    steps:
+      - name: Check the outputs
+        run: |
+          echo "event=$EVENT_NAME matched=$MATCHED reason=$REASON"
+          case "$MATCHED" in true|false) ;; *) echo "matched is neither true nor false"; exit 1 ;; esac
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            [ "$MATCHED" = "true" ] && [ "$REASON" = "manual" ] || { echo "a manual run must answer true/manual"; exit 1; }
+          fi
+          # this workflow only starts when one of the two files changed, so a push or a pull request must match
+          case "$EVENT_NAME" in
+            push|pull_request)
+              case "$REASON" in
+                paths|label|unknown-base) [ "$MATCHED" = "true" ] || { echo "reason $REASON must match"; exit 1; } ;;
+                no-paths) echo "the change of these files must have been seen"; exit 1 ;;
+                *) echo "unexpected reason $REASON"; exit 1 ;;
+              esac ;;
+          esac
+          {
+            echo "### Changed paths"
+            echo
+            echo "matched \`$MATCHED\`, reason \`$REASON\`"
+          } >> "$GITHUB_STEP_SUMMARY"
