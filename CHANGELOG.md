@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+- **Studio can order the local authority of the LAN through the admin agent:** `GET /v1/lan-ca` (days left of the authority and of the certificate, and which are within `renew_days` of their end) and `POST /v1/lan-ca` with `action` `setup`, `renew` or `rotate` (always with the one-time code of the maintenance authenticator; the address must be a private IPv4 one and the names end in `.lan` or `.local`); the key of the authority is never read or sent. `armor_lan_cert.py status` also prints `renew_days`. Tests with a stand-in script.
+- **The guides no longer say that port 18080 is never opened to the Internet:** it can be forwarded with the hardened public mode (`network.public_access`, off by default), described in `PUBLIC_ACCESS.md`; the guides of the remote access and of the LAN certificate (eight languages) say so and the LAN guide has a section on ordering the authority from Studio.
 - **A guide for opening port 18080 to the Internet, in the eight languages (`docs/PUBLIC_ACCESS*.md`):** what to check before forwarding the port (strong secrets, TLS, two-step sign-in, remote policy, the remote check), how the server option that allows requests from outside works (off by default) and what to read afterwards.
 
 ## [0.7.5] - Pinned SSH deploy, local LAN CA and package in every release

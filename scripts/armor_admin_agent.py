@@ -42,6 +42,7 @@ SYSTEMCTL = os.environ.get("ARMOR_SYSTEMCTL", "systemctl")
 SCRIPT_DIR = Path(__file__).resolve().parent
 IDENTITY_SCRIPT = Path(os.environ.get("ARMOR_MQTT_IDENTITY", str(SCRIPT_DIR / "mqtt_identity.sh")))
 FIREWALL_SCRIPT = Path(os.environ.get("ARMOR_FIREWALL_SCRIPT", str(SCRIPT_DIR / "firewall_core.sh")))
+LAN_CERT_SCRIPT = Path(os.environ.get("ARMOR_LAN_CERT_SCRIPT", str(SCRIPT_DIR / "armor_lan_cert.py")))
 MAX_FILE_BYTES = 64 * 1024
 KEEP_BACKUPS = 5
 
@@ -518,6 +519,69 @@ def set_field_http(state: str) -> dict[str, object]:
     return {"ok": True, "state": state, **firewall_status()}
 
 
+# ---- the local certificate authority of the LAN --------------------------------------------------------------------------------------------------
+# Studio asks, always with a code, for the authority and the certificate of the machine's address to be made, renewed or replaced; armor_lan_cert.py does the work (the key of the
+# authority stays in its folder, mode 0600, and is never read, printed or sent here). The lifetimes and the days before the end at which it warns are in its settings file, lan-ca.json.
+LAN_CA_ACTIONS = ("setup", "renew", "rotate")
+LAN_NAME = re.compile(r"[a-z0-9][a-z0-9-]{0,40}\.(lan|local)")
+LAN_IP = re.compile(r"\d{1,3}(\.\d{1,3}){3}")
+
+
+def lan_cert(arguments: list[str]) -> subprocess.CompletedProcess[str]:
+    return subprocess.run([sys.executable, str(LAN_CERT_SCRIPT), *arguments], capture_output=True, text=True, timeout=120, check=False)
+
+
+def lan_ca_status() -> dict[str, object]:
+    """The state of the authority and of the certificate, with the warning when either is within `renew_days` of its end (the number is in lan-ca.json)."""
+    if not LAN_CERT_SCRIPT.is_file():
+        return {"installed": False, "approval": "totp" if totp_file().is_file() else "not_enrolled"}
+    done = lan_cert(["status"])
+    if done.returncode != 0:
+        raise Refused(502, "lan_ca_failed")
+    out: dict[str, object] = {"installed": True, "approval": "totp" if totp_file().is_file() else "not_enrolled", "enabled": False, "authority": None, "certificate": None}
+    renew = 30
+    for line in done.stdout.splitlines():
+        key, _, rest = line.partition(":")
+        rest = rest.strip()
+        if key == "switch":
+            out["enabled"] = rest == "on"
+        elif key == "renew_days" and rest.isdigit():
+            renew = int(rest)
+        elif key in ("authority", "certificate"):
+            found = re.fullmatch(r"(\d+) days left, SHA-256 ([0-9A-Fa-f:]+)", rest)
+            out[key] = {"days_left": int(found.group(1)), "sha256": found.group(2)} if found else None
+    out["renew_days"] = renew
+    out["expiring"] = [name for name in ("authority", "certificate") if isinstance(out[name], dict) and int(out[name]["days_left"]) <= renew]   # type: ignore[index]
+    return out
+
+
+def lan_ca_order(action: str, ip: str, names: object) -> dict[str, object]:
+    """`setup` makes the authority (and switches it on) and the certificate of `ip`; `renew` makes a new certificate with the same authority; `rotate` puts the authority aside and makes a new one,
+    after which every device has to install the new authority again."""
+    if action not in LAN_CA_ACTIONS:
+        raise Refused(422, "invalid_action")
+    if not LAN_CERT_SCRIPT.is_file():
+        raise Refused(409, "lan_ca_not_installed")
+    if not isinstance(ip, str) or not LAN_IP.fullmatch(ip):
+        raise Refused(422, "invalid_ip")
+    wanted = names if isinstance(names, list) else []
+    if len(wanted) > 4 or not all(isinstance(name, str) and LAN_NAME.fullmatch(name) for name in wanted):
+        raise Refused(422, "invalid_names")
+    if action == "rotate":
+        done = lan_cert(["remove"])
+        if done.returncode != 0:
+            raise Refused(502, "lan_ca_failed")
+    arguments = ["setup", "--ip", ip, "--enable"]
+    for name in wanted:
+        arguments += ["--name", str(name)]
+    if action == "renew":
+        arguments.append("--force")
+    done = lan_cert(arguments)
+    if done.returncode != 0:
+        raise Refused(422 if done.returncode == 2 else 502, "lan_ca_refused" if done.returncode == 2 else "lan_ca_failed")
+    return {"ok": True, "action": action, "devices_must_reinstall": action == "rotate", **lan_ca_status()}
+
+
 # ---- the socket ---------------------------------------------------------------------------------------------------------------------------------
 
 class Handler(http.server.BaseHTTPRequestHandler):
@@ -616,6 +680,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 require_sensitive(sensitive_given)
                 require_approval(self.headers.get(TOTP_HEADER, ""), enrolled_required=True)
                 self.reply(200, set_field_http(str(self.body().get("state", ""))))
+            elif method == "GET" and parts == ["lan-ca"]:
+                self.reply(200, lan_ca_status())
+            elif method == "POST" and parts == ["lan-ca"]:
+                require_sensitive(sensitive_given)
+                require_approval(self.headers.get(TOTP_HEADER, ""), enrolled_required=True)
+                data = self.body()
+                self.reply(200, lan_ca_order(str(data.get("action", "")), str(data.get("ip", "")), data.get("names", [])))
             else:
                 raise Refused(404, "not_found")
         except Refused as refusal:

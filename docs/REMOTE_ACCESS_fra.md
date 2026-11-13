@@ -2,6 +2,8 @@
 
 La règle : **une seule porte** et **un nom, jamais une adresse**. Le broker MQTT et les nœuds ne sont jamais publiés sur Internet.
 
+Le port 18080 du serveur peut aussi être redirigé directement, mais seulement avec le mode public durci (`network.public_access`, désactivé par défaut) : voir PUBLIC_ACCESS_fra.md.
+
 ## 1. Choisir la porte
 
 * **A. Un VPN (recommandé)** : WireGuard ou Tailscale sur la machine qui exécute le serveur. De l'extérieur, le téléphone rejoint le VPN et tout fonctionne comme à la maison (le panneau de chaque nœud aussi). Si votre fournisseur ne vous donne pas d'adresse publique à vous (CGNAT), Tailscale fonctionne sans rien ouvrir.
