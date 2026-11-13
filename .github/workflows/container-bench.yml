@@ -77,7 +77,8 @@ jobs:
 
   systemd-install:
     name: The installer and its units on a real systemd in a Debian container
-    runs-on: ubuntu-latest
+    # The Ubuntu 26 image confines /usr/sbin/mosquitto with a host AppArmor profile that denies the configuration under /opt/armor, inside this Debian container too; the CM5 is Debian, so the host kernel is pinned to the previous image.
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
       - name: Check out repository
