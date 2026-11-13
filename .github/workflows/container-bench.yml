@@ -121,7 +121,7 @@ jobs:
 
       - name: Start the container and run the bench
         run: |
-          docker run -d --name armorsd --privileged --cgroupns=host -v /sys/fs/cgroup:/sys/fs/cgroup:rw --tmpfs /run --tmpfs /run/lock             -v "$PWD:/repo:ro" -v "$PWD/server:/server:ro" -v "$PWD/studio:/studio:ro" armor-systemd
+          docker run -d --name armorsd --privileged --security-opt apparmor=unconfined --cgroupns=host -v /sys/fs/cgroup:/sys/fs/cgroup:rw --tmpfs /run --tmpfs /run/lock             -v "$PWD:/repo:ro" -v "$PWD/server:/server:ro" -v "$PWD/studio:/studio:ro" armor-systemd
           docker exec armorsd bash /repo/scripts/systemd_bench.sh
 
       - name: What the container logged, if the bench failed
