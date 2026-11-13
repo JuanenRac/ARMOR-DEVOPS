@@ -2,6 +2,8 @@
 
 La regla: **una sola puerta** y **un nombre, nunca una dirección**. El broker MQTT y los nodos no se publican nunca en Internet.
 
+El puerto 18080 del servidor también puede reenviarse directamente, pero solo con el modo público endurecido (`network.public_access`, desactivado por defecto): véase PUBLIC_ACCESS_spa.md.
+
 ## 1. Elige la puerta
 
 * **A. Una VPN (recomendado)**: WireGuard o Tailscale en la máquina que ejecuta el servidor. Desde fuera el móvil entra en la VPN y todo funciona como en casa (también el panel de cada nodo). Si tu operador no te da una dirección pública propia (CGNAT), Tailscale funciona sin abrir nada.

@@ -1,6 +1,6 @@
 # Un certificado para la dirección de la máquina en la red local
 
-Este es el camino hacia un `https://192.168.0.180` en el que confían un teléfono o un navegador, con una autoridad propia de la instalación y sin ningún nombre en el DNS público. Es **opcional y está apagado**: el perfil `tls` (un nombre, la autoridad propia de Caddy, véase HTTPS_PAIRING.md) y el perfil `lan-ca` siguen funcionando como están. El puerto 18080 del servidor **nunca se abre a Internet**: se llega a él desde la red local o a través de la VPN, y nada de esta guía lo cambia.
+Este es el camino hacia un `https://192.168.0.180` en el que confían un teléfono o un navegador, con una autoridad propia de la instalación y sin ningún nombre en el DNS público. Es **opcional y está apagado**: el perfil `tls` (un nombre, la autoridad propia de Caddy, véase HTTPS_PAIRING.md) y el perfil `lan-ca` siguen funcionando como están. El puerto 18080 del servidor se alcanza desde la red local o a través de la VPN, y nada de esta guía lo abre a Internet. Si decides reenviarlo en el router, sigue antes PUBLIC_ACCESS.md: el modo público endurecido (`network.public_access`, desactivado por defecto) es lo que permite las peticiones de fuera.
 
 ## Qué crea
 
@@ -29,3 +29,7 @@ La autoridad está limitada por una restricción de nombres dentro de su propio 
 * Quien tenga `ca.key` puede emitir certificados que los dispositivos que confían en la autoridad aceptan, para direcciones privadas: guarda la carpeta para ti, haz copia de seguridad como de cualquier otro secreto y no la pongas nunca en un repositorio.
 * `remove` aparta la carpeta (`lan-ca.removed-<hora>`); no se borra nada. Los dispositivos que instalaron la autoridad antigua deben quitarla.
 * Nada de esto se ha ejecutado en la CM5: las pruebas crean una autoridad y un certificado en una carpeta desechable con openssl y comprueban que la cadena se verifica para la dirección y no para otra.
+
+## Desde Studio
+
+Con el agente de administración instalado, un administrador puede crear, renovar y sustituir la autoridad desde Studio (Configuración > Seguridad), siempre con el código de un solo uso del autenticador de mantenimiento: `POST /v1/lan-ca` del agente con `action` `setup` (autoridad y certificado para la dirección; activa la opción), `renew` (un certificado nuevo con la misma autoridad) o `rotate` (la autoridad se aparta y se crea una nueva: todos los dispositivos deben instalarla de nuevo). `GET /v1/lan-ca` indica los días que quedan de la autoridad y del certificado y lista en `expiring` los que están a `renew_days` de su fin, lo que Studio muestra como aviso. El agente nunca lee, envía ni imprime la clave de la autoridad; las duraciones y `renew_days` siguen en `lan-ca.json`.

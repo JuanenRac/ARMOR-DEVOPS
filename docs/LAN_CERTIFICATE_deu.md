@@ -1,6 +1,6 @@
 # Ein Zertifikat für die Adresse des Rechners im lokalen Netzwerk
 
-Dies ist der Weg zu einem `https://192.168.0.180`, dem ein Telefon oder ein Browser vertraut, mit einer eigenen Zertifizierungsstelle der Installation und ohne Namen im öffentlichen DNS. Er ist **optional und ausgeschaltet**: Das Profil `tls` (ein Name, die eigene Stelle von Caddy, siehe HTTPS_PAIRING.md) und das Profil `lan-ca` funktionieren weiter wie bisher. Port 18080 des Servers wird **nie ins Internet geöffnet**: Er ist aus dem lokalen Netzwerk oder über das VPN erreichbar, und nichts in dieser Anleitung ändert das.
+Dies ist der Weg zu einem `https://192.168.0.180`, dem ein Telefon oder ein Browser vertraut, mit einer eigenen Zertifizierungsstelle der Installation und ohne Namen im öffentlichen DNS. Er ist **optional und ausgeschaltet**: Das Profil `tls` (ein Name, die eigene Stelle von Caddy, siehe HTTPS_PAIRING.md) und das Profil `lan-ca` funktionieren weiter wie bisher. Port 18080 des Servers ist aus dem lokalen Netzwerk oder über das VPN erreichbar, und nichts in dieser Anleitung öffnet ihn ins Internet. Wenn Sie ihn im Router weiterleiten wollen, folgen Sie zuerst PUBLIC_ACCESS.md: Der gehärtete öffentliche Modus (`network.public_access`, standardmäßig aus) erlaubt erst Anfragen von außen.
 
 ## Was erzeugt wird
 
@@ -29,3 +29,7 @@ Die Stelle ist durch eine Namensbeschränkung in ihrem eigenen Zertifikat begren
 * Wer `ca.key` besitzt, kann Zertifikate für private Adressen ausstellen, die die Geräte akzeptieren, die der Stelle vertrauen: Behalten Sie den Ordner für sich, sichern Sie ihn wie jedes andere Geheimnis und legen Sie ihn nie in ein Repository.
 * `remove` legt den Ordner beiseite (`lan-ca.removed-<Zeit>`); nichts wird gelöscht. Geräte, die die alte Stelle installiert haben, sollten sie entfernen.
 * Nichts davon lief auf dem CM5: Die Tests erzeugen mit openssl in einem Wegwerfordner eine Stelle und ein Zertifikat und prüfen, dass die Kette für die Adresse gilt und nicht für eine andere.
+
+## Aus Studio
+
+Ist der Admin-Agent installiert, kann ein Administrator die Zertifizierungsstelle in Studio (Konfiguration > Sicherheit) anlegen, erneuern und ersetzen, immer mit dem Einmalcode des Wartungs-Authenticators: `POST /v1/lan-ca` des Agenten mit `action` `setup` (Stelle und Zertifikat für die Adresse; schaltet die Option ein), `renew` (ein neues Zertifikat unter derselben Stelle) oder `rotate` (die Stelle wird beiseitegelegt und eine neue erstellt: Jedes Gerät muss sie neu installieren). `GET /v1/lan-ca` nennt die verbleibenden Tage von Stelle und Zertifikat und listet in `expiring` die auf, die höchstens `renew_days` vor dem Ende stehen; Studio zeigt sie als Warnung. Der Agent liest, sendet oder druckt den Schlüssel der Stelle nie; Laufzeiten und `renew_days` bleiben in `lan-ca.json`.

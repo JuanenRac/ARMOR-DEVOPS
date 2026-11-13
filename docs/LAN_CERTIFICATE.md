@@ -1,6 +1,6 @@
 # A certificate for the address of the machine on the local network
 
-This is the way to an `https://192.168.0.180` that a phone or a browser trusts, with an authority of the installation's own and no name in the public DNS. It is **optional and off**: the `tls` profile (a name, Caddy's own authority, see HTTPS_PAIRING.md) and the `lan-ca` profile keep working as they are. Port 18080 of the server is **never opened to the Internet**: it is reached from the local network or through the VPN, and nothing in this guide changes that.
+This is the way to an `https://192.168.0.180` that a phone or a browser trusts, with an authority of the installation's own and no name in the public DNS. It is **optional and off**: the `tls` profile (a name, Caddy's own authority, see HTTPS_PAIRING.md) and the `lan-ca` profile keep working as they are. Port 18080 of the server is reached from the local network or through the VPN, and nothing in this guide opens it to the Internet. If you decide to forward it on the router, follow PUBLIC_ACCESS.md first: the hardened public mode (`network.public_access`, off by default) is what allows requests from outside.
 
 ## What it makes
 
@@ -29,3 +29,7 @@ The authority is limited by a name constraint inside its own certificate: it can
 * Whoever holds `ca.key` can issue certificates that the devices trusting the authority accept, for private addresses: keep the folder to yourself, back it up like any other secret, and never put it in a repository.
 * `remove` puts the folder aside (`lan-ca.removed-<time>`); nothing is deleted. Devices that installed the old authority should remove it.
 * Nothing here has run on the CM5: the tests make an authority and a certificate in a throwaway folder with openssl and check that the chain verifies for the address and not for another.
+
+## From Studio
+
+With the admin agent installed, an administrator can make, renew and replace the authority from Studio (Configuration > Security), always with the one-time code of the maintenance authenticator: `POST /v1/lan-ca` of the agent with `action` `setup` (authority and certificate for the address; switches the option on), `renew` (a new certificate under the same authority) or `rotate` (the authority is put aside and a new one made: every device must install it again). `GET /v1/lan-ca` says how many days are left of the authority and of the certificate and lists in `expiring` the ones within `renew_days` of their end, which Studio shows as a warning. The key of the authority is never read, sent or printed by the agent; the lifetimes and `renew_days` stay in `lan-ca.json`.

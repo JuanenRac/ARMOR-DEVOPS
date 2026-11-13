@@ -2,6 +2,8 @@
 
 Languages: [Español](REMOTE_ACCESS_spa.md) · [Deutsch](REMOTE_ACCESS_deu.md) · [Français](REMOTE_ACCESS_fra.md) · [Italiano](REMOTE_ACCESS_ita.md) · [日本語](REMOTE_ACCESS_jpn.md) · [中文](REMOTE_ACCESS_zho.md) · [Português](REMOTE_ACCESS_por.md)
 
+Port 18080 of the server can also be forwarded directly, but only with the hardened public mode (`network.public_access`, off by default): see PUBLIC_ACCESS.md.
+
 The rule: **one door only**, and a **name, never an address**. The MQTT broker and the nodes are never published to the Internet.
 
 ## 1. Choose the door

@@ -2,6 +2,8 @@
 
 Die Regel: **nur eine Tür** und **ein Name, nie eine Adresse**. Der MQTT-Broker und die Knoten werden nie im Internet veröffentlicht.
 
+Der Port 18080 des Servers kann auch direkt weitergeleitet werden, aber nur mit dem gehärteten öffentlichen Modus (`network.public_access`, standardmäßig aus): siehe PUBLIC_ACCESS_deu.md.
+
 ## 1. Die Tür wählen
 
 * **A. Ein VPN (empfohlen)**: WireGuard oder Tailscale auf dem Rechner mit dem Server. Von außen tritt das Handy dem VPN bei und alles funktioniert wie zu Hause (auch das Panel jedes Knotens). Hat Ihr Anbieter keine eigene öffentliche Adresse (CGNAT), funktioniert Tailscale ohne etwas zu öffnen.

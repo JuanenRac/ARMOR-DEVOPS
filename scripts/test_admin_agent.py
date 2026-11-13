@@ -474,6 +474,52 @@ class AgentTest(unittest.TestCase):
                 self.agent._totp_last_counter[0] = 0
         self.assertEqual(log.read_text(encoding="utf-8").split("\n")[:2], ["field-http on", "field-http off"])
 
+    def test_the_lan_authority_orders_need_the_authenticator_check_their_input_and_never_show_a_key(self) -> None:
+        totp = Path(self.tmp.name) / "lan.totp"
+        log = Path(self.tmp.name) / "lan.log"
+        stand_in = Path(self.tmp.name) / "lan_cert_stand_in.py"
+        stand_in.write_text("import os, sys\n"
+                            f"open({str(log)!r}, 'a').write(' '.join(sys.argv[1:]) + '\\n')\n"
+                            "if os.environ.get('FAIL_LAN') == '1': sys.exit(3)\n"
+                            "if sys.argv[1] == 'status':\n"
+                            "    print('switch: on'); print('renew_days: 30')\n"
+                            "    print('authority: 3000 days left, SHA-256 AA:BB:CC'); print('certificate: 12 days left, SHA-256 DD:EE:FF')\n", encoding="utf-8")
+        vector_key = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"
+        self.agent.configure_sensitive("open", "")
+        with mock.patch.dict(os.environ, {"ARMOR_MAINT_TOTP_FILE": str(totp)}), mock.patch.object(self.agent, "LAN_CERT_SCRIPT", stand_in):
+            status, data = self.call("GET", "/v1/lan-ca")
+            self.assertEqual((status, data["enabled"], data["authority"], data["certificate"], data["renew_days"]), (200, True, {"days_left": 3000, "sha256": "AA:BB:CC"}, {"days_left": 12, "sha256": "DD:EE:FF"}, 30))
+            self.assertEqual(data["expiring"], ["certificate"], "the certificate is within renew_days of its end, the authority is not")
+            order: dict[str, object] = {"action": "setup", "ip": "192.168.0.180", "names": ["armor.lan"]}
+            self.assertEqual(self.call("POST", "/v1/lan-ca", order), (403, {"error": "totp_not_enrolled"}))
+            totp.write_text(vector_key + "\n", encoding="ascii")
+            try:
+                now = int(time.time() // 30)
+                def ask(body: dict[str, object]) -> tuple[int, Any]:
+                    self.agent._totp_last_counter[0] = 0
+                    return self.call("POST", "/v1/lan-ca", body, extra={"X-Armor-Maint-Totp": self.agent.totp_code(vector_key, now)})
+                self.agent._totp_last_counter[0] = 0
+                self.assertEqual(self.call("POST", "/v1/lan-ca", order), (401, {"error": "totp_required"}))
+                self.assertEqual(ask({**order, "action": "burn"}), (422, {"error": "invalid_action"}))
+                self.assertEqual(ask({**order, "ip": "192.168.0.1; rm -rf /"}), (422, {"error": "invalid_ip"}))
+                self.assertEqual(ask({**order, "names": ["armor.com"]}), (422, {"error": "invalid_names"}))
+                self.assertEqual(ask({**order, "names": ["a.lan"] * 5}), (422, {"error": "invalid_names"}))
+                self.assertFalse(log.exists() and "setup" in log.read_text(encoding="utf-8"), "a refused order runs nothing")
+                status, data = ask(order)
+                self.assertEqual((status, data["ok"], data["devices_must_reinstall"]), (200, True, False))
+                status, data = ask({**order, "action": "renew"})
+                self.assertEqual((status, data["action"]), (200, "renew"))
+                status, data = ask({**order, "action": "rotate"})
+                self.assertEqual((status, data["devices_must_reinstall"]), (200, True))
+                with mock.patch.dict(os.environ, {"FAIL_LAN": "1"}):
+                    self.assertEqual(ask(order), (502, {"error": "lan_ca_failed"}))
+            finally:
+                totp.unlink(missing_ok=True)
+                self.agent._totp_last_counter[0] = 0
+        lines = [line for line in log.read_text(encoding="utf-8").splitlines() if not line.startswith("status")]
+        self.assertEqual(lines[:4], ["setup --ip 192.168.0.180 --enable --name armor.lan", "setup --ip 192.168.0.180 --enable --name armor.lan --force", "remove", "setup --ip 192.168.0.180 --enable --name armor.lan"])
+        self.assertNotIn("KEY", log.read_text(encoding="utf-8").upper().replace("--KEY", ""), "no key is passed or printed")
+
     def test_the_socket_is_not_open_to_everybody(self) -> None:
         mode = stat.S_IMODE(os.stat(self.sock).st_mode)
         self.assertEqual(mode & 0o007, 0, oct(mode))                                # nothing for "others"

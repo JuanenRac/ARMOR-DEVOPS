@@ -244,6 +244,7 @@ def command_status(_: argparse.Namespace) -> int:
     folder = base_dir()
     settings = read_settings(folder)
     print(f"switch: {'on' if settings['enabled'] else 'off'}")
+    print(f"renew_days: {settings['renew_days']}")
     for label, name in (("authority", "ca.crt"), ("certificate", "leaf.crt")):
         path = folder / name
         if path.is_file():

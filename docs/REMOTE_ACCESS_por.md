@@ -2,6 +2,8 @@
 
 A regra: **uma só porta** e **um nome, nunca um endereço**. O broker MQTT e os nós nunca se publicam na Internet.
 
+A porta 18080 do servidor também pode ser reencaminhada diretamente, mas só com o modo público reforçado (`network.public_access`, desativado por predefinição): ver PUBLIC_ACCESS_por.md.
+
 ## 1. Escolha a porta
 
 * **A. Uma VPN (recomendado)**: WireGuard ou Tailscale na máquina que executa o servidor. De fora o telemóvel entra na VPN e tudo funciona como em casa (também o painel de cada nó). Se o seu operador não lhe dá um endereço público próprio (CGNAT), o Tailscale funciona sem abrir nada.
