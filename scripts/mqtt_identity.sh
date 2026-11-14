@@ -67,6 +67,7 @@ role_lines() {
       echo "topic readwrite armor/device/$NAME/#"
       echo "topic write armor/solar/$NAME/+/state"
       echo "topic write armor/solar/$NAME/maintenance/result"
+      echo "topic write armor/solar/$NAME/system"
       echo "topic write armor/radar/$NAME/events"
       echo "topic read armor/radar/$NAME/control/armed"
       echo "topic read armor/control/$NAME/command"
@@ -89,6 +90,7 @@ role_lines() {
     solar-node)
       echo "topic write armor/solar/$NAME/+/state"
       echo "topic write armor/solar/$NAME/maintenance/result"
+      echo "topic write armor/solar/$NAME/system"
       echo "topic write armor/health/$NAME"
       echo "topic read armor/control/$NAME/command"
       echo "topic read armor/control/all/command"
