@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [0.7.6] - Public access guide, local LAN authority orders, solar summary access and workflow time limits
+
 - **A node may publish its own `armor/solar/<name>/system` summary (and nobody else's):** the table of the access lines (`node_roles.json`, copied from ARMOR-COMMON) gives the line to the solar and the field kinds, `mqtt_identity.sh` is regenerated from it, the example ACL shows it and a test of the enforcement checks that the server cannot write it and that another node's topic stays closed.
 - **The floor of the test coverage rises to what the run measures:** 90.4 % of the lines (it was 89.5) and 85.4 % of the branches (it was 85.0), against 90.42 % and 85.50 % measured.
 - **A reusable workflow to skip expensive jobs on changes that cannot affect them:** `changed-paths.yml` takes globs (and an optional pull request label that forces the answer) and tells a caller, with `matched` and `reason`, whether a change touches them; it reads two commits with a sparse checkout, asks for `contents: read` only, and answers `true` whenever it cannot find what the change is compared with. `test-changed-paths.yml` tries its rules on throw-away repositories (a pull request that touches the paths and one that does not, the label, a push, a manual run, the patterns) and makes one real call. No workflow of the family calls it yet.
