@@ -13,6 +13,7 @@
         "topic readwrite armor/device/{name}/#",
         "topic write armor/solar/{name}/+/state",
         "topic write armor/solar/{name}/maintenance/result",
+        "topic write armor/solar/{name}/system",
         "topic write armor/radar/{name}/events",
         "topic read armor/radar/{name}/control/armed",
         "topic read armor/control/{name}/command",
@@ -39,6 +40,7 @@
       "topics": [
         "topic write armor/solar/{name}/+/state",
         "topic write armor/solar/{name}/maintenance/result",
+        "topic write armor/solar/{name}/system",
         "topic write armor/health/{name}",
         "topic read armor/control/{name}/command",
         "topic read armor/control/all/command",

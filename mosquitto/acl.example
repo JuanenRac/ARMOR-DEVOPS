@@ -56,6 +56,7 @@ topic readwrite armor/device/#
 # user solar-node-solar-1
 # topic write armor/solar/solar-1/+/state
 # topic write armor/solar/solar-1/maintenance/result
+# topic write armor/solar/solar-1/system
 # topic write armor/health/solar-1
 # topic read armor/control/solar-1/command
 # topic read armor/control/all/command

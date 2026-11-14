@@ -110,6 +110,14 @@ class MaintenanceCommandIsTheServers(unittest.TestCase):
         self.assertFalse(broker.may(user, "write", "armor/solar/other/inverter-1/state"))
         self.assertTrue(broker.may(user, "read", "armor/solar/sol-1/maintenance/command"), "it must still read the order the server sends")
 
+    def test_a_node_publishes_its_own_system_summary_and_nobody_elses(self) -> None:
+        broker = self.broker()
+        for user, own in (("solar-node-sol-1", "sol-1"), ("field-node-fld-1", "fld-1")):
+            self.assertTrue(broker.may(user, "write", f"armor/solar/{own}/system"), user)
+            self.assertFalse(broker.may(user, "write", "armor/solar/other/system"), user)
+        self.assertFalse(broker.may("armor-server", "write", "armor/solar/sol-1/system"), "the summary is the node's, not the server's")
+        self.assertTrue(broker.may("armor-server", "read", "armor/solar/sol-1/system"))
+
     def test_a_field_node_cannot_publish_the_order_either(self) -> None:
         broker = self.broker()
         user = "field-node-fld-1"
