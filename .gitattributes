@@ -9,3 +9,8 @@
 mosquitto/* text eol=lf
 caddy/* text eol=lf
 scripts/*.acl text eol=lf
+
+# Two pull requests that add an entry to the CHANGELOG at the same place do not conflict: git keeps both entries when it merges or rebases.
+CHANGELOG.md merge=union
+CHANGELOG_*.md merge=union
+CHANGELOG.*.md merge=union
