@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import base64
+import http.client
 import json
 import os
 import shutil
@@ -46,7 +47,6 @@ class MaintenanceGapTests(base.MaintenanceTest):
         self.server.server_close()  # type: ignore[attr-defined]
 
     def call(self, method: str, path: str, body: object = None, token: str | None = TOKEN, headers: dict[str, str] | None = None) -> tuple[int, dict]:
-        connection = base.UnixConnection(self.socket_path)
         sent = dict(headers or {})
         if token is not None:
             sent["X-Armor-Maint-Token"] = token
@@ -54,10 +54,17 @@ class MaintenanceGapTests(base.MaintenanceTest):
         if body is not None:
             payload = body if isinstance(body, str) else json.dumps(body)
             sent["Content-Type"] = "application/json"
-        connection.request(method, path, body=payload, headers=sent)
-        response = connection.getresponse()
-        raw = response.read()
-        return response.status, json.loads(raw) if raw else {}
+        for attempt in range(3):          # a refusal that does not read the body can close the socket while the client still writes: ask again (every call here is safe to repeat)
+            try:
+                connection = base.UnixConnection(self.socket_path)
+                connection.request(method, path, body=payload, headers=sent)
+                response = connection.getresponse()
+                raw = response.read()
+                return response.status, json.loads(raw) if raw else {}
+            except (BrokenPipeError, ConnectionResetError, http.client.RemoteDisconnected):
+                if attempt == 2:
+                    raise
+        raise AssertionError("unreachable")
 
     def helper(self, name: str, text: str) -> Path:
         script = self.prefix / "bin" / name
@@ -107,12 +114,12 @@ class MaintenanceGapTests(base.MaintenanceTest):
         self.assertEqual((status, body["error"]), (400, "invalid_json"))
 
     def test_a_body_over_the_limit_is_refused(self) -> None:
-        status, body = self.call("POST", "/v1/staging", body=json.dumps({"enabled": True, "pad": "x" * 70000}))
+        status, body = self.call("POST", "/v1/staging", headers={"Content-Length": "70000"})        # the refusal comes from the header: the body is never sent
         self.assertEqual((status, body["error"]), (413, "body_too_large"))
 
     def test_a_negative_or_broken_length_is_refused(self) -> None:
         for length in ("-5", "abc"):
-            status, body = self.call("POST", "/v1/staging", body="{}", headers={"Content-Length": length})
+            status, body = self.call("POST", "/v1/staging", headers={"Content-Length": length})
             self.assertEqual((status, body.get("error")), (400, "bad_length"), length)
 
     # ---- updates and rollbacks ----
