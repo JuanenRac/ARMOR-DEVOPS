@@ -443,10 +443,9 @@ class MaintenanceGapTests(base.MaintenanceTest):
     def test_a_sensitive_call_wants_the_code_when_a_secret_is_enrolled(self) -> None:
         method, parts = next(iter(self.agent.SENSITIVE_ROUTES))
         path = Path(self.tmp.name) / "guard.totp"
-        secret = base64.b32encode(b"12345678901234567890").decode()
-        path.write_text(secret + "\n", encoding="ascii")
         self.agent._totp_last_counter[0] = 0
         with mock.patch.dict(os.environ, {"ARMOR_MAINT_TOTP_FILE": str(path)}):
+            self.agent.totp_enroll()                       # the agent itself makes and stores the random value: the test writes nothing
             os.environ.pop("ARMOR_MAINT_PEER_UIDS", None)
             with self.assertRaises(self.agent.Refused) as caught:
                 self.agent.guard_sensitive(method, list(parts), None, "")
