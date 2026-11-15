@@ -21,6 +21,7 @@
   <img src="https://img.shields.io/badge/License-GPL%203.0--or--later-blue.svg" alt="GPL 3.0 oder neuer">
   <img src="https://img.shields.io/badge/Deploy-Docker%20Compose-2496ed.svg" alt="Deploy">
   <img src="https://img.shields.io/badge/Bench-systemd-FFB020.svg" alt="Bench">
+  <img src="https://img.shields.io/badge/Tests-494-00E5FF.svg" alt="Tests">
   <img src="https://img.shields.io/badge/Version-0.7.6-0f6cbd.svg" alt="Version">
   <img src="https://img.shields.io/badge/Maturity-established-2EA44F.svg" alt="Reifegrad">
 </p>
@@ -167,10 +168,13 @@ Siehe die [Grenze der Bereitstellung](docs/DEPLOYMENT_BOUNDARY.md) und den [Prü
 | `test_backup.sh`  `test_env_and_restore.sh` | der Hin- und Rückweg von Sicherung und Wiederherstellung, die Geheimnisse und die Umgebungsprüfung |
 | `test_acl_single_source.py` | die Broker-Regeln des Servers: eine Quelle, dieselbe im Beispiel, im Installer und bei den Topics, die ARMOR-SERVER wirklich nutzt |
 | `test_node_roles.py` | was mqtt_identity.sh für jede Art von Identität schreibt, ist die Tabelle von ARMOR-COMMON (eine dagegen geprüfte Kopie) |
+| `test_topology.py` | jeder Dienst der Compose-Dateien und der TLS-Schicht: Härtung, Limits, Netze, Ports, Volumes, Geheimnisse, Variablen, Prüfungen sowie die Konfiguration von Broker und Proxy |
+| `test_repo_consistency.py` | die Skripte, Datendateien, Workflows, die acht READMEs und die Dokumente stimmen untereinander und mit dem Register der Familie überein |
+| `test_maintenance_gaps.py` | die Routen des Wartungshelfers einzeln, die Einmalcodes und die erlaubten Benutzer (braucht Linux) |
 | `test_compose.sh`  `validate-compose.sh` | die Compose-Topologie und ihr TLS-Profil, mit Docker Engine in WSL gebaut und ausgeführt |
 | `test_firewall.sh`  `test_install_plan.sh`  `test_mqtt_identity.sh`  `test_mqtt_tls.sh`  `test_tls_check.sh`  `test_wireguard.sh`  `test_ddns.sh` | die Firewall, der Plan des Installers, die Broker-Identitäten, MQTT über TLS, die TLS-Prüfung, das VPN und der dynamische Name |
 
-Die Python-Tests laufen mit `python -m unittest discover -s scripts -p "test_*.py"`; unter Windows können die drei, die Unix-Sockets brauchen, nicht laufen. Die Skripte brauchen Bash, WSL, Docker oder root und müssen unter Linux laufen. Eine einzige Testzahl gibt es noch nicht: Project status sagt, was gelaufen ist. GitHub Actions führt bei jedem Push und Pull Request die A.R.M.O.R.-Basis aus: die Prüfung von Manifest, Version, Änderungsprotokoll und README-Parität, dann den eigenen Build und die eigenen Tests des Projekts.
+Die Python-Tests laufen mit `python -m unittest discover -s scripts -p "test_*.py"`; unter Windows können die, die Unix-Sockets brauchen, nicht laufen. Die Skripte brauchen Bash, WSL, Docker oder root und müssen unter Linux laufen. Es gibt 494 Python-Tests, dazu die Shell-Tests, und der Workflow Coverage floor hält die Abdeckung von `scripts/` über einer Untergrenze; Project status sagt, was gelaufen ist. GitHub Actions führt bei jedem Push und Pull Request die A.R.M.O.R.-Basis aus: die Prüfung von Manifest, Version, Änderungsprotokoll und README-Parität, dann den eigenen Build und die eigenen Tests des Projekts.
 
 ## 🏗️ Build und Veröffentlichung
 
@@ -231,7 +235,7 @@ ARMOR-DEVOPS/
 
 * Eine saubere Installation auf einer Maschine, die das Projekt nie sah, ist nicht belegt.
 * Die ganze Docker-Topologie wurde mit Docker Engine in WSL gebaut und ausgeführt, aber nicht auf ihrem Ziel, dem Jetson.
-* Es gibt keine einzige Testzahl, und die Tests der zwei Helfer brauchen Linux.
+* Die Tests der zwei Helfer und der Wartungsrouten brauchen Linux (Unix-Sockets).
 * Keine unabhängige Sicherheitsprüfung.
 
 **Als Nächstes**
