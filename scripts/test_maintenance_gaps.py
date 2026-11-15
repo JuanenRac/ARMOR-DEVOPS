@@ -117,7 +117,8 @@ class MaintenanceGapTests(base.MaintenanceTest):
 
     # ---- updates and rollbacks ----
     def test_an_update_without_components_is_refused(self) -> None:
-        for wanted in ({}, {"components": []}, {"components": "server"}, {"components": ["server", "bogus"]}):
+        cases: list[dict[str, object]] = [{}, {"components": []}, {"components": "server"}, {"components": ["server", "bogus"]}]
+        for wanted in cases:
             status, body = self.call("POST", "/v1/updates", body=wanted)
             self.assertEqual((status, body["error"]), (422, "unknown_component"), str(wanted))
 
