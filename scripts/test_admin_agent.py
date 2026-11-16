@@ -246,6 +246,33 @@ class AgentTest(unittest.TestCase):
         self.assertTrue(all(stat.S_IMODE(copy.stat().st_mode) == 0o600 for copy in copies))
         self.assertFalse(list(path.parent.glob(".armor.reach.*")))                       # no temporary file is left behind
 
+    def test_the_broker_configuration_can_be_given_the_protection_of_the_rules_and_a_closed_list_of_directives(self) -> None:
+        current = "listener 1883\nallow_anonymous false\npassword_file /etc/mosquitto/passwd\nacl_file /etc/mosquitto/acl\npersistence true\n"
+        check = self.agent.check_broker_conf
+        check(current, current)
+        check(current.replace("persistence true", "persistence false\nlog_dest stderr"), current)
+        for bad, code in (
+            (current.replace("allow_anonymous false", "allow_anonymous true"), "anonymous_access_not_allowed"),
+            (current + "plugin /tmp/evil.so\n", "directive_not_allowed:plugin"),
+            (current + "auth_plugin /tmp/evil.so\n", "directive_not_allowed:auth_plugin"),
+            (current + "include_dir /tmp/more\n", "directive_not_allowed:include_dir"),
+            (current.replace("acl_file /etc/mosquitto/acl", "acl_file /tmp/open.acl"), "acl_file_cannot_change"),
+            (current.replace("password_file /etc/mosquitto/passwd\n", ""), "password_file_cannot_be_removed"),
+            (current.replace("acl_file /etc/mosquitto/acl\n", ""), "acl_file_cannot_be_removed"),
+        ):
+            with self.assertRaises(self.agent.Refused, msg=bad) as caught:
+                check(bad, current)
+            self.assertEqual((caught.exception.status, caught.exception.code), (422, code))
+
+    def test_with_the_protection_of_the_broker_configuration_on_it_is_a_sensitive_file(self) -> None:
+        self.assertFalse(self.agent.is_sensitive_file("mosquitto.conf"), "off by default: as it always was")
+        self.agent.Sensitive.conf = True
+        try:
+            self.assertTrue(self.agent.is_sensitive_file("mosquitto.conf"))
+            self.assertTrue(self.agent.sensitive_status()["conf_protected"])
+        finally:
+            self.agent.Sensitive.conf = False
+
     def test_every_format_refuses_what_it_does_not_understand(self) -> None:
         check = self.agent.check_content
         for fmt, good, bad in (("env", "A_B=1\n# c\n\n", "1A=2"), ("acl", "user x\ntopic read a/b\npattern read a/%u\n", "allow all"),
