@@ -390,6 +390,11 @@ def _decode(data: bytes) -> tuple[int, int, int, int] | None:
     return None if x is None else (x, y, 1, x * y % _P)
 
 
+def _small_order(point: tuple[int, int, int, int]) -> bool:
+    """True for a point of the small subgroup (order 1, 2, 4 or 8): eight times it is the neutral element."""
+    return _encode(_multiply(8, point)) == _encode((0, 1, 1, 0))
+
+
 def ed25519_verify(public_key: bytes, message: bytes, signature: bytes) -> bool:
     """True only for a valid Ed25519 signature (RFC 8032) of `message` by `public_key`."""
     if len(public_key) != 32 or len(signature) != 64:
@@ -397,6 +402,9 @@ def ed25519_verify(public_key: bytes, message: bytes, signature: bytes) -> bool:
     point_a, point_r = _decode(public_key), _decode(signature[:32])
     scalar = int.from_bytes(signature[32:], "little")
     if point_a is None or point_r is None or scalar >= _Q:
+        return False
+    # a key or a nonce point of small order makes the check pass for any message: refuse them, as the verifiers that follow RFC 8032 strictly do
+    if _small_order(point_a) or _small_order(point_r):
         return False
     k = int.from_bytes(hashlib.sha512(signature[:32] + public_key + message).digest(), "little") % _Q
     return _encode(_multiply(scalar, _BASE)) == _encode(_add(point_r, _multiply(k, point_a)))

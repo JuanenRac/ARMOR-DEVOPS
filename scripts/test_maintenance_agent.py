@@ -547,6 +547,58 @@ class MaintenanceTest(unittest.TestCase):
         self.assertFalse(self.agent.ed25519_verify(public, b"x", signature))
         self.assertFalse(self.agent.ed25519_verify(public, b"", signature[:-1] + bytes([signature[-1] ^ 1])))
 
+    # Known bad inputs of Ed25519 (the cases a verifier written by hand gets wrong), kept as a fixed set.
+    RFC8032_PUBLIC = bytes.fromhex("d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a")
+    RFC8032_SIGNATURE = bytes.fromhex("e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e065224901555fb8821590a33bacc61e39701cf9b46bd25bf5f0595bbe24655141438e7a100b")
+    GROUP_ORDER = 2**252 + 27742317777372353535851937790883648493
+    FIELD_PRIME = 2**255 - 19
+    SMALL_ORDER_POINTS = (
+        "0100000000000000000000000000000000000000000000000000000000000000",   # the neutral element
+        "ecffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",   # order 2
+        "0000000000000000000000000000000000000000000000000000000000000000",   # order 4
+        "0000000000000000000000000000000000000000000000000000000000000080",   # order 4, other sign
+        "c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac037a",   # order 8
+        "c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac03fa",   # order 8, other sign
+        "26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc05",   # order 8
+        "26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc85",   # order 8, other sign
+    )
+
+    def test_ed25519_refuses_a_scalar_that_is_not_canonical(self) -> None:
+        scalar = int.from_bytes(self.RFC8032_SIGNATURE[32:], "little")
+        for bad in (scalar + self.GROUP_ORDER, self.GROUP_ORDER, 2**256 - 1):
+            forged = self.RFC8032_SIGNATURE[:32] + bad.to_bytes(32, "little")
+            self.assertFalse(self.agent.ed25519_verify(self.RFC8032_PUBLIC, b"", forged), hex(bad))
+
+    def test_ed25519_refuses_a_y_that_is_not_below_the_field_prime(self) -> None:
+        for y in (self.FIELD_PRIME, self.FIELD_PRIME + 1, 2**255 - 1):
+            encoded = y.to_bytes(32, "little")
+            self.assertFalse(self.agent.ed25519_verify(encoded, b"", self.RFC8032_SIGNATURE), f"public key y={y}")
+            self.assertFalse(self.agent.ed25519_verify(self.RFC8032_PUBLIC, b"", encoded + self.RFC8032_SIGNATURE[32:]), f"R y={y}")
+
+    def test_ed25519_refuses_a_point_that_is_not_on_the_curve_or_has_a_sign_with_no_x(self) -> None:
+        off_curve = (2).to_bytes(32, "little")   # no x satisfies the curve equation for y = 2
+        self.assertFalse(self.agent.ed25519_verify(off_curve, b"", self.RFC8032_SIGNATURE))
+        self.assertFalse(self.agent.ed25519_verify(self.RFC8032_PUBLIC, b"", off_curve + self.RFC8032_SIGNATURE[32:]))
+        minus_zero = bytes([1]) + bytes(30) + bytes([0x80])   # y = 1 (x = 0) with the sign bit set
+        self.assertFalse(self.agent.ed25519_verify(minus_zero, b"", self.RFC8032_SIGNATURE))
+
+    def test_ed25519_refuses_points_of_small_order_as_key_or_as_nonce(self) -> None:
+        for text in self.SMALL_ORDER_POINTS:
+            point = bytes.fromhex(text)
+            # such a key makes the equation hold for every message with a null scalar: it must never be accepted
+            for message in (b"", b"any message", bytes(64)):
+                self.assertFalse(self.agent.ed25519_verify(point, message, point + bytes(32)), f"key and nonce {text[:8]}")
+            self.assertFalse(self.agent.ed25519_verify(self.RFC8032_PUBLIC, b"", point + self.RFC8032_SIGNATURE[32:]), f"nonce {text[:8]}")
+        # and the agent never trusts such a key even when it is written in the environment file as the next key
+        self.assertFalse(self.agent.ed25519_verify(bytes.fromhex(self.SMALL_ORDER_POINTS[0]), b"x", bytes.fromhex(self.SMALL_ORDER_POINTS[0]) + bytes(32)))
+
+    def test_ed25519_refuses_wrong_lengths_and_empty_signatures(self) -> None:
+        self.assertFalse(self.agent.ed25519_verify(self.RFC8032_PUBLIC[:31], b"", self.RFC8032_SIGNATURE))
+        self.assertFalse(self.agent.ed25519_verify(self.RFC8032_PUBLIC + b"\x00", b"", self.RFC8032_SIGNATURE))
+        self.assertFalse(self.agent.ed25519_verify(self.RFC8032_PUBLIC, b"", self.RFC8032_SIGNATURE + b"\x00"))
+        self.assertFalse(self.agent.ed25519_verify(self.RFC8032_PUBLIC, b"", bytes(64)))
+        self.assertTrue(self.agent.ed25519_verify(self.RFC8032_PUBLIC, b"", self.RFC8032_SIGNATURE), "the good vector still passes")
+
     def test_a_signature_binds_the_component_the_version_and_the_hash(self) -> None:
         digest = "a" * 64
         good = self.key.sign(f"armor-pkg/1|ai|0.2.5|{digest}".encode())
