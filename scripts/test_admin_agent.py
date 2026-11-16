@@ -417,6 +417,28 @@ class AgentTest(unittest.TestCase):
         self.assertTrue(self.agent.totp_accepts(vector_key, "287082", now=59.0))
         self.agent._totp_last_counter[0] = 0
 
+    def test_wrong_codes_close_the_door_for_a_growing_time(self) -> None:
+        env = {"ARMOR_MAINT_TOTP_FAILURES": "2", "ARMOR_MAINT_TOTP_LOCK_S": "30", "ARMOR_MAINT_TOTP_LOCK_MAX_S": "3600", "ARMOR_MAINT_TOTP_FILE": str(Path(self.tmp.name) / "lock.totp")}
+        Path(env["ARMOR_MAINT_TOTP_FILE"]).write_text("GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ\n", encoding="ascii")
+        self.agent._totp_failures.update(count=0, until=0.0)
+        self.agent._totp_last_counter[0] = 0
+        try:
+            with mock.patch.dict(os.environ, env), mock.patch.object(self.agent.time, "time", return_value=59.0):
+                with self.assertRaises(self.agent.Refused) as caught:
+                    self.agent.require_approval("000000")
+                self.assertEqual(caught.exception.code, "totp_invalid")
+                with self.assertRaises(self.agent.Refused):
+                    self.agent.require_approval("000000")
+                self.assertEqual(self.agent.totp_lock_wait(), 31)
+                with self.assertRaises(self.agent.Refused) as caught:
+                    self.agent.require_approval("287082")   # even the right code waits
+                self.assertEqual((caught.exception.status, caught.exception.code), (429, "totp_locked"))
+            with mock.patch.dict(os.environ, env), mock.patch.object(self.agent.time, "time", return_value=59.0 + 40):
+                self.assertEqual(self.agent.totp_lock_wait(), 0)
+        finally:
+            self.agent._totp_failures.update(count=0, until=0.0)
+            self.agent._totp_last_counter[0] = 0
+
     def test_the_two_switches_of_the_broker_rules_need_the_authenticator_and_say_what_is_on(self) -> None:
         totp = Path(self.tmp.name) / "maint.totp"
         acl = self.prefix / "etc/mosquitto/acl"
