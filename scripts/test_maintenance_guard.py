@@ -42,6 +42,7 @@ class GuardTests(unittest.TestCase):
         self.addCleanup(patcher.stop)
         os.environ.pop("ARMOR_MAINT_PEER_UIDS", None)
         agent._totp_last_counter[0] = 0
+        agent._totp_failures.update(count=0, until=0.0)
 
     def test_the_code_of_rfc_6238_is_right(self):
         self.assertEqual(agent.totp_code(RFC_VECTOR_KEY, 59 // 30), "287082")
@@ -78,6 +79,54 @@ class GuardTests(unittest.TestCase):
             agent.guard_sensitive("POST", ["console", "run"], None, "287082")
             with self.assertRaises(agent.Refused):
                 agent.guard_sensitive("POST", ["console", "run"], None, "287082")
+
+    def test_wrong_codes_close_the_door_for_a_time_that_grows_and_a_right_code_opens_it(self):
+        self.file.write_text(RFC_VECTOR_KEY + "\n", encoding="ascii")
+        env = {"ARMOR_MAINT_TOTP_FAILURES": "3", "ARMOR_MAINT_TOTP_LOCK_S": "30", "ARMOR_MAINT_TOTP_LOCK_MAX_S": "100"}
+        with mock.patch.dict(os.environ, env), mock.patch.object(agent.time, "time", return_value=59.0):
+            for _ in range(2):
+                with self.assertRaises(agent.Refused) as caught:
+                    agent.guard_sensitive("POST", ["console", "run"], None, "000000")
+                self.assertEqual(caught.exception.code, "totp_invalid")
+            self.assertEqual(agent.totp_lock_wait(), 0, "two wrong codes are still allowed")
+            with self.assertRaises(agent.Refused):
+                agent.guard_sensitive("POST", ["console", "run"], None, "000000")   # the third closes it for 30 s
+            self.assertEqual(agent.totp_lock_wait(), 31)
+            # while it is closed even the right code is not looked at, so the door cannot be tried
+            with self.assertRaises(agent.Refused) as caught:
+                agent.guard_sensitive("POST", ["console", "run"], None, "287082")
+            self.assertEqual((caught.exception.status, caught.exception.code), (429, "totp_locked"))
+        with mock.patch.dict(os.environ, env), mock.patch.object(agent.time, "time", return_value=59.0 + 40):
+            self.assertEqual(agent.totp_lock_wait(), 0)
+            with self.assertRaises(agent.Refused):
+                agent.guard_sensitive("POST", ["console", "run"], None, "000000")   # the fourth: twice as long
+            self.assertEqual(agent.totp_lock_wait(), 61)
+            agent.totp_failed()
+            agent.totp_failed()
+            self.assertEqual(agent.totp_lock_wait(), 101, "never longer than the longest lock")
+        with mock.patch.dict(os.environ, env), mock.patch.object(agent.time, "time", return_value=59.0 + 400):
+            self.assertEqual(agent.totp_lock_wait(), 0)
+            self.assertTrue(agent.totp_accepts(RFC_VECTOR_KEY, agent.totp_code(RFC_VECTOR_KEY, int((59.0 + 400) // 30))))
+            agent.totp_cleared()
+            self.assertEqual(agent._totp_failures["count"], 0)
+
+    def test_the_lock_can_be_switched_off_and_a_missing_code_does_not_count(self):
+        self.file.write_text(RFC_VECTOR_KEY + "\n", encoding="ascii")
+        with mock.patch.dict(os.environ, {"ARMOR_MAINT_TOTP_LOCKOUT": "0", "ARMOR_MAINT_TOTP_FAILURES": "1"}):
+            for _ in range(5):
+                with self.assertRaises(agent.Refused) as caught:
+                    agent.guard_sensitive("POST", ["console", "run"], None, "000000")
+                self.assertEqual(caught.exception.code, "totp_invalid")
+            self.assertEqual(agent.totp_lock_wait(), 0)
+        with mock.patch.dict(os.environ, {"ARMOR_MAINT_TOTP_FAILURES": "1"}):
+            for _ in range(3):
+                with self.assertRaises(agent.Refused) as caught:
+                    agent.guard_sensitive("POST", ["console", "run"], None, "")
+                self.assertEqual(caught.exception.code, "totp_required")
+            self.assertEqual(agent.totp_lock_wait(), 0)
+            self.assertEqual(agent.totp_lockout_settings(), (1, 30.0, 3600.0))
+        with mock.patch.dict(os.environ, {"ARMOR_MAINT_TOTP_FAILURES": "banana", "ARMOR_MAINT_TOTP_LOCK_S": "0"}):
+            self.assertEqual(agent.totp_lockout_settings(), (5, 1.0, 3600.0), "a value that is not a number falls back, one out of range is cut")
 
     def test_reading_never_needs_a_code(self):
         self.file.write_text(RFC_VECTOR_KEY + "\n", encoding="ascii")
