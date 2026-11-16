@@ -21,7 +21,7 @@
   <img src="https://img.shields.io/badge/License-GPL%203.0--or--later-blue.svg" alt="GPL 3.0 ou ultérieure">
   <img src="https://img.shields.io/badge/Deploy-Docker%20Compose-2496ed.svg" alt="Deploy">
   <img src="https://img.shields.io/badge/Bench-systemd-FFB020.svg" alt="Bench">
-  <img src="https://img.shields.io/badge/Tests-494-00E5FF.svg" alt="Tests">
+  <img src="https://img.shields.io/badge/Tests-502-00E5FF.svg" alt="Tests">
   <img src="https://img.shields.io/badge/Version-0.7.6-0f6cbd.svg" alt="Version">
   <img src="https://img.shields.io/badge/Maturity-established-2EA44F.svg" alt="Maturité">
 </p>
@@ -174,7 +174,7 @@ Voir la [frontière du déploiement](docs/DEPLOYMENT_BOUNDARY.md) et le [banc d'
 | `test_compose.sh`  `validate-compose.sh` | la topologie Compose et son profil TLS, construites et exécutées avec Docker Engine sous WSL |
 | `test_firewall.sh`  `test_install_plan.sh`  `test_mqtt_identity.sh`  `test_mqtt_tls.sh`  `test_tls_check.sh`  `test_wireguard.sh`  `test_ddns.sh` | le pare-feu, le plan de l'installateur, les identités du broker, MQTT sur TLS, le contrôle TLS, le VPN et le nom dynamique |
 
-Les tests Python se lancent avec `python -m unittest discover -s scripts -p "test_*.py"` ; sous Windows ceux qui demandent des sockets Unix ne peuvent pas tourner. Les scripts demandent Bash, WSL, Docker ou root et doivent être lancés sous Linux. Il y a 494 tests Python, en plus des tests shell, et le workflow Coverage floor maintient la couverture de `scripts/` au-dessus d'un plancher ; Project status dit ce qui a été exécuté. GitHub Actions exécute la base A.R.M.O.R. à chaque push et pull request : la validation du manifeste, de la version, du journal des modifications et de la parité des README, puis le build et les tests propres au projet.
+Les tests Python se lancent avec `python -m unittest discover -s scripts -p "test_*.py"` ; sous Windows ceux qui demandent des sockets Unix ne peuvent pas tourner. Les scripts demandent Bash, WSL, Docker ou root et doivent être lancés sous Linux. Il y a 502 tests Python, en plus des tests shell, et le workflow Coverage floor maintient la couverture de `scripts/` au-dessus d'un plancher ; Project status dit ce qui a été exécuté. GitHub Actions exécute la base A.R.M.O.R. à chaque push et pull request : la validation du manifeste, de la version, du journal des modifications et de la parité des README, puis le build et les tests propres au projet.
 
 ## 🏗️ Compilation et publication
 
