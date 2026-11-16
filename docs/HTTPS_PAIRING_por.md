@@ -9,7 +9,7 @@ O perfil `tls` deste repositório coloca o Caddy à frente do Studio e do servid
 ## Os passos
 
 1. **Nome.** Escolha o nome com que os telemóveis chegam à casa (o nome de DNS dinâmico a partir de fora, ou um nome da rede local) e ponha-o em `ARMOR_TLS_HOST` (`ARMOR_TLS_PORT=443` se o router reencaminhar o 443).
-2. **Arranque-o.** `docker compose --profile tls up -d` (ou o Caddy do pacote com o mesmo `Caddyfile`). O servidor corre com `ARMOR_TRUST_PROXY=1` e `ARMOR_PUBLIC_ORIGIN=https://<nome>`.
+2. **Arranque-o.** `docker compose --profile tls up -d` (ou o Caddy do pacote com o mesmo `Caddyfile`). O servidor corre com `ARMOR_TRUST_PROXY=uniquelocal` e `ARMOR_PUBLIC_ORIGIN=https://<nome>`.
 3. **Verifique.** `scripts/armor_tls_check.sh <nome> 443 <root.crt>` diz se o servidor responde, se a cadeia é válida para o nome, se restam mais de 14 dias e que chave fixaria um telemóvel, e escreve a linha `armor-pin:<nome>:<pin>`. O certificado raiz é `pki/authorities/local/root.crt` nos dados do Caddy (o assistente de manutenção encontra-o; `ARMOR_TLS_CA_FILE` indica-o se estiver noutro sítio).
 4. **Emparelhe cada telemóvel.** No Studio, Configuração > Segurança > acesso a partir de fora > *Emparelhar o telemóvel com o HTTPS da casa*: escreva o nome, prima o botão, copie o texto. Na aplicação, Mais > Segurança, cole-o. A aplicação passa a aceitar para a casa só essa autoridade; uma chave diferente é recusada e dito.
 5. **Experimente tudo** em cada telemóvel, com o Wi-Fi de casa e com dados móveis: início de sessão, câmaras, armar, alarmes, push.

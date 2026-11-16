@@ -45,6 +45,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
+from typing import Any
 
 AGENT_VERSION = "0.1.7"
 PREFIX = Path(os.environ.get("ARMOR_PREFIX", "/opt/armor"))
@@ -139,8 +140,31 @@ def installed_version(component: str) -> str:
 _cache: dict[str, tuple[float, dict[str, object]]] = {}
 
 
+def github_authorization(url: str) -> dict[str, str]:
+    """The token of GitHub goes only to the API of GitHub, never to the address of a file, a redirect or the server of this machine."""
+    if GITHUB_TOKEN and urllib.parse.urlsplit(url).hostname == "api.github.com":
+        return {"Authorization": f"Bearer {GITHUB_TOKEN}"}
+    return {}
+
+
+class DropAuthorizationOnRedirect(urllib.request.HTTPRedirectHandler):
+    """A redirect to another host (the file of a release is served from a storage host) does not carry the Authorization header along."""
+
+    def redirect_request(self, req: Any, fp: Any, code: int, msg: str, headers: Any, newurl: str) -> Any:
+        redirected = super().redirect_request(req, fp, code, msg, headers, newurl)
+        if redirected is not None and urllib.parse.urlsplit(newurl).hostname != urllib.parse.urlsplit(req.full_url).hostname:
+            for name in [name for name in redirected.headers if name.lower() == "authorization"]:
+                del redirected.headers[name]
+            for name in [name for name in redirected.unredirected_hdrs if name.lower() == "authorization"]:
+                del redirected.unredirected_hdrs[name]
+        return redirected
+
+
+urllib.request.install_opener(urllib.request.build_opener(DropAuthorizationOnRedirect))
+
+
 def http_get(url: str, accept: str = "application/vnd.github+json", timeout: float = 20.0, local_tls: bool = False) -> bytes:
-    request = urllib.request.Request(url, headers={"Accept": accept, "User-Agent": "armor-maintenance", **({"Authorization": f"Bearer {GITHUB_TOKEN}"} if GITHUB_TOKEN else {})})
+    request = urllib.request.Request(url, headers={"Accept": accept, "User-Agent": "armor-maintenance", **github_authorization(url)})
     # local_tls: the health check of this machine's own server, which may serve https with its own certificate (nothing leaves the machine, nothing secret is sent).
     context = ssl._create_unverified_context() if local_tls and url.startswith("https://") else None   # noqa: S323
     with urllib.request.urlopen(request, timeout=timeout, context=context) as response:     # noqa: S310 - the address is fixed to GitHub (or a test server)
@@ -288,7 +312,7 @@ def clear_history() -> int:
 
 def download(job: Job, step: str, url: str, destination: Path) -> str:
     """Download to a file with the progress shown in the step; returns the SHA-256 of what came."""
-    request = urllib.request.Request(url, headers={"User-Agent": "armor-maintenance", **({"Authorization": f"Bearer {GITHUB_TOKEN}"} if GITHUB_TOKEN and urllib.parse.urlsplit(url).hostname == "api.github.com" else {})})
+    request = urllib.request.Request(url, headers={"User-Agent": "armor-maintenance", **github_authorization(url)})
     digest = hashlib.sha256()
     with urllib.request.urlopen(request, timeout=30) as response, open(destination, "wb") as out:      # noqa: S310
         total = int(response.headers.get("Content-Length") or 0)

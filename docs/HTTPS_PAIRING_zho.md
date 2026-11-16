@@ -9,7 +9,7 @@
 ## 步骤
 
 1. **名称。** 选择手机访问住宅所用的名称（从外部访问的动态 DNS 名称，或本地网络的名称），填入 `ARMOR_TLS_HOST`（若路由器转发 443，则设置 `ARMOR_TLS_PORT=443`）。
-2. **启动。** `docker compose --profile tls up -d`（或使用软件包中的 Caddy 与同一个 `Caddyfile`）。服务器以 `ARMOR_TRUST_PROXY=1` 和 `ARMOR_PUBLIC_ORIGIN=https://<名称>` 运行。
+2. **启动。** `docker compose --profile tls up -d`（或使用软件包中的 Caddy 与同一个 `Caddyfile`）。服务器以 `ARMOR_TRUST_PROXY=uniquelocal` 和 `ARMOR_PUBLIC_ORIGIN=https://<名称>` 运行。
 3. **检查。** `scripts/armor_tls_check.sh <名称> 443 <root.crt>` 会说明服务器是否应答、证书链对该名称是否有效、是否还剩 14 天以上、手机会固定哪个密钥，并输出 `armor-pin:<名称>:<pin>` 这一行。根证书是 Caddy 数据中的 `pki/authorities/local/root.crt`（维护助手能找到它；若在别处，用 `ARMOR_TLS_CA_FILE` 指定）。
 4. **逐台配对手机。** 在 Studio 的 配置 > 安全 > 从外部访问 中选择 *将手机与住宅的 HTTPS 配对*：输入名称，点击按钮，复制文本。在应用的 更多 > 安全 中粘贴。之后应用只接受该机构作为这座住宅的证书颁发机构；不同的密钥会被拒绝并提示。
 5. **全部试一遍。** 在每台手机上，用家中 Wi-Fi 和移动数据分别测试：登录、摄像头、布防、报警、推送。
