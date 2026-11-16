@@ -96,7 +96,7 @@ ok; if grep -q "weak" <<<"$out"; then bad "a secret value was printed"; fi
 # --remote: what is not acceptable when the installation is reached from the Internet
 remote_project() {
   project "$1"
-  { echo "ARMOR_PUBLIC_ORIGIN=https://armor.example.org"; echo "ARMOR_COOKIE_SECURE="; echo "ARMOR_TRUST_PROXY=1"; echo "ARMOR_DISARM_PIN=required"; echo "ARMOR_MQTT_BIND=192.168.0.10"; } >>"$1/.env"
+  { echo "ARMOR_PUBLIC_ORIGIN=https://armor.example.org"; echo "ARMOR_COOKIE_SECURE="; echo "ARMOR_TRUST_PROXY=uniquelocal"; echo "ARMOR_DISARM_PIN=required"; echo "ARMOR_MQTT_BIND=192.168.0.10"; } >>"$1/.env"
   set_value "$1" ARMOR_STUDIO_PASSWORD "$(token 16)"
 }
 check_remote() { bash "$1/scripts/check-required-env.sh" --remote; }
@@ -108,6 +108,9 @@ P="$WORK/remote3"; remote_project "$P"; set_value "$P" ARMOR_COOKIE_SECURE "0"
 expect 2 "ARMOR_COOKIE_SECURE=0" check_remote "$P"
 P="$WORK/remote4"; remote_project "$P"; set_value "$P" ARMOR_TRUST_PROXY "0"
 expect 2 "ARMOR_TRUST_PROXY must trust" check_remote "$P"
+P="$WORK/remote4b"; remote_project "$P"; set_value "$P" ARMOR_TRUST_PROXY "1"
+expect 0 "use uniquelocal" check_remote "$P"
+out="$(check_remote "$WORK/remote1" 2>&1)"; ok; grep -q "uniquelocal" <<<"$out" && bad "uniquelocal was warned about"
 P="$WORK/remote5"; remote_project "$P"; set_value "$P" ARMOR_DISARM_PIN ""
 expect 2 "ARMOR_DISARM_PIN must be required" check_remote "$P"
 P="$WORK/remote6"; remote_project "$P"; set_value "$P" ARMOR_MQTT_BIND "0.0.0.0"

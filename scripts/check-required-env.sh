@@ -46,7 +46,9 @@ if [[ "$REMOTE" == 1 ]]; then
   [[ "$origin" == https://* ]] || { echo "ERROR: ARMOR_PUBLIC_ORIGIN must be an https:// address for remote access" >&2; status=2; }
   [[ "$(read_value ARMOR_COOKIE_SECURE)" != 0 ]] || { echo "ERROR: ARMOR_COOKIE_SECURE=0 sends the session cookie in clear; leave it empty or 1 for remote access" >&2; status=2; }
   proxy="$(read_value ARMOR_TRUST_PROXY)"
-  case "$proxy" in 0|false|off|no) echo "ERROR: ARMOR_TRUST_PROXY must trust the proxy in front of the server for remote access (the real address of a client is needed to limit it)" >&2; status=2 ;; esac
+  case "$proxy" in 0|false|off|no) echo "ERROR: ARMOR_TRUST_PROXY must trust the proxy in front of the server for remote access (the real address of a client is needed to limit it)" >&2; status=2 ;;
+    true|[0-9]*) echo "WARNING: ARMOR_TRUST_PROXY=$proxy trusts a number of hops; behind the tls profile (Caddy, then the nginx of Studio) the server would take the address of the proxy as the client, so every client from the Internet would look like the house; use uniquelocal" >&2 ;;
+  esac
   [[ "$(read_value ARMOR_DISARM_PIN)" == required ]] || { echo "ERROR: ARMOR_DISARM_PIN must be required for remote access" >&2; status=2; }
   bind="$(read_value ARMOR_MQTT_BIND)"
   case "$bind" in
