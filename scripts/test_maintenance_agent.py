@@ -665,6 +665,16 @@ class MaintenanceTest(unittest.TestCase):
         self.assertIn("older .sig", str(view["log"]))
         self.assertEqual(self.agent.installed_version("ai"), "0.2.5")
 
+    def test_force_reinstalls_the_same_version_and_never_goes_back_to_an_older_one(self) -> None:
+        self.publish("ARMOR-SERVER-AI", "0.2.3", {"src/armor_server_ai/__init__.py": b'__version__ = "0.2.3"\n'}, "ai", signature="manifest")
+        view = self.wait(self.agent.update_job(["ai"], True))
+        self.assertEqual(view["state"], "failed")
+        self.assertIn("downgrade_refused", view["error"])
+        self.assertEqual(self.agent.installed_version("ai"), "0.2.4")
+        view = self.wait(self.agent.update_job(["ai"], False))
+        self.assertEqual(view["state"], "done", "without force an older release is just 'already up to date'")
+        self.assertEqual(self.agent.installed_version("ai"), "0.2.4")
+
     def test_a_bad_manifest_signature_is_not_saved_by_a_good_older_one_unless_either_and_then_the_older_decides(self) -> None:
         self.publish("ARMOR-SERVER-AI", "0.2.5", {"src/armor_server_ai/__init__.py": b'__version__ = "0.2.5"\n'}, "ai", signature="manifest")
         name = "armor-ai-0.2.5.tgz"

@@ -32,16 +32,28 @@ STATUS = {
 }
 
 
-def stand_in(folder: Path, status: dict[str, object], update_ok: bool = True) -> Path:
-    """A shell script that answers `status` and `update` like the engine and writes its arguments and the signature variable to a log."""
+def stand_in(folder: Path, status: dict[str, object], update_ok: bool = True, after: dict[str, object] | None = None, drift: dict[str, object] | None = None) -> Path:
+    """A shell script that answers `status` and `update` like the engine and writes its arguments and the signature variable to a log.
+    `after` is what `status` says once `update` has run (default: every project is at the version GitHub has); `drift` is what it says from the second `status` on, before any update."""
     binary = folder / "armor-updater"
     log = folder / "calls.log"
     update = {"project": "x", "action": "update", "ok": update_ok, "error": "" if update_ok else "signature missing", "results": []}
+    if after is None:
+        after = {**status, "projects": [{**item, "local_version": item["github_version"], "state": "UP TO DATE"} for item in status["projects"]]}  # type: ignore[attr-defined]
+
+    def block(document: dict[str, object]) -> str:
+        return "cat <<'EOF'\n" + json.dumps(document, indent=2) + "\nEOF\n"
+
+    updated, seen = folder / "updated.flag", folder / "status.count"
     binary.write_text(
         "#!/bin/sh\n"
         f'echo "$@ REQUIRE=$ARMOR_UPDATER_REQUIRE_SIGNED" >> {log}\n'
-        f'if [ "$1" = "status" ]; then cat <<\'EOF\'\n{json.dumps(status, indent=2)}\nEOF\n'
-        f"else echo 'human line on stderr' >&2; echo '{json.dumps(update)}'; fi\n",
+        'if [ "$1" = "status" ]; then\n'
+        f"  if [ -f {updated} ]; then\n" + block(after) + "  else\n"
+        f"    echo x >> {seen}\n"
+        f'    if [ "$(wc -l < {seen})" -gt 1 ]; then\n' + block(drift if drift is not None else status) + "    else\n" + block(status) + "    fi\n"
+        "  fi\n"
+        f"else echo 'human line on stderr' >&2; touch {updated}; echo '{json.dumps(update)}'; fi\n",
         encoding="utf-8",
     )
     binary.chmod(binary.stat().st_mode | stat.S_IXUSR)
@@ -126,7 +138,8 @@ class UpdaterBridgeTests(unittest.TestCase):
         self.wait(agent.updater_apply({"project": "ARMOR-SERVER", "plan_id": plan}))
         calls = (self.root / "calls.log").read_text().splitlines()
         self.assertTrue(all(line.endswith("REQUIRE=1") for line in calls), calls)
-        self.assertEqual(calls[-1], f"update ARMOR-SERVER --workspace {self.root / 'ws'} --json REQUIRE=1")
+        self.assertIn(f"update ARMOR-SERVER --workspace {self.root / 'ws'} --json REQUIRE=1", calls)
+        self.assertEqual([line.split()[0] for line in calls], ["status", "status", "update", "status"], "the target is read again before the update and the version in place after it")
 
     def test_a_failed_update_is_reported_as_failed(self):
         stand_in(self.root, STATUS, update_ok=False)
@@ -135,11 +148,29 @@ class UpdaterBridgeTests(unittest.TestCase):
         self.wait(job)
         self.assertEqual((job.state, job.error, job.result["ok"]), ("failed", "update_failed", False))
 
+    def test_a_release_that_changed_after_the_preview_is_not_installed_unseen(self):
+        newer = {**STATUS, "projects": [{**STATUS["projects"][0], "github_version": "0.8.2.0"}, STATUS["projects"][1]]}  # type: ignore[index]
+        stand_in(self.root, STATUS, drift=newer)
+        plan = str(agent.updater_preview({"project": "ARMOR-SERVER"})["plan_id"])
+        job = agent.updater_apply({"project": "ARMOR-SERVER", "plan_id": plan})
+        self.wait(job)
+        self.assertEqual((job.state, job.error), ("failed", "plan_stale"))
+        self.assertNotIn("update", [line.split()[0] for line in (self.root / "calls.log").read_text().splitlines()], "nothing was installed")
+
+    def test_a_different_version_in_place_after_the_update_is_reported(self):
+        stuck = {**STATUS, "projects": [dict(STATUS["projects"][0]), STATUS["projects"][1]]}  # type: ignore[index]
+        stand_in(self.root, STATUS, after=stuck)
+        plan = str(agent.updater_preview({"project": "ARMOR-SERVER"})["plan_id"])
+        job = agent.updater_apply({"project": "ARMOR-SERVER", "plan_id": plan})
+        self.wait(job)
+        self.assertEqual((job.state, job.result["ok"], job.result["error"]), ("failed", False, "version_mismatch"))
+
     def test_two_applies_in_a_row_are_held_back(self):
         with mock.patch.dict(os.environ, {"ARMOR_MAINT_UPDATER_MIN_INTERVAL_S": "300"}):
             first = str(agent.updater_preview({"project": "ARMOR-SERVER"})["plan_id"])
             self.wait(agent.updater_apply({"project": "ARMOR-SERVER", "plan_id": first}))
             agent._updater_clock["preview"] = 0.0
+            (self.root / "updated.flag").unlink()   # a newer release came out meanwhile
             second = str(agent.updater_preview({"project": "ARMOR-SERVER"})["plan_id"])
             self.assertEqual(self.refused(agent.updater_apply, {"project": "ARMOR-SERVER", "plan_id": second}), (429, "too_soon"))
 

@@ -920,6 +920,9 @@ def update_job(components: list[str], force: bool) -> Job:
                     if "error" in release:
                         raise Refused(502, str(release["error"]))
                     installed = installed_version(component)
+                    # `force` reinstalls the SAME version (to repair it); it never goes back: a signed release that moved back to an older firmware would otherwise be installed.
+                    if installed and version_key(str(release["version"])) < version_key(installed) and force:
+                        raise Refused(409, "downgrade_refused")
                     if installed and version_key(str(release["version"])) <= version_key(installed) and not force:
                         job.say(f"{component} is already at {installed}")
                         for part in ("download", "verify", "install", *(("stage",) if component == "server" else ()), "restart", "check"):
@@ -1811,6 +1814,13 @@ def updater_project(data: dict[str, object]) -> str:
     return project
 
 
+def updater_entry(project: str) -> dict[str, object]:
+    """What the engine says now about one project ({} when it says nothing)."""
+    projects = updater_run(["status"], timeout=120).get("projects")
+    entry = next((item for item in projects if isinstance(item, dict) and item.get("name") == project), None) if isinstance(projects, list) else None
+    return entry if isinstance(entry, dict) else {}
+
+
 def updater_state() -> dict[str, object]:
     return {"enabled": updater_enabled(), "available": updater_bin().is_file(), "require_signed": True, "min_interval_s": updater_interval(), "projects": sorted(updater_projects())}
 
@@ -1870,8 +1880,15 @@ def updater_apply(data: dict[str, object]) -> Job:
             try:
                 job.step("update", "running", 10)
                 job.say(f"{project}: updating to {plan['target']}")
+                # What was approved is what is installed: the engine takes the newest signed release at the moment it runs, so the target is read again just before and the version
+                # that is in place is read just after; a release that changed in between is not installed unseen.
+                if plan.get("target") and updater_entry(project).get("github_version") != plan["target"]:
+                    raise Refused(409, "plan_stale")
                 report = updater_run(["update", project], timeout=3600)
                 ok = report.get("ok") is True
+                if ok and plan.get("target") and updater_entry(project).get("local_version") != plan["target"]:
+                    ok = False
+                    report = {**report, "error": "version_mismatch"}
                 job.step("update", "done" if ok else "failed")
                 job.step("report", "done")
                 job.result = {"project": project, "ok": ok, "error": str(report.get("error", ""))[:300], "target": plan["target"]}
