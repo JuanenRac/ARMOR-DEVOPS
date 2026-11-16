@@ -9,7 +9,7 @@ Le profil `tls` de ce dépôt place Caddy devant Studio et le serveur. Son défa
 ## Les étapes
 
 1. **Nom.** Choisissez le nom par lequel les téléphones joignent la maison (le nom DNS dynamique depuis l'extérieur, ou un nom du réseau local) et mettez-le dans `ARMOR_TLS_HOST` (`ARMOR_TLS_PORT=443` si le routeur redirige le 443).
-2. **Démarrez-le.** `docker compose --profile tls up -d` (ou Caddy du paquet avec le même `Caddyfile`). Le serveur tourne avec `ARMOR_TRUST_PROXY=1` et `ARMOR_PUBLIC_ORIGIN=https://<nom>`.
+2. **Démarrez-le.** `docker compose --profile tls up -d` (ou Caddy du paquet avec le même `Caddyfile`). Le serveur tourne avec `ARMOR_TRUST_PROXY=uniquelocal` et `ARMOR_PUBLIC_ORIGIN=https://<nom>`.
 3. **Vérifiez.** `scripts/armor_tls_check.sh <nom> 443 <root.crt>` dit si le serveur répond, si la chaîne est valide pour le nom, s'il reste plus de 14 jours et quelle clé un téléphone épinglerait, et affiche la ligne `armor-pin:<nom>:<pin>`. Le certificat racine est `pki/authorities/local/root.crt` dans les données de Caddy (l'assistant de maintenance le trouve ; `ARMOR_TLS_CA_FILE` le nomme s'il est ailleurs).
 4. **Appairez chaque téléphone.** Dans Studio, Configuration > Sécurité > accès depuis l'extérieur > *Appairer le téléphone avec le HTTPS de la maison* : saisissez le nom, appuyez sur le bouton, copiez le texte. Dans l'application, Plus > Sécurité, collez-le. L'application n'acceptera alors que cette autorité pour la maison ; une clé différente est refusée et signalée.
 5. **Essayez tout** sur chaque téléphone, sur le Wi-Fi de la maison et en données mobiles : connexion, caméras, armement, alarmes, push.

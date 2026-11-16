@@ -9,7 +9,7 @@ Android アプリは、他の手段がない間はローカルネットワーク
 ## 手順
 
 1. **名前。** スマートフォンが家に接続するときの名前（外部からは動的 DNS の名前、またはローカルネットワークの名前）を選び、`ARMOR_TLS_HOST` に設定します（ルーターが 443 を転送するなら `ARMOR_TLS_PORT=443`）。
-2. **起動。** `docker compose --profile tls up -d`（またはパッケージの Caddy を同じ `Caddyfile` で）。サーバーは `ARMOR_TRUST_PROXY=1` と `ARMOR_PUBLIC_ORIGIN=https://<名前>` で動かします。
+2. **起動。** `docker compose --profile tls up -d`（またはパッケージの Caddy を同じ `Caddyfile` で）。サーバーは `ARMOR_TRUST_PROXY=uniquelocal` と `ARMOR_PUBLIC_ORIGIN=https://<名前>` で動かします。
 3. **確認。** `scripts/armor_tls_check.sh <名前> 443 <root.crt>` が、サーバーの応答、名前に対する証明書チェーンの有効性、残り 14 日を超えるか、スマートフォンが固定する鍵を示し、`armor-pin:<名前>:<pin>` の行を出力します。ルート証明書は Caddy のデータ内の `pki/authorities/local/root.crt` です（メンテナンスヘルパーが見つけます。別の場所なら `ARMOR_TLS_CA_FILE` で指定）。
 4. **スマートフォンごとにペアリング。** Studio の 設定 > セキュリティ > 外部からのアクセス で *電話を家の HTTPS とペアリング* を開き、名前を入力してボタンを押し、テキストをコピーします。アプリの その他 > セキュリティ に貼り付けます。以後アプリは、この家についてその認証局だけを受け入れ、異なる鍵は拒否して知らせます。
 5. **すべて試す。** 各スマートフォンで、自宅 Wi-Fi とモバイルデータの両方で、サインイン、カメラ、警戒、アラーム、プッシュを確認します。

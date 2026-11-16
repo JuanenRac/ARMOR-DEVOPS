@@ -540,6 +540,24 @@ class MaintenanceTest(unittest.TestCase):
         assert block
         self.assertEqual("".join(f"{int(item, 16):02x}" for item in block.group(1).split(",")), self.real_key)
 
+    def test_the_github_token_goes_only_to_the_github_api_and_not_along_a_redirect(self) -> None:
+        import urllib.request
+        agent = self.agent
+        agent.GITHUB_TOKEN = "ghp_not_a_real_token"
+        try:
+            self.assertEqual(agent.github_authorization("https://api.github.com/repos/x/y/releases/latest"), {"Authorization": "Bearer ghp_not_a_real_token"})
+            for url in ("https://github.com/x/y/releases/download/v1/a.sha256", "http://127.0.0.1:18080/healthz", "https://objects.example.net/a.sig"):
+                self.assertEqual(agent.github_authorization(url), {}, url)
+            handler = agent.DropAuthorizationOnRedirect()
+            first = urllib.request.Request("https://api.github.com/a", headers={"Authorization": "Bearer ghp_not_a_real_token", "User-Agent": "t"})
+            other = handler.redirect_request(first, None, 302, "Found", {}, "https://objects.example.net/b")
+            self.assertIsNotNone(other)
+            self.assertFalse(other.has_header("Authorization"))
+            same = handler.redirect_request(first, None, 302, "Found", {}, "https://api.github.com/c")
+            self.assertTrue(same.has_header("Authorization"))
+        finally:
+            agent.GITHUB_TOKEN = ""
+
     def test_ed25519_matches_the_published_test_vector(self) -> None:
         public = bytes.fromhex("d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a")
         signature = bytes.fromhex("e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e065224901555fb8821590a33bacc61e39701cf9b46bd25bf5f0595bbe24655141438e7a100b")
