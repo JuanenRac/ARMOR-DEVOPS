@@ -8,6 +8,7 @@ The calls they protect: `POST /v1/console/run`, `POST /v1/system/reboot`, `POST 
 |---|---|
 | `ARMOR_MAINT_PEER_UIDS=998,0` | The kernel tells the helper the user number of the process on the other end of the socket (`SO_PEERCRED`); a user that is not in the list gets `403 peer_not_allowed`. Empty: not checked. |
 | `ARMOR_MAINT_TOTP_FILE` (default `<prefix>/etc/maint.totp`) | When the file exists, a sensitive call must bring a current six-digit code in the header `X-Armor-Maint-Totp` (`401 totp_required`, `401 totp_invalid`). A code is good once. |
+| `ARMOR_MAINT_TOTP_LOCKOUT` (default `1`; `0` turns it off), `ARMOR_MAINT_TOTP_FAILURES` (default `5`), `ARMOR_MAINT_TOTP_LOCK_S` (default `30`), `ARMOR_MAINT_TOTP_LOCK_MAX_S` (default `3600`) | After that many wrong codes in a row the helper (and the admin agent, which shares the file and these settings) answers `429 totp_locked` without looking at any code for `LOCK_S` seconds; every further wrong code doubles the wait up to `LOCK_MAX_S`, and a right code clears the count. A call with no code does not count. Without the lock a process of the group `armor` that holds the token could try thousands of codes a second. |
 
 Make the secret of the authenticator with `armor_maintenance_agent.py --totp-enroll` (as root): it writes the file with mode 0600 and shows the secret once, to be added to an authenticator app (SHA-1, six digits, 30 seconds). Delete the file to turn the code off again.
 

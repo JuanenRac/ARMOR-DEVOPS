@@ -446,6 +446,48 @@ TOTP_WINDOW = 1
 _totp_last_counter = [0]
 _totp_lock = threading.Lock()
 
+_totp_failures = {"count": 0, "until": 0.0}
+
+
+def totp_lockout_settings() -> tuple[int, float, float] | None:
+    """(wrong codes before the lock, first lock in seconds, longest lock in seconds) from the environment file, or None when the lock is switched off (ARMOR_MAINT_TOTP_LOCKOUT=0)."""
+    if os.environ.get("ARMOR_MAINT_TOTP_LOCKOUT", "1").strip().lower() in ("0", "off", "no", "false"):
+        return None
+
+    def number(name: str, default: int, low: int, high: int) -> int:
+        try:
+            return min(high, max(low, int(os.environ.get(name, "").strip() or default)))
+        except ValueError:
+            return default
+
+    return number("ARMOR_MAINT_TOTP_FAILURES", 5, 1, 100), float(number("ARMOR_MAINT_TOTP_LOCK_S", 30, 1, 86400)), float(number("ARMOR_MAINT_TOTP_LOCK_MAX_S", 3600, 1, 604800))
+
+
+def totp_lock_wait(now: float | None = None) -> int:
+    """Seconds still to wait before a code is looked at again (0 when the door is open)."""
+    left = _totp_failures["until"] - (time.time() if now is None else now)
+    return int(left) + 1 if left > 0 else 0
+
+
+def totp_failed(now: float | None = None) -> None:
+    """Counts a wrong code. From the allowed number on, the door closes for a time that doubles with every further wrong code up to the longest lock."""
+    settings = totp_lockout_settings()
+    if settings is None:
+        return
+    allowed, first, longest = settings
+    with _totp_lock:
+        _totp_failures["count"] += 1
+        beyond = _totp_failures["count"] - allowed
+        if beyond >= 0:
+            _totp_failures["until"] = (time.time() if now is None else now) + min(longest, first * (2 ** min(beyond, 30)))
+
+
+def totp_cleared() -> None:
+    """A right code opens the door again and forgets the wrong ones."""
+    with _totp_lock:
+        _totp_failures["count"] = 0
+        _totp_failures["until"] = 0.0
+
 
 def totp_file() -> Path:
     return Path(os.environ.get("ARMOR_MAINT_TOTP_FILE", str(PREFIX / "etc" / "maint.totp")))
@@ -482,8 +524,12 @@ def require_approval(code: str, enrolled_required: bool = False) -> None:
         return
     if not code:
         raise Refused(401, "totp_required")
+    if totp_lock_wait() > 0:
+        raise Refused(429, "totp_locked")
     if not totp_accepts(path.read_text(encoding="ascii").strip(), code):
+        totp_failed()
         raise Refused(401, "totp_invalid")
+    totp_cleared()
 
 
 # ---- the two switches of the broker rules that no install turns on ------------------------------------------------------------------------------
