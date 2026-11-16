@@ -85,13 +85,15 @@ MIN_TOKEN_LENGTH = 24
 
 
 def is_sensitive_file(file_id: str) -> bool:
-    return file_id in FILES and FILES[file_id][1] in ("env", "acl")
+    return file_id in FILES and (FILES[file_id][1] in ("env", "acl") or (FILES[file_id][1] == "conf" and Sensitive.conf))
 
 
 class Sensitive:
     """How writes to the broker rules and the .env files are protected. Set at start-up from the environment, never from a request."""
     mode = "open"
     token = ""
+    # ARMOR_ADMIN_SENSITIVE_CONF=1: the broker configuration is as sensitive as the rules (second secret, the administrator's code) and only a closed list of directives is taken
+    conf = False
 
 
 def configure_sensitive(mode: str, token: str, main_token: str = "") -> str | None:
@@ -106,7 +108,45 @@ def configure_sensitive(mode: str, token: str, main_token: str = "") -> str | No
 
 def sensitive_status() -> dict[str, object]:
     return {"mode": Sensitive.mode, "protected": Sensitive.mode != "open", "files": [key for key in FILES if is_sensitive_file(key)],
-            "warning": "open" if Sensitive.mode == "open" else ""}
+            "conf_protected": Sensitive.conf, "warning": "open" if Sensitive.mode == "open" else ""}
+
+
+# The directives of the broker configuration that may be written while ARMOR_ADMIN_SENSITIVE_CONF=1. The ones that decide who may connect or read are checked on top (check_broker_conf).
+BROKER_DIRECTIVES = frozenset({
+    "listener", "port", "bind_address", "protocol", "allow_anonymous", "password_file", "acl_file", "per_listener_settings", "persistence", "persistence_location", "autosave_interval",
+    "log_dest", "log_type", "log_timestamp", "connection_messages", "max_connections", "max_keepalive", "max_packet_size", "message_size_limit", "max_queued_messages", "max_inflight_messages",
+    "certfile", "keyfile", "cafile", "capath", "require_certificate", "use_identity_as_username", "tls_version", "ciphers",
+})
+BROKER_FIXED_PATHS = ("password_file", "acl_file")
+
+
+def broker_conf_directives(content: str) -> list[tuple[str, str]]:
+    out: list[tuple[str, str]] = []
+    for line in content.splitlines():
+        text = line.strip()
+        if text and not text.startswith("#"):
+            name, _, value = text.partition(" ")
+            out.append((name, value.strip()))
+    return out
+
+
+def check_broker_conf(content: str, current: str) -> None:
+    """With ARMOR_ADMIN_SENSITIVE_CONF=1: only listed directives; no anonymous access; no plugin or include; the files of the accounts and of the rules stay the ones the installation has."""
+    now = broker_conf_directives(content)
+    before = {name: value for name, value in broker_conf_directives(current) if name in BROKER_FIXED_PATHS}
+    seen_fixed: dict[str, str] = {}
+    for name, value in now:
+        if name not in BROKER_DIRECTIVES:
+            raise Refused(422, f"directive_not_allowed:{name[:40]}")
+        if name == "allow_anonymous" and value.lower() != "false":
+            raise Refused(422, "anonymous_access_not_allowed")
+        if name in BROKER_FIXED_PATHS:
+            if before.get(name) != value:
+                raise Refused(422, f"{name}_cannot_change")
+            seen_fixed[name] = value
+    for name in before:
+        if name not in seen_fixed:
+            raise Refused(422, f"{name}_cannot_be_removed")
 
 
 def require_sensitive(given: str) -> None:
@@ -644,12 +684,19 @@ class Handler(http.server.BaseHTTPRequestHandler):
             elif method == "PUT" and len(parts) == 2 and parts[0] == "files":
                 if is_sensitive_file(parts[1]):
                     require_sensitive(sensitive_given)
-                if FILES[parts[1]][1] == "acl":
+                if FILES[parts[1]][1] == "acl" or (FILES[parts[1]][1] == "conf" and Sensitive.conf):
                     require_approval(self.headers.get(TOTP_HEADER, ""))
                 data = self.body()
                 content = data.get("content")
                 if not isinstance(content, str):
                     raise Refused(422, "invalid_content")
+                if FILES[parts[1]][1] == "conf" and Sensitive.conf:
+                    try:
+                        current = file_path(parts[1]).read_text(encoding="utf-8")
+                    except OSError:
+                        current = ""
+                    check_content("conf", content)
+                    check_broker_conf(content, current)
                 expect = data.get("expect_mtime")
                 result = write_file(parts[1], content, float(expect) if isinstance(expect, (int, float)) else None)
                 restarted: list[str] = []
@@ -743,6 +790,10 @@ def main() -> int:
     if problem:
         print(f"ARMOR_ADMIN_SENSITIVE is not usable ({problem}): use open, read_only, or second_token with ARMOR_ADMIN_SENSITIVE_TOKEN (at least {MIN_TOKEN_LENGTH} characters, different from ARMOR_ADMIN_TOKEN)", file=sys.stderr)
         return 2
+    Sensitive.conf = os.environ.get("ARMOR_ADMIN_SENSITIVE_CONF", "0").strip() == "1"
+    if not Sensitive.conf:
+        print("WARNING: the broker configuration (mosquitto.conf) can be rewritten with the admin token alone, which can open the broker even with the rules locked. "
+              "Set ARMOR_ADMIN_SENSITIVE_CONF=1 to give it the same protection as the rules and to accept only a closed list of directives.", file=sys.stderr, flush=True)
     if mode == "open":
         print("WARNING: the broker rules and the .env files can be rewritten with the admin token alone; a compromised server could open the broker. "
               "Set ARMOR_ADMIN_SENSITIVE=second_token (with ARMOR_ADMIN_SENSITIVE_TOKEN) or read_only to lock them.", file=sys.stderr, flush=True)
