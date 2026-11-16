@@ -21,7 +21,7 @@
   <img src="https://img.shields.io/badge/License-GPL%203.0--or--later-blue.svg" alt="GPL 3.0 or later">
   <img src="https://img.shields.io/badge/Deploy-Docker%20Compose-2496ed.svg" alt="Deploy">
   <img src="https://img.shields.io/badge/Bench-systemd-FFB020.svg" alt="Bench">
-  <img src="https://img.shields.io/badge/Tests-494-00E5FF.svg" alt="Tests">
+  <img src="https://img.shields.io/badge/Tests-502-00E5FF.svg" alt="Tests">
   <img src="https://img.shields.io/badge/Version-0.7.6-0f6cbd.svg" alt="Version">
   <img src="https://img.shields.io/badge/Maturity-established-2EA44F.svg" alt="Maturity">
 </p>
@@ -174,7 +174,7 @@ Consulte o [limite da implantação](docs/DEPLOYMENT_BOUNDARY.md) e a [bancada d
 | `test_compose.sh`  `validate-compose.sh` | a topologia Compose e o seu perfil TLS, construídos e executados com Docker Engine no WSL |
 | `test_firewall.sh`  `test_install_plan.sh`  `test_mqtt_identity.sh`  `test_mqtt_tls.sh`  `test_tls_check.sh`  `test_wireguard.sh`  `test_ddns.sh` | a firewall, o plano do instalador, as identidades do broker, MQTT sobre TLS, a verificação TLS, a VPN e o nome dinâmico |
 
-Os testes de Python correm com `python -m unittest discover -s scripts -p "test_*.py"`; no Windows os que precisam de sockets Unix não podem correr. Os scripts precisam de Bash, WSL, Docker ou root e têm de ser executados em Linux. Há 494 testes de Python, além dos testes de shell, e o workflow Coverage floor mantém a cobertura de `scripts/` acima de um piso; o Project status diz o que foi executado. O GitHub Actions executa a base do A.R.M.O.R. em cada push e pull request: a validação do manifesto, da versão, do registo de alterações e da paridade dos README, e depois a compilação e os testes do próprio projeto.
+Os testes de Python correm com `python -m unittest discover -s scripts -p "test_*.py"`; no Windows os que precisam de sockets Unix não podem correr. Os scripts precisam de Bash, WSL, Docker ou root e têm de ser executados em Linux. Há 502 testes de Python, além dos testes de shell, e o workflow Coverage floor mantém a cobertura de `scripts/` acima de um piso; o Project status diz o que foi executado. O GitHub Actions executa a base do A.R.M.O.R. em cada push e pull request: a validação do manifesto, da versão, do registo de alterações e da paridade dos README, e depois a compilação e os testes do próprio projeto.
 
 ## 🏗️ Compilação e publicação
 
