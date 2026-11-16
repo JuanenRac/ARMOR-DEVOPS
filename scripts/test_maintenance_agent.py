@@ -543,13 +543,13 @@ class MaintenanceTest(unittest.TestCase):
     def test_the_github_token_goes_only_to_the_github_api_and_not_along_a_redirect(self) -> None:
         import urllib.request
         agent = self.agent
-        agent.GITHUB_TOKEN = "ghp_not_a_real_token"
+        agent.GITHUB_TOKEN = "not-a-real-token"
         try:
-            self.assertEqual(agent.github_authorization("https://api.github.com/repos/x/y/releases/latest"), {"Authorization": "Bearer ghp_not_a_real_token"})
+            self.assertEqual(agent.github_authorization("https://api.github.com/repos/x/y/releases/latest"), {"Authorization": "Bearer not-a-real-token"})
             for url in ("https://github.com/x/y/releases/download/v1/a.sha256", "http://127.0.0.1:18080/healthz", "https://objects.example.net/a.sig"):
                 self.assertEqual(agent.github_authorization(url), {}, url)
             handler = agent.DropAuthorizationOnRedirect()
-            first = urllib.request.Request("https://api.github.com/a", headers={"Authorization": "Bearer ghp_not_a_real_token", "User-Agent": "t"})
+            first = urllib.request.Request("https://api.github.com/a", headers={"Authorization": "Bearer not-a-real-token", "User-Agent": "t"})
             other = handler.redirect_request(first, None, 302, "Found", {}, "https://objects.example.net/b")
             self.assertIsNotNone(other)
             self.assertFalse(other.has_header("Authorization"))
