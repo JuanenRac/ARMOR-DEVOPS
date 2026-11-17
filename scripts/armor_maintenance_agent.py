@@ -1913,7 +1913,7 @@ def updater_apply(data: dict[str, object]) -> Job:
 # nothing is locked out by an update of this file:
 #   ARMOR_MAINT_PEER_UIDS=998,0   the user numbers the kernel reports for the process on the other end of the socket (SO_PEERCRED); any other user is refused (403 peer_not_allowed)
 #   ARMOR_MAINT_SENSITIVE_EXTENDED=1  the same two checks also guard the WireGuard peers (add, read the configuration with its private key, remove), the forced refresh of the DDNS
-#                                 name and the rollback of a program (off by default)
+#                                 name, the rollback of a program and an update asked with force (off by default)
 #   ARMOR_MAINT_TOTP_FILE=...     the file with the base32 secret of the administrator's authenticator (made by `--totp-enroll`, mode 0600); when it exists, a sensitive call
 #                                 must bring a current six-digit code in X-Armor-Maint-Totp (401 totp_required / totp_invalid); a code is good once (no replay)
 SENSITIVE_ROUTES = {
@@ -1926,9 +1926,9 @@ def sensitive_extended() -> bool:
     return os.environ.get("ARMOR_MAINT_SENSITIVE_EXTENDED", "0").strip().lower() in ("1", "on", "yes", "true")
 
 
-def is_sensitive(method: str, parts: list[str]) -> bool:
+def is_sensitive(method: str, parts: list[str], forced: bool = False) -> bool:
     """Whether a call is one of the sensitive ones: the fixed list, and with ARMOR_MAINT_SENSITIVE_EXTENDED=1 also the WireGuard peers (adding one, reading its configuration, which holds
-    its private key, removing it), the forced refresh of the dynamic DNS name and the rollback of a program."""
+    its private key, removing it), the forced refresh of the dynamic DNS name, the rollback of a program and an update that asks to be forced (`force: true`, which is why the body is read first)."""
     if (method, tuple(parts)) in SENSITIVE_ROUTES:
         return True
     if not sensitive_extended():
@@ -1939,6 +1939,8 @@ def is_sensitive(method: str, parts: list[str]) -> bool:
         return True
     if method == "POST" and len(parts) == 5 and parts[:3] == ["remote", "wireguard", "peers"] and parts[4] == "remove":
         return True
+    if method == "POST" and parts == ["updates"]:
+        return forced
     return method == "POST" and len(parts) == 3 and parts[0] == "updates" and parts[2] == "rollback"
 
 
@@ -2048,9 +2050,9 @@ def totp_enroll() -> str:
     return secret
 
 
-def guard_sensitive(method: str, parts: list[str], credentials: tuple[int, int, int] | None, code: str) -> None:
+def guard_sensitive(method: str, parts: list[str], credentials: tuple[int, int, int] | None, code: str, forced: bool = False) -> None:
     """Refuses a sensitive call that does not come from an allowed user or without a current code, when those checks are on; does nothing for any other call."""
-    if not is_sensitive(method, parts):
+    if not is_sensitive(method, parts, forced):
         return
     allowed = peer_uids()
     if allowed is not None and (credentials is None or credentials[1] not in allowed):
@@ -2115,11 +2117,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 raise Refused(404, "not_found")
             parts = parts[1:]
             arguments = dict(pair.split("=", 1) for pair in query.split("&") if "=" in pair)
-            guard_sensitive(method, parts, peer_credentials(self.request), self.headers.get("X-Armor-Maint-Totp", ""))
+            preread: dict[str, object] | None = None
+            if method == "POST" and parts == ["updates"] and sensitive_extended():
+                preread = self.body()          # the body is needed before the guard: a forced update is one of the guarded calls
+            guard_sensitive(method, parts, peer_credentials(self.request), self.headers.get("X-Armor-Maint-Totp", ""), preread is not None and preread.get("force") is True)
             if method == "GET" and parts == ["overview"]:
                 self.reply(200, overview(arguments.get("force") == "1"))
             elif method == "POST" and parts == ["updates"]:
-                data = self.body()
+                data = preread if preread is not None else self.body()
                 wanted = data.get("components")
                 if not isinstance(wanted, list) or not wanted or any(item not in COMPONENTS for item in wanted):
                     raise Refused(422, "unknown_component")

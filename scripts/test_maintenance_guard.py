@@ -160,6 +160,13 @@ class GuardTests(unittest.TestCase):
                     agent.guard_sensitive(method, parts, (1, 1000, 1000), "")
                 self.assertEqual((caught.exception.status, caught.exception.code), (403, "peer_not_allowed"))
                 agent.guard_sensitive(method, parts, (1, 998, 998), "")
+        with self.assertRaises(agent.Refused):                       # a forced update is guarded too, a plain one is not
+            agent.guard_sensitive("POST", ["updates"], (1, 1000, 1000), "", True)
+        agent.guard_sensitive("POST", ["updates"], (1, 998, 998), "", True)
+        agent.guard_sensitive("POST", ["updates"], (1, 1000, 1000), "", False)
+        os.environ["ARMOR_MAINT_SENSITIVE_EXTENDED"] = "0"
+        agent.guard_sensitive("POST", ["updates"], (1, 1000, 1000), "", True)   # off: the forced update is not guarded
+        os.environ["ARMOR_MAINT_SENSITIVE_EXTENDED"] = "1"
         for method, parts in (("GET", ["remote"]), ("GET", ["remote", "wireguard", "peers"]), ("GET", ["overview"]), ("POST", ["updates"]), ("GET", ["updates", "x", "rollback"])):
             agent.guard_sensitive(method, parts, (1, 1000, 1000), "")   # reading and the plain update are not on the extended list
 
