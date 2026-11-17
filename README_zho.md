@@ -21,7 +21,7 @@
   <img src="https://img.shields.io/badge/License-GPL%203.0--or--later-blue.svg" alt="GPL 3.0 or later">
   <img src="https://img.shields.io/badge/Deploy-Docker%20Compose-2496ed.svg" alt="Deploy">
   <img src="https://img.shields.io/badge/Bench-systemd-FFB020.svg" alt="Bench">
-  <img src="https://img.shields.io/badge/Tests-502-00E5FF.svg" alt="Tests">
+  <img src="https://img.shields.io/badge/Tests-509-00E5FF.svg" alt="Tests">
   <img src="https://img.shields.io/badge/Version-0.7.6-0f6cbd.svg" alt="Version">
   <img src="https://img.shields.io/badge/Maturity-established-2EA44F.svg" alt="Maturity">
 </p>
@@ -174,7 +174,7 @@ scripts/backup_data.sh --data-dir <data> --out-dir <backups> --passphrase-file <
 | `test_compose.sh`  `validate-compose.sh` | Compose 拓扑及其 TLS 配置，在 WSL 的 Docker Engine 中构建并运行 |
 | `test_firewall.sh`  `test_install_plan.sh`  `test_mqtt_identity.sh`  `test_mqtt_tls.sh`  `test_tls_check.sh`  `test_wireguard.sh`  `test_ddns.sh` | 防火墙、安装器的计划、代理身份、TLS 上的 MQTT、TLS 检查、VPN 和动态域名 |
 
-Python 测试用 `python -m unittest discover -s scripts -p "test_*.py"` 运行；在 Windows 上需要 Unix 套接字的无法运行。脚本需要 Bash、WSL、Docker 或 root，须在 Linux 上运行。共有 502 个 Python 测试，另有 shell 测试，工作流 Coverage floor 把 `scripts/` 的覆盖率保持在下限之上；Project status 说明已运行的内容。GitHub Actions 在每次推送和拉取请求时运行 A.R.M.O.R. 基线：清单、版本、更新日志和 README 一致性的校验，然后是项目自身的构建和测试。
+Python 测试用 `python -m unittest discover -s scripts -p "test_*.py"` 运行；在 Windows 上需要 Unix 套接字的无法运行。脚本需要 Bash、WSL、Docker 或 root，须在 Linux 上运行。共有 509 个 Python 测试，另有 shell 测试，工作流 Coverage floor 把 `scripts/` 的覆盖率保持在下限之上；Project status 说明已运行的内容。GitHub Actions 在每次推送和拉取请求时运行 A.R.M.O.R. 基线：清单、版本、更新日志和 README 一致性的校验，然后是项目自身的构建和测试。
 
 ## 🏗️ 构建与发布
 
