@@ -21,7 +21,7 @@
   <img src="https://img.shields.io/badge/License-GPL%203.0--or--later-blue.svg" alt="GPL 3.0 or later">
   <img src="https://img.shields.io/badge/Deploy-Docker%20Compose-2496ed.svg" alt="Deploy">
   <img src="https://img.shields.io/badge/Bench-systemd-FFB020.svg" alt="Bench">
-  <img src="https://img.shields.io/badge/Tests-502-00E5FF.svg" alt="Tests">
+  <img src="https://img.shields.io/badge/Tests-509-00E5FF.svg" alt="Tests">
   <img src="https://img.shields.io/badge/Version-0.7.6-0f6cbd.svg" alt="Version">
   <img src="https://img.shields.io/badge/Maturity-established-2EA44F.svg" alt="Maturity">
 </p>
@@ -174,7 +174,7 @@ See the [deployment boundary](docs/DEPLOYMENT_BOUNDARY.md) and the [test bench](
 | `test_compose.sh`  `validate-compose.sh` | the Compose topology and its TLS profile, built and run with Docker Engine in WSL |
 | `test_firewall.sh`  `test_install_plan.sh`  `test_mqtt_identity.sh`  `test_mqtt_tls.sh`  `test_tls_check.sh`  `test_wireguard.sh`  `test_ddns.sh` | the firewall, the installer's plan, the broker identities, MQTT over TLS, the TLS check, the VPN and the dynamic name |
 
-The Python tests run with `python -m unittest discover -s scripts -p "test_*.py"`; on Windows the ones that need Unix sockets cannot run. The scripts need Bash, WSL, Docker or root, and have to be run on Linux. There are 502 Python tests, besides the shell tests, and the workflow Coverage floor holds the coverage of `scripts/` above a floor; Project status says what has been run. GitHub Actions runs the A.R.M.O.R. baseline on every push and pull request: the validation of the manifest, version, changelog and README parity, then the project's own build and tests.
+The Python tests run with `python -m unittest discover -s scripts -p "test_*.py"`; on Windows the ones that need Unix sockets cannot run. The scripts need Bash, WSL, Docker or root, and have to be run on Linux. There are 509 Python tests, besides the shell tests, and the workflow Coverage floor holds the coverage of `scripts/` above a floor; Project status says what has been run. GitHub Actions runs the A.R.M.O.R. baseline on every push and pull request: the validation of the manifest, version, changelog and README parity, then the project's own build and tests.
 
 ## 🏗️ Build & Release
 
