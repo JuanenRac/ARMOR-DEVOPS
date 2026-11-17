@@ -147,6 +147,22 @@ class GuardTests(unittest.TestCase):
         self.assertEqual(self.file.stat().st_mode & 0o777, 0o600)
         self.assertEqual(len(agent.totp_code(secret, 1)), 6)
 
+    def test_the_extended_list_is_off_until_asked_for_and_then_guards_the_keys_of_remote_access(self):
+        extended = [("POST", ["remote", "wireguard", "peers"]), ("GET", ["remote", "wireguard", "peers", "phone"]), ("POST", ["remote", "wireguard", "peers", "phone", "remove"]),
+                    ("POST", ["remote", "ddns", "update"]), ("POST", ["updates", "armor-server", "rollback"])]
+        os.environ["ARMOR_MAINT_PEER_UIDS"] = "998"
+        for method, parts in extended:                      # off: nothing changes, a user outside the list still gets through
+            agent.guard_sensitive(method, parts, (1, 1000, 1000), "")
+        os.environ["ARMOR_MAINT_SENSITIVE_EXTENDED"] = "1"
+        for method, parts in extended:
+            with self.subTest(parts=parts):
+                with self.assertRaises(agent.Refused) as caught:
+                    agent.guard_sensitive(method, parts, (1, 1000, 1000), "")
+                self.assertEqual((caught.exception.status, caught.exception.code), (403, "peer_not_allowed"))
+                agent.guard_sensitive(method, parts, (1, 998, 998), "")
+        for method, parts in (("GET", ["remote"]), ("GET", ["remote", "wireguard", "peers"]), ("GET", ["overview"]), ("POST", ["updates"]), ("GET", ["updates", "x", "rollback"])):
+            agent.guard_sensitive(method, parts, (1, 1000, 1000), "")   # reading and the plain update are not on the extended list
+
     def test_every_sensitive_route_is_one_the_helper_serves(self):
         source = (HERE / "armor_maintenance_agent.py").read_text(encoding="utf-8")
         for method, parts in agent.SENSITIVE_ROUTES:

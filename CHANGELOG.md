@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+- **The sensitive calls of the maintenance helper can include the keys of remote access:** with `ARMOR_MAINT_SENSITIVE_EXTENDED=1` the check of the user and the code of the authenticator also guards adding a WireGuard peer, reading its configuration (which holds its private key), removing it, the forced refresh of the DDNS name and the rollback of a program. Off by default, so nothing changes until the administrator writes it. See `docs/SENSITIVE_SETTINGS.md`.
+
 - **The update of a program through the engine installs the version that was approved, and `force` never goes back:** the preview hands out a plan with the version it saw, but the engine installs the newest signed release at the moment it runs, up to five minutes later. The target is now read again just before the update (`plan_stale` if it changed, nothing installed) and the version in place is read after it (`version_mismatch` if it is not the approved one). In `POST /v1/updates`, `force` reinstalls the same version to repair it but refuses an older release (`downgrade_refused`), which a signed release that moved back to an old firmware would otherwise have installed.
 
 - **The environment check warns about `ARMOR_TRUST_PROXY` set to a number or `true` for remote access:** behind the `tls` profile (Caddy, then the nginx of Studio) the server would take the address of the proxy as the client, so every client from the Internet would look like the house; the check says to use `uniquelocal`, the value of the compose files.

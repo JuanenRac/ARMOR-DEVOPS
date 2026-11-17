@@ -1912,12 +1912,36 @@ def updater_apply(data: dict[str, object]) -> Job:
 # upgrade, the automatic updates, the remote access) two more checks can be switched on, each by what the administrator writes in armor.maint.env, and both are off until then so
 # nothing is locked out by an update of this file:
 #   ARMOR_MAINT_PEER_UIDS=998,0   the user numbers the kernel reports for the process on the other end of the socket (SO_PEERCRED); any other user is refused (403 peer_not_allowed)
+#   ARMOR_MAINT_SENSITIVE_EXTENDED=1  the same two checks also guard the WireGuard peers (add, read the configuration with its private key, remove), the forced refresh of the DDNS
+#                                 name and the rollback of a program (off by default)
 #   ARMOR_MAINT_TOTP_FILE=...     the file with the base32 secret of the administrator's authenticator (made by `--totp-enroll`, mode 0600); when it exists, a sensitive call
 #                                 must bring a current six-digit code in X-Armor-Maint-Totp (401 totp_required / totp_invalid); a code is good once (no replay)
 SENSITIVE_ROUTES = {
     ("POST", ("console", "run")), ("POST", ("system", "reboot")), ("POST", ("system", "upgrade")), ("POST", ("system", "auto-updates")), ("POST", ("staging",)),
     ("POST", ("remote", "wireguard", "setup")), ("POST", ("remote", "ddns", "setup")), ("POST", ("updater", "apply")),
 }
+
+def sensitive_extended() -> bool:
+    """ARMOR_MAINT_SENSITIVE_EXTENDED=1 also puts the keys of remote access and the rollback of a program behind the same checks (off by default, so nothing is locked out by an update)."""
+    return os.environ.get("ARMOR_MAINT_SENSITIVE_EXTENDED", "0").strip().lower() in ("1", "on", "yes", "true")
+
+
+def is_sensitive(method: str, parts: list[str]) -> bool:
+    """Whether a call is one of the sensitive ones: the fixed list, and with ARMOR_MAINT_SENSITIVE_EXTENDED=1 also the WireGuard peers (adding one, reading its configuration, which holds
+    its private key, removing it), the forced refresh of the dynamic DNS name and the rollback of a program."""
+    if (method, tuple(parts)) in SENSITIVE_ROUTES:
+        return True
+    if not sensitive_extended():
+        return False
+    if method == "POST" and parts in (["remote", "wireguard", "peers"], ["remote", "ddns", "update"]):
+        return True
+    if method == "GET" and len(parts) == 4 and parts[:3] == ["remote", "wireguard", "peers"]:
+        return True
+    if method == "POST" and len(parts) == 5 and parts[:3] == ["remote", "wireguard", "peers"] and parts[4] == "remove":
+        return True
+    return method == "POST" and len(parts) == 3 and parts[0] == "updates" and parts[2] == "rollback"
+
+
 TOTP_STEP_S = 30
 TOTP_WINDOW = 1            # steps either side of now, for a clock that is a little off
 _totp_last_counter = [0]
@@ -2026,7 +2050,7 @@ def totp_enroll() -> str:
 
 def guard_sensitive(method: str, parts: list[str], credentials: tuple[int, int, int] | None, code: str) -> None:
     """Refuses a sensitive call that does not come from an allowed user or without a current code, when those checks are on; does nothing for any other call."""
-    if (method, tuple(parts)) not in SENSITIVE_ROUTES:
+    if not is_sensitive(method, parts):
         return
     allowed = peer_uids()
     if allowed is not None and (credentials is None or credentials[1] not in allowed):
