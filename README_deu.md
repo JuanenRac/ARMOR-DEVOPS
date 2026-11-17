@@ -141,6 +141,7 @@ Die zwei Helfer (`armor_admin_agent.py`, `armor_maintenance_agent.py`) lauschen 
 | `ARMOR_TLS_BIND`  `ARMOR_TLS_PORT`  `ARMOR_TLS_HTTP_PORT` | 8443 | Caddy des Profils `tls` |
 | `ARMOR_MAINT_STAGING`  `ARMOR_MAINT_STAGING_WAIT_S` | off  30 | in `armor.maint.env`: `on` lässt den Wartungshelfer den neuen Server vor dem Umschalten auf einem freien Loopback-Port mit leerem Datenordner und ohne Broker testen (die Wartezeit beträgt 5 bis 120 Sekunden); der Schalter im Studio-Bildschirm Aktualisierungen hat, einmal benutzt, Vorrang vor dieser Datei |
 | `.env`  `.env.example` | - | von `generate_secrets.sh` erzeugt, von Git ignoriert; das Beispiel listet jede Variable |
+| `ARMOR_MAINT_SENSITIVE_EXTENDED` | 0 | in `armor.maint.env`: mit `1` schützen die Benutzer- und Zweitfaktor-Prüfungen des Wartungshelfers auch die WireGuard-Peers, die erzwungene Aktualisierung des DDNS-Namens, das Zurückrollen eines Programms und ein Update mit `force` (aus, damit ein Update des Helfers niemanden aussperrt) |
 
 Die Root-Konsole des Wartungshelfers ist eine Einstellung in der eigenen Datei der Maschine und standardmäßig aus; Firewall und TLS sind Optionen des Installers, keine Voreinstellungen. Einzelheiten in [docs/CM5_TEST_BENCH.md](docs/CM5_TEST_BENCH.md).
 
