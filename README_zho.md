@@ -141,6 +141,7 @@ ARMOR-DEVOPS 是其他一切到达机器并保持最新的途径。它在 CM5 �
 | `ARMOR_TLS_BIND`  `ARMOR_TLS_PORT`  `ARMOR_TLS_HTTP_PORT` | 8443 | `tls` 配置的 Caddy |
 | `ARMOR_MAINT_STAGING`  `ARMOR_MAINT_STAGING_WAIT_S` | off  30 | `armor.maint.env` 内：`on` 让维护助手在切换前，于回环地址的空闲端口上以空数据目录且不连代理的方式试运行新服务器（等待 5 至 120 秒）；一旦使用过 Studio“更新”界面的开关，它将优先于此文件 |
 | `.env`  `.env.example` | - | 由 `generate_secrets.sh` 创建，Git 忽略；示例列出每个变量 |
+| `ARMOR_MAINT_SENSITIVE_EXTENDED` | 0 | 在 `armor.maint.env` 中：设为 `1` 时，维护助手的用户检查和第二因素检查还会保护 WireGuard 对等节点、DDNS 名称的强制刷新、程序回滚以及要求 `force` 的更新（默认关闭，以免更新助手时把人锁在外面） |
 
 维护助手的 root 控制台是机器自身文件中的设置，默认关闭；防火墙和 TLS 是安装器的选项而非默认值。详见 [docs/CM5_TEST_BENCH.md](docs/CM5_TEST_BENCH.md)。
 

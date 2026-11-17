@@ -141,6 +141,7 @@ The two helpers (`armor_admin_agent.py`, `armor_maintenance_agent.py`) listen on
 | `ARMOR_TLS_BIND`  `ARMOR_TLS_PORT`  `ARMOR_TLS_HTTP_PORT` | 8443 | Caddy of the `tls` profile |
 | `ARMOR_MAINT_STAGING`  `ARMOR_MAINT_STAGING_WAIT_S` | off  30 | in `armor.maint.env`: `on` makes the maintenance helper try the new server on a free loopback port, with an empty data folder and no broker, before it switches (the wait is 5 to 120 seconds); the switch of Studio's Updates screen, once used, wins over this file |
 | `.env`  `.env.example` | - | created by `generate_secrets.sh`, ignored by Git; the example lists every variable |
+| `ARMOR_MAINT_SENSITIVE_EXTENDED` | 0 | in `armor.maint.env`: with `1` the user and second-factor checks of the maintenance helper also guard the WireGuard peers, the forced refresh of the DDNS name, the rollback of a program and an update that asks for `force` (off so that an update of the helper locks nobody out) |
 
 The root console of the maintenance helper is a setting of the machine's own file and is off by default; the firewall and TLS are options of the installer, not defaults. Details in [docs/CM5_TEST_BENCH.md](docs/CM5_TEST_BENCH.md).
 

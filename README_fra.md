@@ -141,6 +141,7 @@ Les deux assistants (`armor_admin_agent.py`, `armor_maintenance_agent.py`) écou
 | `ARMOR_TLS_BIND`  `ARMOR_TLS_PORT`  `ARMOR_TLS_HTTP_PORT` | 8443 | Caddy du profil `tls` |
 | `ARMOR_MAINT_STAGING`  `ARMOR_MAINT_STAGING_WAIT_S` | off  30 | dans `armor.maint.env` : `on` fait essayer le nouveau serveur par l'assistant de maintenance, sur un port libre du loopback, avec un dossier de données vide et sans broker, avant de basculer (l'attente va de 5 à 120 secondes) ; l'interrupteur de l'écran Mises à jour de Studio, une fois utilisé, l'emporte sur ce fichier |
 | `.env`  `.env.example` | - | créé par `generate_secrets.sh`, ignoré par Git ; l'exemple liste chaque variable |
+| `ARMOR_MAINT_SENSITIVE_EXTENDED` | 0 | dans `armor.maint.env` : avec `1` les contrôles d'utilisateur et de second facteur de l'assistant de maintenance protègent aussi les pairs WireGuard, le rafraîchissement forcé du nom DDNS, le retour arrière d'un programme et une mise à jour qui demande `force` (désactivé pour qu'une mise à jour de l'assistant n'enferme personne dehors) |
 
 La console root de l'assistant de maintenance est un réglage du propre fichier de la machine et est éteinte par défaut ; le pare-feu et le TLS sont des options de l'installateur, pas des valeurs par défaut. Détails dans [docs/CM5_TEST_BENCH.md](docs/CM5_TEST_BENCH.md).
 

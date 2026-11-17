@@ -141,6 +141,7 @@ ARMOR-DEVOPS は、他のすべてがマシンに載り、最新に保たれる�
 | `ARMOR_TLS_BIND`  `ARMOR_TLS_PORT`  `ARMOR_TLS_HTTP_PORT` | 8443 | `tls` プロファイルの Caddy |
 | `ARMOR_MAINT_STAGING`  `ARMOR_MAINT_STAGING_WAIT_S` | off  30 | `armor.maint.env` 内：`on` にすると、メンテナンスヘルパーは切り替える前に、新しいサーバーをループバックの空きポートで、空のデータフォルダーとブローカーなしで試します（待ち時間は 5〜120 秒）。Studio の「更新」画面のスイッチを一度使うと、このファイルより優先されます |
 | `.env`  `.env.example` | - | `generate_secrets.sh` が作成し、Git は無視。例に全変数を記載 |
+| `ARMOR_MAINT_SENSITIVE_EXTENDED` | 0 | `armor.maint.env` 内：`1` にすると、保守ヘルパーのユーザー確認と第二要素の確認が、WireGuard のピア、DDNS 名の強制更新、プログラムのロールバック、`force` を求める更新も守ります（ヘルパーの更新で誰も締め出されないよう既定は無効） |
 
 メンテナンスヘルパーの root コンソールはマシン自身のファイルの設定で、既定ではオフです。ファイアウォールと TLS はインストーラーのオプションで、既定ではありません。詳細は [docs/CM5_TEST_BENCH.md](docs/CM5_TEST_BENCH.md)。
 
