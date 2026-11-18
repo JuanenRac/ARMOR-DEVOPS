@@ -22,7 +22,7 @@
   <img src="https://img.shields.io/badge/Deploy-Docker%20Compose-2496ed.svg" alt="Deploy">
   <img src="https://img.shields.io/badge/Bench-systemd-FFB020.svg" alt="Bench">
   <img src="https://img.shields.io/badge/Tests-509-00E5FF.svg" alt="Tests">
-  <img src="https://img.shields.io/badge/Version-0.7.6-0f6cbd.svg" alt="Version">
+  <img src="https://img.shields.io/badge/Version-0.7.7-0f6cbd.svg" alt="Version">
   <img src="https://img.shields.io/badge/Maturity-established-2EA44F.svg" alt="Reifegrad">
 </p>
 
@@ -36,7 +36,7 @@
 
 | | |
 |---|---|
-| Version | `0.7.6` |
+| Version | `0.7.7` |
 | Reifegrad | Etabliert |
 | Rolle | Bereitstellungs-Kit: Installer für den CM5-Prüfstand, Release-Pakete, zwei Helfer, Compose-Topologie |
 | Technik | Bash, Python 3 (Standardbibliothek), Docker Compose, Mosquitto, Caddy, nginx, systemd |
