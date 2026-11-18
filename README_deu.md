@@ -193,7 +193,7 @@ Es wird nichts kompiliert: Es sind Skripte, eine Compose-Datei und Python-Helfer
 ## 📂 Struktur des Repositorys
 
 <p align="center">
-  <img src="images/repository-structure.svg" alt="Repository structure of ARMOR-DEVOPS" width="100%">
+  <img src="images/repository-structure.svg" alt="Repository-Struktur von ARMOR-DEVOPS" width="100%">
 </p>
 
 <details>

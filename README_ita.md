@@ -193,7 +193,7 @@ Non si compila nulla: sono script, un file Compose e assistenti Python. `scripts
 ## 📂 Struttura del repository
 
 <p align="center">
-  <img src="images/repository-structure.svg" alt="Repository structure of ARMOR-DEVOPS" width="100%">
+  <img src="images/repository-structure.svg" alt="Struttura del repository di ARMOR-DEVOPS" width="100%">
 </p>
 
 <details>

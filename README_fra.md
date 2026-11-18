@@ -193,7 +193,7 @@ Rien n'est compilé : ce sont des scripts, un fichier Compose et des assistants 
 ## 📂 Structure du dépôt
 
 <p align="center">
-  <img src="images/repository-structure.svg" alt="Repository structure of ARMOR-DEVOPS" width="100%">
+  <img src="images/repository-structure.svg" alt="Structure du dépôt de ARMOR-DEVOPS" width="100%">
 </p>
 
 <details>

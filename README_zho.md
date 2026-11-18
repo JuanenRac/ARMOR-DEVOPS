@@ -193,7 +193,7 @@ Python 测试用 `python -m unittest discover -s scripts -p "test_*.py"` 运行�
 ## 📂 仓库结构
 
 <p align="center">
-  <img src="images/repository-structure.svg" alt="Repository structure of ARMOR-DEVOPS" width="100%">
+  <img src="images/repository-structure.svg" alt="ARMOR-DEVOPS 的仓库结构" width="100%">
 </p>
 
 <details>
