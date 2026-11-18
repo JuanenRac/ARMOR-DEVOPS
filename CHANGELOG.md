@@ -4,6 +4,9 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+- **The shared tools of the manifest and the status lights gain an opt-in strict check of the evidence:** `sync_manifests.py` and `status_lights.py` take `--strict-evidence` (off by default; `ARMOR_STRICT_EVIDENCE=1` switches it on for `armor_ci_validate.py`).
+- **The manifest says simulator evidence until the record of a test on real hardware is kept:** it said bench with no record, so the Hardware light goes down to orange in the eight READMEs (a person raises them again with the record).
+
 ## [0.7.7] - Hardened admin and maintenance agents, whole-topology and repository tests, executable scripts
 
 - **The sensitive calls of the maintenance helper can include the keys of remote access:** with `ARMOR_MAINT_SENSITIVE_EXTENDED=1` the check of the user and the code of the authenticator also guards adding a WireGuard peer, reading its configuration (which holds its private key), removing it, the forced refresh of the DDNS name, the rollback of a program and an update that asks for `force`. Off by default, so nothing changes until the administrator writes it. See `docs/SENSITIVE_SETTINGS.md`.
