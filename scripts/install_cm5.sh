@@ -75,7 +75,7 @@ Usage: install_cm5.sh --public-host HOST [--apply] [--server-port N] [--studio-p
                  nothing. An upgrade keeps what the install had.
   --with-network also run the network watcher (armor-network): it looks at the local network, tells the server what changes and changes nothing; it gets its own token
                  (--network-node-id NAME, default house-1)
-  --with-voice   also run the voice gateway (armor-voice, on 127.0.0.1 only): the closed list of fifteen written and spoken commands (arm and disarm are confirmed
+  --with-voice   also run the voice gateway (armor-voice, on 127.0.0.1 only): the closed list of sixteen written and spoken commands (arm and disarm are confirmed
                  in two turns; the server asks it and carries out what it accepts, so the phone can send commands as text or voice)
   --with-backup  a daily encrypted backup of $PREFIX/data (a timer; see scripts/backup_data.sh), kept under $PREFIX/backups
   --bind         address all services listen on (default ${BIND_ADDRESS})
@@ -242,7 +242,7 @@ for pair in "${REACH_UNIQUE[@]}"; do say "  also reachable : ${pair%%=*} (server
 [[ "$BROKER_AUTH" != "dynsec" ]] || say "  broker identities: the dynamic-security plugin of Mosquitto 2 (managed with mosquitto_ctrl; mqtt_identity.sh no longer edits them)"
 [[ "$WITH_AI" -ne 1 ]] || say "  armor-server-ai: looks at the cameras through the server (movement, weighed with the radars and the light) and tells it; its own token opens only four routes of the server"
 [[ "$AI_IP_RESTRICT" != "on" ]] || say "  armor-server-ai: the kernel only lets its unit talk to localhost${AI_IP_ALLOW:+ and $AI_IP_ALLOW} (IPAddressDeny=any)"
-[[ "$WITH_VOICE" -ne 1 ]] || say "  armor-voice    : 127.0.0.1:$VOICE_PORT (written and spoken commands: a closed list of fifteen, arm and disarm confirmed in two turns; only this machine can reach it)"
+[[ "$WITH_VOICE" -ne 1 ]] || say "  armor-voice    : 127.0.0.1:$VOICE_PORT (written and spoken commands: a closed list of sixteen, arm and disarm confirmed in two turns; only this machine can reach it)"
 [[ "$WITH_BACKUP" -ne 1 ]] || say "  armor-backup   : daily, encrypted, kept under $PREFIX/backups"
 [[ "$WITH_MAINT" -ne 1 ]] || say "  armor-maintenance: root helper on /run/armor-maint.sock (group $SERVICE_USER): updates from GitHub, the system's updates and, only if turned on in $PREFIX/etc/armor.maint.env, a root console"
 [[ "$WITH_MAINT" -ne 1 ]] || say "  unattended-upgrades: automatic SECURITY updates of the system (security source only, on by default, switch and reboot window in Studio; it never reboots while the system is armed)"
@@ -665,7 +665,7 @@ fi
 if [[ "$WITH_VOICE" -eq 1 ]]; then
   cat >/etc/systemd/system/armor-voice.service <<EOF
 [Unit]
-Description=A.R.M.O.R. voice gateway (a closed list of fifteen commands, loopback only)
+Description=A.R.M.O.R. voice gateway (a closed list of sixteen commands, loopback only)
 After=network-online.target
 Before=armor-server.service
 
