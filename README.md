@@ -59,7 +59,7 @@ Each line is one part of this repository and the light says how far it is today.
 | Software | 🟡 | The CM5 bench installer has run on a real CM5 that hosts other software, which stayed healthy; a clean install on a machine that has never seen the project is not proven. |
 | Tests | 🟡 | The backup and restore scripts have a passing round-trip test, the two helpers have their own tests, and the Docker topology with its optional TLS profile was built and run with Docker Engine in WSL; the whole topology has not run on its target. |
 | Hardware | 🟠 | It runs the CM5 test bench in daily use; nothing has run on the Jetson. |
-| Updates | 🟢 | Updates of the components from GitHub, through Studio, have been done on the CM5 test bench. |
+| Updates | 🟠 | Updates of the components from GitHub, through Studio, have been done on the CM5 test bench. |
 | Documentation | 🟢 | Eight languages and the changelog are up to date. |
 
 ## 🎯 Overview

@@ -59,7 +59,7 @@ Jede Zeile ist ein Teil dieses Repositorys, und die Ampel sagt, wie weit er heut
 | Software | 🟡 | Der Installer des CM5-Prüfstands lief auf einem echten CM5, auf dem andere Software läuft und gesund blieb; eine saubere Installation auf einem Rechner, der das Projekt nie gesehen hat, ist nicht belegt. |
 | Tests | 🟡 | Die Skripte für Sicherung und Wiederherstellung haben einen bestandenen Hin-und-zurück-Test, die beiden Helfer haben eigene Tests, und die Docker-Topologie mit ihrem optionalen TLS-Profil wurde mit Docker Engine in WSL gebaut und ausgeführt; die gesamte Topologie lief nicht auf ihrem Ziel. |
 | Hardware | 🟠 | Er betreibt den CM5-Prüfstand im täglichen Einsatz; auf dem Jetson lief nichts. |
-| Aktualisierungen | 🟢 | Aktualisierungen der Komponenten von GitHub über Studio wurden auf dem CM5-Prüfstand durchgeführt. |
+| Aktualisierungen | 🟠 | Aktualisierungen der Komponenten von GitHub über Studio wurden auf dem CM5-Prüfstand durchgeführt. |
 | Dokumentation | 🟢 | Acht Sprachen und das Änderungsprotokoll sind aktuell. |
 
 ## 🎯 Überblick

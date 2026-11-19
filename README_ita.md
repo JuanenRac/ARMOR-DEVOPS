@@ -59,7 +59,7 @@ Ogni riga è una parte di questo repository e il semaforo dice a che punto è og
 | Software | 🟡 | L'installatore del banco CM5 è stato eseguito su una CM5 reale che ospita altro software, rimasto in salute; un'installazione pulita su una macchina che non ha mai visto il progetto non è provata. |
 | Test | 🟡 | Gli script di backup e ripristino hanno un test di andata e ritorno che passa, i due assistenti hanno i propri test e la topologia Docker con il profilo TLS opzionale è stata costruita ed eseguita con Docker Engine in WSL; la topologia completa non ha girato sulla sua destinazione. |
 | Hardware | 🟠 | Gestisce il banco di prova CM5 in uso quotidiano; nulla ha girato sulla Jetson. |
-| Aggiornamenti | 🟢 | Gli aggiornamenti dei componenti da GitHub, tramite Studio, sono stati eseguiti sul banco di prova CM5. |
+| Aggiornamenti | 🟠 | Gli aggiornamenti dei componenti da GitHub, tramite Studio, sono stati eseguiti sul banco di prova CM5. |
 | Documentazione | 🟢 | Otto lingue e il registro delle modifiche sono aggiornati. |
 
 ## 🎯 Panoramica
