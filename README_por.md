@@ -59,7 +59,7 @@ Cada linha é uma parte deste repositório e a luz diz até onde chega hoje. É 
 | Software | 🟡 | O instalador da bancada CM5 correu num CM5 real que aloja outro software, que se manteve saudável; uma instalação limpa numa máquina que nunca viu o projeto não está provada. |
 | Testes | 🟡 | Os scripts de cópia de segurança e restauro têm um teste de ida e volta que passa, os dois auxiliares têm testes próprios, e a topologia Docker com o seu perfil TLS opcional foi construída e executada com o Docker Engine no WSL; a topologia completa não correu no seu destino. |
 | Hardware | 🟠 | Faz funcionar a bancada de testes CM5 em uso diário; nada funcionou no Jetson. |
-| Atualizações | 🟢 | As atualizações dos componentes a partir do GitHub, através do Studio, foram feitas na bancada de testes CM5. |
+| Atualizações | 🟠 | As atualizações dos componentes a partir do GitHub, através do Studio, foram feitas na bancada de testes CM5. |
 | Documentação | 🟢 | Oito idiomas e o registo de alterações estão atualizados. |
 
 ## 🎯 Visão geral

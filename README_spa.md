@@ -59,7 +59,7 @@ Cada línea es una parte de este repositorio y la luz dice hasta dónde llega ho
 | Software | 🟡 | El instalador del banco CM5 se ha ejecutado en una CM5 real que aloja otro software, que siguió sano; una instalación limpia en una máquina que nunca ha visto el proyecto no está probada. |
 | Pruebas | 🟡 | Los scripts de copia y restauración tienen una prueba de ida y vuelta que pasa, los dos ayudantes tienen sus propias pruebas, y la topología Docker con su perfil TLS opcional se construyó y ejecutó con Docker Engine en WSL; la topología completa no ha funcionado en su destino. |
 | Hardware | 🟠 | Gestiona el banco de pruebas CM5 en uso diario; nada ha funcionado en la Jetson. |
-| Actualizaciones | 🟢 | Las actualizaciones de los componentes desde GitHub, a través de Studio, se han hecho en el banco de pruebas CM5. |
+| Actualizaciones | 🟠 | Las actualizaciones de los componentes desde GitHub, a través de Studio, se han hecho en el banco de pruebas CM5. |
 | Documentación | 🟢 | Ocho idiomas y el historial de cambios están al día. |
 
 ## 🎯 Resumen

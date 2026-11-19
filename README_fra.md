@@ -59,7 +59,7 @@ Chaque ligne est une partie de ce dépôt et le feu dit où elle en est aujourd'
 | Logiciel | 🟡 | L'installateur du banc CM5 a tourné sur un vrai CM5 qui héberge d'autres logiciels, restés en bonne santé ; une installation propre sur une machine qui n'a jamais vu le projet n'est pas prouvée. |
 | Tests | 🟡 | Les scripts de sauvegarde et de restauration ont un test aller-retour qui réussit, les deux assistants ont leurs propres tests, et la topologie Docker avec son profil TLS optionnel a été construite et exécutée avec Docker Engine sous WSL ; la topologie complète n'a pas tourné sur sa cible. |
 | Matériel | 🟠 | Il fait tourner le banc d'essai CM5 au quotidien ; rien n'a tourné sur le Jetson. |
-| Mises à jour | 🟢 | Les mises à jour des composants depuis GitHub, via Studio, ont été faites sur le banc d'essai CM5. |
+| Mises à jour | 🟠 | Les mises à jour des composants depuis GitHub, via Studio, ont été faites sur le banc d'essai CM5. |
 | Documentation | 🟢 | Huit langues et le journal des modifications sont à jour. |
 
 ## 🎯 Présentation
