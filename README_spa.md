@@ -22,7 +22,7 @@
   <img src="https://img.shields.io/badge/Deploy-Docker%20Compose-2496ed.svg" alt="Deploy">
   <img src="https://img.shields.io/badge/Bench-systemd-FFB020.svg" alt="Bench">
   <img src="https://img.shields.io/badge/Tests-509-00E5FF.svg" alt="Pruebas">
-  <img src="https://img.shields.io/badge/Version-0.7.7-0f6cbd.svg" alt="Versión">
+  <img src="https://img.shields.io/badge/Version-0.7.8-0f6cbd.svg" alt="Versión">
   <img src="https://img.shields.io/badge/Maturity-established-2EA44F.svg" alt="Madurez">
 </p>
 
@@ -36,7 +36,7 @@
 
 | | |
 |---|---|
-| Versión | `0.7.7` |
+| Versión | `0.7.8` |
 | Madurez | Establecido |
 | Función | Kit de despliegue: instalador del banco de la CM5, paquetes de versión, dos ayudantes, topología Compose |
 | Tecnología | Bash, Python 3 (biblioteca estándar), Docker Compose, Mosquitto, Caddy, nginx, systemd |
