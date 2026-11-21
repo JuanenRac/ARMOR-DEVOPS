@@ -40,7 +40,7 @@
 | 成熟度 | 確立 |
 | 役割 | デプロイキット：CM5 テストベンチのインストーラー、リリースパッケージ、2 つのヘルパー、Compose 構成 |
 | 技術 | Bash、Python 3（標準ライブラリ）、Docker Compose、Mosquitto、Caddy、nginx、systemd |
-| テスト | 各部分にテストスクリプト（`scripts/test_*.sh` と `test_*.py`）。Compose 構成は WSL の Docker でビルドして実行 |
+| テスト | 509 件：各部分にテストスクリプト（`scripts/test_*.sh` と `test_*.py`）。Compose 構成は WSL の Docker でビルドして実行 |
 | 契約 | ベンチのポート：サーバー 18080、Studio 18081、MQTT 18883（1883 は使わない）、音声 18090 |
 | 動作環境 | CM5 または SSH で届く Debian 系マシン。コンテナ構成には Docker Engine と Compose |
 | 実機での確認 | 他のソフトウェアも載る実際の CM5 で CM5 テストベンチを日常的に運用。Jetson ではまだ |

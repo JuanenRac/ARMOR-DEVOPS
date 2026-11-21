@@ -40,7 +40,7 @@
 | Maturidade | Estabelecido |
 | Função | Kit de implantação: instalador da bancada do CM5, pacotes de versão, dois ajudantes, topologia Compose |
 | Tecnologia | Bash, Python 3 (biblioteca padrão), Docker Compose, Mosquitto, Caddy, nginx, systemd |
-| Testes | Um script de teste para cada parte (`scripts/test_*.sh` e `test_*.py`); a topologia Compose é construída e executada com Docker no WSL |
+| Testes | 509 testes: um script de teste para cada parte (`scripts/test_*.sh` e `test_*.py`); a topologia Compose é construída e executada com Docker no WSL |
 | Contrato | Portas da bancada: servidor 18080, Studio 18081, MQTT 18883 (nunca 1883), voz 18090 |
 | Funciona em | Um CM5 ou qualquer máquina baseada em Debian acessível por SSH; Docker Engine com Compose para a topologia de contentores |
 | Em hardware real | Faz correr a bancada de testes do CM5 em uso diário, num CM5 real que aloja outro software; ainda não no Jetson |

@@ -40,7 +40,7 @@
 | Reifegrad | Etabliert |
 | Rolle | Bereitstellungs-Kit: Installer für den CM5-Prüfstand, Release-Pakete, zwei Helfer, Compose-Topologie |
 | Technik | Bash, Python 3 (Standardbibliothek), Docker Compose, Mosquitto, Caddy, nginx, systemd |
-| Tests | Ein Testskript je Teil (`scripts/test_*.sh` und `test_*.py`); die Compose-Topologie wird mit Docker in WSL gebaut und ausgeführt |
+| Tests | 509 Tests: ein Testskript je Teil (`scripts/test_*.sh` und `test_*.py`); die Compose-Topologie wird mit Docker in WSL gebaut und ausgeführt |
 | Vertrag | Ports des Prüfstands: Server 18080, Studio 18081, MQTT 18883 (nie 1883), Sprache 18090 |
 | Läuft auf | Ein CM5 oder jede Debian-basierte Maschine per SSH; Docker Engine mit Compose für die Container-Topologie |
 | Auf echter Hardware | Betreibt den CM5-Testaufbau im täglichen Einsatz, auf einem echten CM5, der andere Software beherbergt; noch nicht auf dem Jetson |
