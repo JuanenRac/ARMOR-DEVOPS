@@ -40,7 +40,7 @@
 | Maturité | Établi |
 | Rôle | Kit de déploiement : installateur du banc CM5, paquets de version, deux assistants, topologie Compose |
 | Technologie | Bash, Python 3 (bibliothèque standard), Docker Compose, Mosquitto, Caddy, nginx, systemd |
-| Tests | Un script de test pour chaque partie (`scripts/test_*.sh` et `test_*.py`) ; la topologie Compose est construite et exécutée avec Docker sous WSL |
+| Tests | 509 tests : un script de test pour chaque partie (`scripts/test_*.sh` et `test_*.py`) ; la topologie Compose est construite et exécutée avec Docker sous WSL |
 | Contrat | Ports du banc : serveur 18080, Studio 18081, MQTT 18883 (jamais 1883), voix 18090 |
 | Fonctionne sur | Un CM5 ou toute machine Debian joignable par SSH ; Docker Engine avec Compose pour la topologie de conteneurs |
 | Sur matériel réel | Fait tourner le banc de test CM5 en usage quotidien, sur un vrai CM5 qui héberge d'autres logiciels ; pas encore sur le Jetson |

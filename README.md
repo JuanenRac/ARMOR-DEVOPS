@@ -40,7 +40,7 @@
 | Maturity | Established |
 | Role | Deployment kit: CM5 test bench installer, release packages, two helpers, Compose topology |
 | Stack | Bash, Python 3 (standard library), Docker Compose, Mosquitto, Caddy, nginx, systemd |
-| Tests | A test script for each part (`scripts/test_*.sh` and `test_*.py`); the Compose topology is built and run with Docker in WSL |
+| Tests | 509 tests: a test script for each part (`scripts/test_*.sh` and `test_*.py`); the Compose topology is built and run with Docker in WSL |
 | Contract | Ports of the bench: server 18080, Studio 18081, MQTT 18883 (never 1883), voice 18090 |
 | Runs on | A CM5 or any Debian-based machine reachable by SSH; Docker Engine with Compose for the container topology |
 | On real hardware | Runs the CM5 test bench in daily use, on a real CM5 that hosts other software; not yet on the Jetson |

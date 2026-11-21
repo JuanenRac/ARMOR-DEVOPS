@@ -40,7 +40,7 @@
 | 成熟度 | 成熟 |
 | 角色 | 部署工具包：CM5 测试台安装器、发布包、两个助手、Compose 拓扑 |
 | 技术栈 | Bash、Python 3（标准库）、Docker Compose、Mosquitto、Caddy、nginx、systemd |
-| 测试 | 每个部分都有测试脚本（`scripts/test_*.sh` 和 `test_*.py`）；Compose 拓扑在 WSL 的 Docker 中构建并运行 |
+| 测试 | 509 项：每个部分都有测试脚本（`scripts/test_*.sh` 和 `test_*.py`）；Compose 拓扑在 WSL 的 Docker 中构建并运行 |
 | 契约 | 测试台端口：服务器 18080、Studio 18081、MQTT 18883（绝不用 1883）、语音 18090 |
 | 运行位置 | CM5 或可通过 SSH 访问的任何基于 Debian 的机器；容器拓扑需要带 Compose 的 Docker Engine |
 | 真实硬件 | 日常运行 CM5 测试台，在托管其他软件的真实 CM5 上；尚未在 Jetson 上 |

@@ -40,7 +40,7 @@
 | Maturità | Consolidato |
 | Ruolo | Kit di distribuzione: installatore del banco CM5, pacchetti di rilascio, due assistenti, topologia Compose |
 | Tecnologia | Bash, Python 3 (libreria standard), Docker Compose, Mosquitto, Caddy, nginx, systemd |
-| Test | Uno script di test per ogni parte (`scripts/test_*.sh` e `test_*.py`); la topologia Compose è costruita ed eseguita con Docker in WSL |
+| Test | 509 test: uno script di test per ogni parte (`scripts/test_*.sh` e `test_*.py`); la topologia Compose è costruita ed eseguita con Docker in WSL |
 | Contratto | Porte del banco: server 18080, Studio 18081, MQTT 18883 (mai 1883), voce 18090 |
 | Gira su | Una CM5 o qualsiasi macchina Debian raggiungibile via SSH; Docker Engine con Compose per la topologia a container |
 | Su hardware reale | Governa il banco di prova CM5 in uso quotidiano, su una vera CM5 che ospita altro software; non ancora sul Jetson |
