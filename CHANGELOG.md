@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+- **The shared tools read the output of processes as UTF-8:** `tools/status_lights.py`, `tools/sync_manifests.py` and `tools/universal_readme_check.py` are the current copies; on Windows a character outside the code page no longer breaks a check.
+
 ## [0.7.9] - Cut downloads and damaged files handled by the helpers
 
 - **Downloads and answers cut in the middle are named for what they are:** a package that arrives short is a failed download instead of a checksum mismatch, a cut answer of GitHub or of the server is unreachable, and the armed state stays unknown (handled as armed).
