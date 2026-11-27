@@ -4,13 +4,14 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [0.7.9] - Cut downloads and damaged files handled by the helpers
+
 - **Downloads and answers cut in the middle are named for what they are:** a package that arrives short is a failed download instead of a checksum mismatch, a cut answer of GitHub or of the server is unreachable, and the armed state stays unknown (handled as armed).
 - **Damaged files no longer stop the helpers:** a cut history of operations starts again and is written whole, and a configuration file in another encoding is refused by name, never rewritten, without hiding the other files of the list.
 - **The shared project tool is the current one:** the copy follows the shared repository, which now knows the new solar panel node.
-
 - **The shared CI workflow pins the current setup-java action:** the line follows the template of the shared repository.
-
 - **The copy of the shared validator is current:** `tools/armor_ci_validate.py` now also checks with `node --check` that the scripts served to a browser parse, in a repository that has them under `panel/` or `public/`.
+
 ## [0.7.8] - Generated file tree, evidence ceiling lights, sixteen voice commands and simulator evidence
 
 - **The structure generator can write a figure read from the code:** `tools/make_structure.py` resolves `{{fact:NAME|LAST}}` in the descriptions of `docs/structure.json` where the documentation tools are next to the repository, and writes LAST (the figure it had when last written) everywhere else, so a repository still builds on its own.

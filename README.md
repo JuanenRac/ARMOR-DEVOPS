@@ -22,7 +22,7 @@
   <img src="https://img.shields.io/badge/Deploy-Docker%20Compose-2496ed.svg" alt="Deploy">
   <img src="https://img.shields.io/badge/Bench-systemd-FFB020.svg" alt="Bench">
   <img src="https://img.shields.io/badge/Tests-513-00E5FF.svg" alt="Tests">
-  <img src="https://img.shields.io/badge/Version-0.7.8-0f6cbd.svg" alt="Version">
+  <img src="https://img.shields.io/badge/Version-0.7.9-0f6cbd.svg" alt="Version">
   <img src="https://img.shields.io/badge/Maturity-established-2EA44F.svg" alt="Maturity">
 </p>
 
@@ -36,7 +36,7 @@
 
 | | |
 |---|---|
-| Version | `0.7.8` |
+| Version | `0.7.9` |
 | Maturity | Established |
 | Role | Deployment kit: CM5 test bench installer, release packages, two helpers, Compose topology |
 | Stack | Bash, Python 3 (standard library), Docker Compose, Mosquitto, Caddy, nginx, systemd |
