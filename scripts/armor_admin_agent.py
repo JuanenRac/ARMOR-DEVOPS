@@ -325,6 +325,8 @@ def read_file(file_id: str) -> dict[str, object]:
         mtime = path.stat().st_mtime
     except FileNotFoundError:
         return {"id": file_id, "path": str(path), "format": fmt, "description": description, "units": list(units), "exists": False, "content": "", "mtime": 0}
+    except UnicodeDecodeError:   # saved in another encoding: shown as a refusal, never rewritten with replaced characters
+        raise Refused(422, "file_not_utf8") from None
     answer: dict[str, object] = {"id": file_id, "path": str(path), "format": fmt, "description": description, "units": list(units), "exists": True, "content": content, "mtime": mtime}
     if fmt == "env":        # the secrets never leave this program; a save with a mask where one was gets the value back below
         answer["content"] = mask_env(content)
@@ -332,12 +334,26 @@ def read_file(file_id: str) -> dict[str, object]:
     return answer
 
 
+def listed_file(file_id: str) -> dict[str, object]:
+    """The entry of one file in the list, without its content: a file that cannot be read as text does not hide the others."""
+    try:
+        return {key: value for key, value in read_file(file_id).items() if key != "content"}
+    except Refused:
+        path = file_path(file_id)
+        _, fmt, units, description = FILES[file_id]
+        return {"id": file_id, "path": str(path), "format": fmt, "description": description, "units": list(units), "exists": True, "mtime": path.stat().st_mtime, "unreadable": True}
+
+
 def write_file(file_id: str, content: str, expect_mtime: float | None) -> dict[str, object]:
     path = file_path(file_id)
     fmt = FILES[file_id][1]
     existing = path.exists()
     if fmt == "env" and ENV_MASK in content:
-        given = unmask_env(content, path.read_text(encoding="utf-8") if existing else "")
+        try:
+            current = path.read_text(encoding="utf-8") if existing else ""
+        except UnicodeDecodeError:
+            raise Refused(422, "file_not_utf8") from None
+        given = unmask_env(content, current)
         if "missing" in given:
             raise Refused(422, f"masked_value_without_original:{given['missing']}")
         content = given["content"]
@@ -542,7 +558,7 @@ SERVER_BATTERY_LINE = re.compile(r"topic write armor/solar/([a-z0-9][a-z0-9_-]{0
 def relay_status() -> dict[str, object]:
     """Which of the two switches are on, read from the block of the server in the broker rules."""
     try:
-        text = (PREFIX / "etc/mosquitto/acl").read_text(encoding="utf-8")
+        text = (PREFIX / "etc/mosquitto/acl").read_text(encoding="utf-8", errors="replace")
     except FileNotFoundError:
         return {"installed": False, "battery_write": [], "alarm_state_relay": False}
     inside = False
@@ -724,7 +740,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             elif method == "POST" and len(parts) == 3 and parts[0] == "services":
                 self.reply(200, service_action(parts[1], parts[2]))
             elif method == "GET" and parts == ["files"]:
-                self.reply(200, {"files": [{k: v for k, v in read_file(key).items() if k != "content"} for key in FILES]})
+                self.reply(200, {"files": [listed_file(key) for key in FILES]})
             elif method == "GET" and len(parts) == 2 and parts[0] == "files":
                 self.reply(200, read_file(parts[1]))
             elif method == "PUT" and len(parts) == 2 and parts[0] == "files":

@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+- **Downloads and answers cut in the middle are named for what they are:** a package that arrives short is a failed download instead of a checksum mismatch, a cut answer of GitHub or of the server is unreachable, and the armed state stays unknown (handled as armed).
+- **Damaged files no longer stop the helpers:** a cut history of operations starts again and is written whole, and a configuration file in another encoding is refused by name, never rewritten, without hiding the other files of the list.
 - **The shared project tool is the current one:** the copy follows the shared repository, which now knows the new solar panel node.
 
 - **The shared CI workflow pins the current setup-java action:** the line follows the template of the shared repository.
