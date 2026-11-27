@@ -21,7 +21,7 @@
   <img src="https://img.shields.io/badge/License-GPL%203.0--or--later-blue.svg" alt="GPL 3.0 or later">
   <img src="https://img.shields.io/badge/Deploy-Docker%20Compose-2496ed.svg" alt="Deploy">
   <img src="https://img.shields.io/badge/Bench-systemd-FFB020.svg" alt="Bench">
-  <img src="https://img.shields.io/badge/Tests-509-00E5FF.svg" alt="Tests">
+  <img src="https://img.shields.io/badge/Tests-513-00E5FF.svg" alt="Tests">
   <img src="https://img.shields.io/badge/Version-0.7.8-0f6cbd.svg" alt="Version">
   <img src="https://img.shields.io/badge/Maturity-established-2EA44F.svg" alt="Maturity">
 </p>
@@ -40,7 +40,7 @@
 | 成熟度 | 確立 |
 | 役割 | デプロイキット：CM5 テストベンチのインストーラー、リリースパッケージ、2 つのヘルパー、Compose 構成 |
 | 技術 | Bash、Python 3（標準ライブラリ）、Docker Compose、Mosquitto、Caddy、nginx、systemd |
-| テスト | 509 件：各部分にテストスクリプト（`scripts/test_*.sh` と `test_*.py`）。Compose 構成は WSL の Docker でビルドして実行 |
+| テスト | 513 件：各部分にテストスクリプト（`scripts/test_*.sh` と `test_*.py`）。Compose 構成は WSL の Docker でビルドして実行 |
 | 契約 | ベンチのポート：サーバー 18080、Studio 18081、MQTT 18883（1883 は使わない）、音声 18090 |
 | 動作環境 | CM5 または SSH で届く Debian 系マシン。コンテナ構成には Docker Engine と Compose |
 | 実機での確認 | 他のソフトウェアも載る実際の CM5 で CM5 テストベンチを日常的に運用。Jetson ではまだ |
@@ -175,7 +175,7 @@ scripts/backup_data.sh --data-dir <data> --out-dir <backups> --passphrase-file <
 | `test_compose.sh`  `validate-compose.sh` | Compose 構成と TLS プロファイル（WSL の Docker Engine でビルドして実行） |
 | `test_firewall.sh`  `test_install_plan.sh`  `test_mqtt_identity.sh`  `test_mqtt_tls.sh`  `test_tls_check.sh`  `test_wireguard.sh`  `test_ddns.sh` | ファイアウォール、インストーラーの計画、ブローカー ID、TLS 上の MQTT、TLS 検査、VPN、動的な名前 |
 
-Python のテストは `python -m unittest discover -s scripts -p "test_*.py"` で実行します。Windows では Unix ソケットが必要なものは動きません。スクリプトには Bash、WSL、Docker または root が必要で、Linux で実行します。Python のテストは 509 件で、このほかにシェルのテストがあり、ワークフロー Coverage floor が `scripts/` のカバレッジを下限で守ります。Project status が実行済みの内容を示します。GitHub Actions は push と pull request のたびに A.R.M.O.R. の基本検査（マニフェスト、バージョン、変更履歴、README の一致）と、プロジェクト自身のビルドとテストを実行します。
+Python のテストは `python -m unittest discover -s scripts -p "test_*.py"` で実行します。Windows では Unix ソケットが必要なものは動きません。スクリプトには Bash、WSL、Docker または root が必要で、Linux で実行します。Python のテストは 513 件で、このほかにシェルのテストがあり、ワークフロー Coverage floor が `scripts/` のカバレッジを下限で守ります。Project status が実行済みの内容を示します。GitHub Actions は push と pull request のたびに A.R.M.O.R. の基本検査（マニフェスト、バージョン、変更履歴、README の一致）と、プロジェクト自身のビルドとテストを実行します。
 
 ## 🏗️ ビルドとリリース
 
