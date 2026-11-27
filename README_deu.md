@@ -21,7 +21,7 @@
   <img src="https://img.shields.io/badge/License-GPL%203.0--or--later-blue.svg" alt="GPL 3.0 oder neuer">
   <img src="https://img.shields.io/badge/Deploy-Docker%20Compose-2496ed.svg" alt="Deploy">
   <img src="https://img.shields.io/badge/Bench-systemd-FFB020.svg" alt="Bench">
-  <img src="https://img.shields.io/badge/Tests-513-00E5FF.svg" alt="Tests">
+  <img src="https://img.shields.io/badge/Tests-516-00E5FF.svg" alt="Tests">
   <img src="https://img.shields.io/badge/Version-0.7.9-0f6cbd.svg" alt="Version">
   <img src="https://img.shields.io/badge/Maturity-established-2EA44F.svg" alt="Reifegrad">
 </p>
@@ -40,7 +40,7 @@
 | Reifegrad | Etabliert |
 | Rolle | Bereitstellungs-Kit: Installer für den CM5-Prüfstand, Release-Pakete, zwei Helfer, Compose-Topologie |
 | Technik | Bash, Python 3 (Standardbibliothek), Docker Compose, Mosquitto, Caddy, nginx, systemd |
-| Tests | 513 Tests: ein Testskript je Teil (`scripts/test_*.sh` und `test_*.py`); die Compose-Topologie wird mit Docker in WSL gebaut und ausgeführt |
+| Tests | 516 Tests: ein Testskript je Teil (`scripts/test_*.sh` und `test_*.py`); die Compose-Topologie wird mit Docker in WSL gebaut und ausgeführt |
 | Vertrag | Ports des Prüfstands: Server 18080, Studio 18081, MQTT 18883 (nie 1883), Sprache 18090 |
 | Läuft auf | Ein CM5 oder jede Debian-basierte Maschine per SSH; Docker Engine mit Compose für die Container-Topologie |
 | Auf echter Hardware | Betreibt den CM5-Testaufbau im täglichen Einsatz, auf einem echten CM5, der andere Software beherbergt; noch nicht auf dem Jetson |
@@ -175,7 +175,7 @@ Siehe die [Grenze der Bereitstellung](docs/DEPLOYMENT_BOUNDARY.md) und den [Prü
 | `test_compose.sh`  `validate-compose.sh` | die Compose-Topologie und ihr TLS-Profil, mit Docker Engine in WSL gebaut und ausgeführt |
 | `test_firewall.sh`  `test_install_plan.sh`  `test_mqtt_identity.sh`  `test_mqtt_tls.sh`  `test_tls_check.sh`  `test_wireguard.sh`  `test_ddns.sh` | die Firewall, der Plan des Installers, die Broker-Identitäten, MQTT über TLS, die TLS-Prüfung, das VPN und der dynamische Name |
 
-Die Python-Tests laufen mit `python -m unittest discover -s scripts -p "test_*.py"`; unter Windows können die, die Unix-Sockets brauchen, nicht laufen. Die Skripte brauchen Bash, WSL, Docker oder root und müssen unter Linux laufen. Es gibt 513 Python-Tests, dazu die Shell-Tests, und der Workflow Coverage floor hält die Abdeckung von `scripts/` über einer Untergrenze; Project status sagt, was gelaufen ist. GitHub Actions führt bei jedem Push und Pull Request die A.R.M.O.R.-Basis aus: die Prüfung von Manifest, Version, Änderungsprotokoll und README-Parität, dann den eigenen Build und die eigenen Tests des Projekts.
+Die Python-Tests laufen mit `python -m unittest discover -s scripts -p "test_*.py"`; unter Windows können die, die Unix-Sockets brauchen, nicht laufen. Die Skripte brauchen Bash, WSL, Docker oder root und müssen unter Linux laufen. Es gibt 516 Python-Tests, dazu die Shell-Tests, und der Workflow Coverage floor hält die Abdeckung von `scripts/` über einer Untergrenze; Project status sagt, was gelaufen ist. GitHub Actions führt bei jedem Push und Pull Request die A.R.M.O.R.-Basis aus: die Prüfung von Manifest, Version, Änderungsprotokoll und README-Parität, dann den eigenen Build und die eigenen Tests des Projekts.
 
 ## 🏗️ Build und Veröffentlichung
 

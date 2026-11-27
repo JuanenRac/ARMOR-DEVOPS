@@ -21,7 +21,7 @@
   <img src="https://img.shields.io/badge/License-GPL%203.0--or--later-blue.svg" alt="GPL 3.0 or later">
   <img src="https://img.shields.io/badge/Deploy-Docker%20Compose-2496ed.svg" alt="Deploy">
   <img src="https://img.shields.io/badge/Bench-systemd-FFB020.svg" alt="Bench">
-  <img src="https://img.shields.io/badge/Tests-513-00E5FF.svg" alt="Tests">
+  <img src="https://img.shields.io/badge/Tests-516-00E5FF.svg" alt="Tests">
   <img src="https://img.shields.io/badge/Version-0.7.9-0f6cbd.svg" alt="Version">
   <img src="https://img.shields.io/badge/Maturity-established-2EA44F.svg" alt="Maturity">
 </p>
@@ -40,7 +40,7 @@
 | 成熟度 | 成熟 |
 | 角色 | 部署工具包：CM5 测试台安装器、发布包、两个助手、Compose 拓扑 |
 | 技术栈 | Bash、Python 3（标准库）、Docker Compose、Mosquitto、Caddy、nginx、systemd |
-| 测试 | 513 项：每个部分都有测试脚本（`scripts/test_*.sh` 和 `test_*.py`）；Compose 拓扑在 WSL 的 Docker 中构建并运行 |
+| 测试 | 516 项：每个部分都有测试脚本（`scripts/test_*.sh` 和 `test_*.py`）；Compose 拓扑在 WSL 的 Docker 中构建并运行 |
 | 契约 | 测试台端口：服务器 18080、Studio 18081、MQTT 18883（绝不用 1883）、语音 18090 |
 | 运行位置 | CM5 或可通过 SSH 访问的任何基于 Debian 的机器；容器拓扑需要带 Compose 的 Docker Engine |
 | 真实硬件 | 日常运行 CM5 测试台，在托管其他软件的真实 CM5 上；尚未在 Jetson 上 |
@@ -175,7 +175,7 @@ scripts/backup_data.sh --data-dir <data> --out-dir <backups> --passphrase-file <
 | `test_compose.sh`  `validate-compose.sh` | Compose 拓扑及其 TLS 配置，在 WSL 的 Docker Engine 中构建并运行 |
 | `test_firewall.sh`  `test_install_plan.sh`  `test_mqtt_identity.sh`  `test_mqtt_tls.sh`  `test_tls_check.sh`  `test_wireguard.sh`  `test_ddns.sh` | 防火墙、安装器的计划、代理身份、TLS 上的 MQTT、TLS 检查、VPN 和动态域名 |
 
-Python 测试用 `python -m unittest discover -s scripts -p "test_*.py"` 运行；在 Windows 上需要 Unix 套接字的无法运行。脚本需要 Bash、WSL、Docker 或 root，须在 Linux 上运行。共有 513 个 Python 测试，另有 shell 测试，工作流 Coverage floor 把 `scripts/` 的覆盖率保持在下限之上；Project status 说明已运行的内容。GitHub Actions 在每次推送和拉取请求时运行 A.R.M.O.R. 基线：清单、版本、更新日志和 README 一致性的校验，然后是项目自身的构建和测试。
+Python 测试用 `python -m unittest discover -s scripts -p "test_*.py"` 运行；在 Windows 上需要 Unix 套接字的无法运行。脚本需要 Bash、WSL、Docker 或 root，须在 Linux 上运行。共有 516 个 Python 测试，另有 shell 测试，工作流 Coverage floor 把 `scripts/` 的覆盖率保持在下限之上；Project status 说明已运行的内容。GitHub Actions 在每次推送和拉取请求时运行 A.R.M.O.R. 基线：清单、版本、更新日志和 README 一致性的校验，然后是项目自身的构建和测试。
 
 ## 🏗️ 构建与发布
 

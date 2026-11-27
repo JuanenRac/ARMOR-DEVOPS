@@ -21,7 +21,7 @@
   <img src="https://img.shields.io/badge/License-GPL%203.0--or--later-blue.svg" alt="GPL 3.0 o successiva">
   <img src="https://img.shields.io/badge/Deploy-Docker%20Compose-2496ed.svg" alt="Deploy">
   <img src="https://img.shields.io/badge/Bench-systemd-FFB020.svg" alt="Bench">
-  <img src="https://img.shields.io/badge/Tests-513-00E5FF.svg" alt="Test">
+  <img src="https://img.shields.io/badge/Tests-516-00E5FF.svg" alt="Test">
   <img src="https://img.shields.io/badge/Version-0.7.9-0f6cbd.svg" alt="Versione">
   <img src="https://img.shields.io/badge/Maturity-established-2EA44F.svg" alt="Maturità">
 </p>
@@ -40,7 +40,7 @@
 | Maturità | Consolidato |
 | Ruolo | Kit di distribuzione: installatore del banco CM5, pacchetti di rilascio, due assistenti, topologia Compose |
 | Tecnologia | Bash, Python 3 (libreria standard), Docker Compose, Mosquitto, Caddy, nginx, systemd |
-| Test | 513 test: uno script di test per ogni parte (`scripts/test_*.sh` e `test_*.py`); la topologia Compose è costruita ed eseguita con Docker in WSL |
+| Test | 516 test: uno script di test per ogni parte (`scripts/test_*.sh` e `test_*.py`); la topologia Compose è costruita ed eseguita con Docker in WSL |
 | Contratto | Porte del banco: server 18080, Studio 18081, MQTT 18883 (mai 1883), voce 18090 |
 | Gira su | Una CM5 o qualsiasi macchina Debian raggiungibile via SSH; Docker Engine con Compose per la topologia a container |
 | Su hardware reale | Governa il banco di prova CM5 in uso quotidiano, su una vera CM5 che ospita altro software; non ancora sul Jetson |
@@ -175,7 +175,7 @@ Vedi il [confine della distribuzione](docs/DEPLOYMENT_BOUNDARY.md) e il [banco d
 | `test_compose.sh`  `validate-compose.sh` | la topologia Compose e il suo profilo TLS, costruite ed eseguite con Docker Engine in WSL |
 | `test_firewall.sh`  `test_install_plan.sh`  `test_mqtt_identity.sh`  `test_mqtt_tls.sh`  `test_tls_check.sh`  `test_wireguard.sh`  `test_ddns.sh` | il firewall, il piano dell'installatore, le identità del broker, MQTT su TLS, il controllo TLS, la VPN e il nome dinamico |
 
-I test Python si eseguono con `python -m unittest discover -s scripts -p "test_*.py"`; su Windows quelli che richiedono socket Unix non possono girare. Gli script richiedono Bash, WSL, Docker o root e vanno eseguiti su Linux. Ci sono 513 test Python, oltre ai test shell, e il workflow Coverage floor mantiene la copertura di `scripts/` sopra una soglia; Project status dice cosa è stato eseguito. GitHub Actions esegue la base A.R.M.O.R. a ogni push e pull request: la validazione di manifesto, versione, registro delle modifiche e parità dei README, poi la compilazione e i test del progetto.
+I test Python si eseguono con `python -m unittest discover -s scripts -p "test_*.py"`; su Windows quelli che richiedono socket Unix non possono girare. Gli script richiedono Bash, WSL, Docker o root e vanno eseguiti su Linux. Ci sono 516 test Python, oltre ai test shell, e il workflow Coverage floor mantiene la copertura di `scripts/` sopra una soglia; Project status dice cosa è stato eseguito. GitHub Actions esegue la base A.R.M.O.R. a ogni push e pull request: la validazione di manifesto, versione, registro delle modifiche e parità dei README, poi la compilazione e i test del progetto.
 
 ## 🏗️ Compilazione e rilascio
 
