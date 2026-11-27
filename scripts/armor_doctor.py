@@ -23,6 +23,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import hmac
+import http.client
 import json
 import os
 import re
@@ -169,7 +170,7 @@ def live_contracts(server_url: str, token: str, get: Callable[[str, str], Any] |
     try:
         try:
             status = fetch(f"{base}/api/v1/contract", token)
-        except (OSError, ValueError):
+        except (OSError, ValueError, http.client.HTTPException):
             status = None                                  # a server before this route: ask the way it used to be asked
         if isinstance(status, dict) and isinstance(status.get("server"), str) and isinstance(status.get("nodes"), list):
             wanted = status["server"]
@@ -182,7 +183,7 @@ def live_contracts(server_url: str, token: str, get: Callable[[str, str], Any] |
                 report = item.get("report", {}) if isinstance(item, dict) else {}
                 said = report.get("contract") if isinstance(report, dict) else None
                 nodes.append((str(item.get("node_id", "?")) if isinstance(item, dict) else "?", _contract_relation(said, wanted) if isinstance(wanted, str) else "unknown", said))
-    except (OSError, ValueError) as error:
+    except (OSError, ValueError, http.client.HTTPException) as error:
         return [("warn", "server", f"the server could not be asked ({type(error).__name__}): the contract of the nodes was not compared")]
     if not isinstance(wanted, str) or _contract_parts(wanted) is None:
         return [("warn", "server", "the server did not say its contract version (the token may not be an operator's): the nodes were not compared")]

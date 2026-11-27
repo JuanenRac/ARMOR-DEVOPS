@@ -25,6 +25,7 @@ import base64
 import datetime
 import hashlib
 import hmac
+import http.client
 import http.server
 import json
 import os
@@ -179,9 +180,11 @@ def latest_release(component: str, force: bool = False) -> dict[str, object]:
         return cached[1]
     try:
         data = json.loads(http_get(f"{GITHUB_API}/repos/{GITHUB_OWNER}/{repo}/releases/latest").decode("utf-8"))
+        if not isinstance(data, dict):
+            raise ValueError("not the description of a release")
     except urllib.error.HTTPError as error:
         result: dict[str, object] = {"error": "no_release" if error.code == 404 else f"github_{error.code}"}
-    except (urllib.error.URLError, TimeoutError, OSError, ValueError):
+    except (urllib.error.URLError, TimeoutError, OSError, ValueError, http.client.HTTPException):   # HTTPException: the answer was cut
         result = {"error": "github_unreachable"}
     else:
         assets = {str(asset.get("name")): str(asset.get("browser_download_url")) for asset in data.get("assets", []) if isinstance(asset, dict)}
@@ -283,9 +286,16 @@ def history_path() -> Path:
 def record_history(job: Job) -> None:
     try:
         DATA_DIR.mkdir(parents=True, exist_ok=True)
-        entries = json.loads(history_path().read_text(encoding="utf-8")) if history_path().exists() else []
+        try:
+            entries = json.loads(history_path().read_text(encoding="utf-8")) if history_path().exists() else []
+        except ValueError:   # a file cut by a power loss must not stop the history for ever: it starts again
+            entries = []
+        if not isinstance(entries, list):
+            entries = []
         entries.append({"id": job.id, "kind": job.kind, "label": job.label, "state": job.state, "error": job.error, "started": job.started, "finished": job.finished, "result": job.result})
-        history_path().write_text(json.dumps(entries[-200:]), encoding="utf-8")
+        temporary = history_path().with_suffix(".tmp")   # written whole and put in its place
+        temporary.write_text(json.dumps(entries[-200:]), encoding="utf-8")
+        os.replace(temporary, history_path())
     except (OSError, ValueError):
         pass
 
@@ -330,6 +340,9 @@ def download(job: Job, step: str, url: str, destination: Path) -> str:
             if time.time() - last > 0.25:
                 last = time.time()
                 job.step(step, "running", min(99, int(got * 100 / total)) if total else 50)
+    if total and got < total:   # a connection that closes early ends the loop without an error: say what happened, not that the checksum is wrong
+        job.say(f"the download was cut: {got} of {total} bytes arrived")
+        raise Refused(502, "download_failed")
     job.say(f"downloaded {got // 1024} KiB")
     return digest.hexdigest()
 
@@ -512,7 +525,7 @@ def check_signature(job: Job, component: str, version: str, assets: dict[str, st
             return None
         try:
             return http_get(url, accept="application/octet-stream").decode("ascii", "replace")
-        except (urllib.error.URLError, TimeoutError, OSError, ValueError):
+        except (urllib.error.URLError, TimeoutError, OSError, ValueError, http.client.HTTPException):
             return ""
 
     manifest = fetch(".sig2")
@@ -733,7 +746,7 @@ def stage_server(job: Job, release_folder: Path) -> None:
                     if b'"ok":true' in http_get(f"http://127.0.0.1:{port}/healthz", accept="application/json", timeout=2.0).replace(b" ", b""):
                         ok = True
                         break
-                except (urllib.error.URLError, OSError, TimeoutError):
+                except (urllib.error.URLError, OSError, TimeoutError, http.client.HTTPException):
                     pass
                 time.sleep(0.5)
         finally:
@@ -1354,7 +1367,7 @@ def armed_state() -> bool | None:
         with urllib.request.urlopen(request, timeout=5) as response:          # noqa: S310 - the address is the local server (or a test server)
             data = json.loads(response.read(4096).decode("utf-8", "replace"))
         return data["armed"] if isinstance(data.get("armed"), bool) else None
-    except (urllib.error.URLError, TimeoutError, OSError, ValueError, KeyError, AttributeError):
+    except (urllib.error.URLError, TimeoutError, OSError, ValueError, KeyError, AttributeError, http.client.HTTPException):
         return None
 
 
