@@ -10,6 +10,7 @@ import socketserver
 import sys
 import unittest
 from pathlib import Path
+from typing import Any
 
 HERE = Path(__file__).resolve().parent
 VECTORS = json.loads((HERE / "fixtures" / "ed25519_vectors.json").read_text(encoding="utf-8"))["vectors"]
@@ -26,6 +27,8 @@ def load_agent():
 
 @unittest.skipUnless(hasattr(socketserver, "UnixStreamServer"), "the helper is a Linux service (Unix sockets): run on Linux, macOS or WSL")
 class Ed25519VectorTests(unittest.TestCase):
+    agent: Any
+
     @classmethod
     def setUpClass(cls) -> None:
         cls.agent = load_agent()
