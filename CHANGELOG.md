@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+- **Fixed cases for the signature check of the maintenance service:** `scripts/fixtures/ed25519_vectors.json` holds the three vectors of RFC 8032 and the changes of them a verifier must refuse (a scalar that is not canonical, points that are not canonical, not on the curve or of small order, wrong lengths, one bit changed), and `scripts/test_ed25519_vectors.py` walks them. The verifier gives every case its answer; no code of the service changed.
+
 - **The shared tools read the output of processes as UTF-8:** `tools/status_lights.py`, `tools/sync_manifests.py` and `tools/universal_readme_check.py` are the current copies; on Windows a character outside the code page no longer breaks a check.
 
 ## [0.7.9] - Cut downloads and damaged files handled by the helpers
